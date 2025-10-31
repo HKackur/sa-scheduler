@@ -41,6 +41,8 @@ jobs:
           NORMALIZED_FLY_TOKEN="$(printf '%s' "$FLY_API_TOKEN" | awk -F, '{print $1}')"
           export FLY_API_TOKEN="$NORMALIZED_FLY_TOKEN"
           export FLYCTL_ACCESS_TOKEN="$NORMALIZED_FLY_TOKEN"
+          # Ensure app exists (idempotent)
+          flyctl apps create sa-scheduler || true
           flyctl deploy -a sa-scheduler --detach
 
 
