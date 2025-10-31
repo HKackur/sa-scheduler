@@ -1,0 +1,18 @@
+# VCS
+.git
+.githooks
+
+# Build outputs
+**/bin
+**/obj
+
+# User local files
+.dev-server.pid
+*.tar.gz
+
+# Node/web libs if any (none expected but safe)
+**/node_modules
+
+# IDE
+.vscode
+.idea

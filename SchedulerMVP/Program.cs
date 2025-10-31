@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
@@ -251,9 +252,22 @@ using (var scope = app.Services.CreateScope())
     var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await identityContext.Database.MigrateAsync();
     
-    // Ensure application database exists (we manage schema adjustments manually)
+    // Ensure application database is up-to-date
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await context.Database.EnsureCreatedAsync();
+    try
+    {
+        // On Postgres, apply EF migrations; on SQLite dev, create if missing
+        var provider = context.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            await context.Database.MigrateAsync();
+        }
+        else
+        {
+            await context.Database.EnsureCreatedAsync();
+        }
+    }
+    catch { }
     
     var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
     await seeder.SeedAsync();
@@ -301,5 +315,11 @@ using (var scope = app.Services.CreateScope())
     }
     catch { }
 }
+
+// Respect proxy headers (Fly.io / reverse proxies)
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 app.Run();

@@ -1,0 +1,32 @@
+app = "sa-scheduler"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ASPNETCORE_URLS = "http://0.0.0.0:8080"
+  # ConnectionStrings__DefaultConnection will be injected via Fly secrets
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [services.concurrency]
+    hard_limit = 50
+    soft_limit = 25
+    type = "requests"
+
+  [[services.http_checks]]
+    interval = "10s"
+    method = "get"
+    path = "/"
+    timeout = "2s"

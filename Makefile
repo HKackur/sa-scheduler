@@ -7,13 +7,14 @@
 # dotnet tool install --global dotnet-ef
 
 # Standard-mål
-.PHONY: dev run add-migration update reset-db health routes
+.PHONY: dev run add-migration update reset-db health routes build run fly-login fly-launch fly-secrets fly-deploy
 
 dev:
 	dotnet watch --project SchedulerMVP/SchedulerMVP.csproj run
 
 run:
-	dotnet run --project SchedulerMVP/SchedulerMVP.csproj
+	DOTNET_URLS="https://localhost:7054;http://localhost:5294" \
+	dotnet run --project SchedulerMVP/SchedulerMVP.csproj -c Debug
 
 # Skapa ny EF-migration: make add-migration NAME=MyChange
 add-migration:
@@ -57,3 +58,20 @@ routes:
 	else \
 	  echo "\nInga dubbletter."; \
 	fi
+
+build:
+	dotnet build SchedulerMVP/SchedulerMVP.csproj -c Release
+
+fly-login:
+	fly auth login
+
+fly-launch:
+	fly launch --no-deploy --copy-config --name sa-scheduler --noworkflows || true
+
+# Usage: make fly-secrets POSTGRES_CONNECTION_STRING='Host=...;Port=5432;Database=...;Username=...;Password=...;Ssl Mode=Require;Trust Server Certificate=true'
+fly-secrets:
+	@if [ -z "$(POSTGRES_CONNECTION_STRING)" ]; then echo "POSTGRES_CONNECTION_STRING is required"; exit 1; fi
+	fly secrets set ConnectionStrings__DefaultConnection="$(POSTGRES_CONNECTION_STRING)"
+
+fly-deploy:
+	fly deploy --build-only=false --detach
