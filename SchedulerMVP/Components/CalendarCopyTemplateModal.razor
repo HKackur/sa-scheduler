@@ -1,0 +1,130 @@
+@inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
+@inject SchedulerMVP.Services.ICalendarBookingService CalendarBookingService
+@inject SchedulerMVP.Services.UIState UI
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="OnBackdrop"></div>
+    <div class="bm-modal">
+        <h3 class="bm-title">Lägg till från mall</h3>
+        <div class="bm-field">
+            <label class="bm-label">Välj mall</label>
+            <select class="tb-select" @onchange="OnTemplateChanged">
+                <option value="">-- Välj mall --</option>
+                @foreach (var template in templates)
+                {
+                    <option value="@template.Id" selected="@(selectedTemplateId == template.Id)">@template.Name</option>
+                }
+            </select>
+        </div>
+        <div class="bm-field">
+            <label class="bm-label">Datumspann</label>
+            <div style="display:flex;gap:8px;align-items:center">
+                <input type="date" class="tb-select" style="flex:1" value="@startDateString" @onchange="OnStartDateChanged" />
+                <span style="color:#6b7280">till</span>
+                <input type="date" class="tb-select" style="flex:1" value="@endDateString" @onchange="OnEndDateChanged" />
+            </div>
+            @if (endDate < startDate)
+            {
+                <div style="margin-top:6px;color:#dc2626;font-size:12px">Slutdatum måste vara samma eller efter startdatum.</div>
+            }
+        </div>
+        <div class="bm-actions">
+            <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+            <button type="button" @onclick="OnCopy" class="btn-primary" disabled="@(!selectedTemplateId.HasValue || endDate < startDate)">Lägg till schema</button>
+        </div>
+    </div>
+    <style>
+        .bm-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.15);padding:24px;min-width:400px;max-width:500px;z-index:2001}
+        .bm-title{margin:0 0 20px 0;font-size:18px;font-weight:600;color:#111827}
+        .bm-select{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-size:14px;color:#111827}
+        .bm-select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+        .week-display{padding:10px 12px;background:#f8f9fa;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;color:#6b7280;text-align:center}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px}
+        .btn-outline{background:#fff;border:1px solid #d1d5db;color:#374151;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s}
+        .btn-outline:hover{background:#f9fafb;border-color:#9ca3af}
+        .btn-primary{background:#3b82f6;border:1px solid #3b82f6;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s}
+        .btn-primary:hover:not(:disabled){background:#2563eb;border-color:#2563eb}
+        .btn-primary:disabled{background:#9ca3af;border-color:#9ca3af;cursor:not-allowed}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnCopied { get; set; }
+
+    private List<SchedulerMVP.Data.Entities.ScheduleTemplate> templates = new();
+    private Guid? selectedTemplateId;
+    private DateOnly startDate;
+    private DateOnly endDate;
+    private string startDateString => startDate.ToString("yyyy-MM-dd");
+    private string endDateString => endDate.ToString("yyyy-MM-dd");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            await LoadTemplates();
+            startDate = UI.CurrentWeekStart; // default: aktuell vecka
+            endDate = UI.CurrentWeekEnd;
+        }
+    }
+
+    private async Task LoadTemplates()
+    {
+        templates = await TemplateService.GetTemplatesAsync();
+        StateHasChanged();
+    }
+
+    private void OnTemplateChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            selectedTemplateId = id;
+        }
+        else
+        {
+            selectedTemplateId = null;
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnCopy()
+    {
+        if (selectedTemplateId.HasValue)
+        {
+            try
+            {
+                await CalendarBookingService.CopyTemplateToDateRangeAsync(selectedTemplateId.Value, startDate, endDate);
+                await OnCopied.InvokeAsync();
+            }
+            catch (Exception ex)
+            {
+                // Console.WriteLine($"Error copying template: {ex.Message}");
+            }
+        }
+    }
+
+    private void OnStartDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+            startDate = d;
+    }
+    private void OnEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+            endDate = d;
+    }
+
+    private async Task OnCancel()
+    {
+        selectedTemplateId = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task OnBackdrop()
+    {
+        await OnCancel();
+    }
+}

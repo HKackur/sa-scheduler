@@ -1,0 +1,910 @@
+@using SchedulerMVP.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Data.AppDbContext Db
+@inject SchedulerMVP.Services.IPlaceService PlaceService
+@inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
+@inject SchedulerMVP.Services.BookingDialogService BookingDialog
+@inject SchedulerMVP.Services.ICalendarBookingService CalendarBookingService
+@inject SchedulerMVP.Services.UserContextService UserContext
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="combined-sidebar">
+    <!-- Platser sektion -->
+    <div class="sidebar-section" style="@(UI.IsGroupFilterActive ? "opacity: 0.5; pointer-events: none;" : "")">
+        <div class="ls-header-row">
+            <h6 class="sa-panel-title">Platser & ytor</h6>
+            <button class="ls-plus @(placeOpen ? "hide-tooltip" : "")" @onclick="OpenCreatePlace" disabled="@UI.IsGroupFilterActive">+</button>
+        </div>
+        
+        @if (!placesLoaded)
+        {
+            
+        }
+        else if (places.Count == 0)
+        {
+            <div class="empty-state" style="margin:8px 0 12px 0;color:#6b7280;font-size:12px;">
+                <div class="empty-text" style="margin-bottom:6px;">Du har inte lagt till några platser</div>
+                <button class="sa-btn" style="font-size:12px;padding:6px 10px;border-radius:6px;border:none;background:#f3f4f6;color:#111827;cursor:pointer;" @onclick="OpenCreatePlace" disabled="@UI.IsGroupFilterActive">Lägg till en plats</button>
+            </div>
+        }
+        else
+        {
+            <ul class="sa-tree-list">
+                @foreach (var placeNode in placeTreeNodes)
+                {
+                    @RenderPlaceNode(placeNode, 0)
+                }
+            </ul>
+            <div class="sa-create-booking" style="margin-top: 10px; display: none;">
+                <button class="sa-btn" @onclick="OpenNewBookingModal" disabled="@UI.IsGroupFilterActive">Ny bokning</button>
+            </div>
+        }
+    </div>
+
+    <!-- Grupper sektion -->
+    <div class="sidebar-section">
+        <div class="sa-panel-header">
+            <h6 class="sa-panel-title">Grupper</h6>
+            @if (groupTypes.Any())
+            {
+                <div class="sa-type-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+                    @foreach (var t in groupTypes)
+                    {
+                        var active = selectedTypes.Contains(t);
+                        <button type="button" class="sa-chip @(active ? "active" : null)" style="border:1px solid #d1d5db;border-radius:999px;background:@(active?"#111827":"#f1f5f9");color:@(active?"#fff":"#111827");padding:2px 8px;font-size:11px" @onclick="() => ToggleType(t)">@t</button>
+                    }
+                </div>
+            }
+        </div>
+        
+        <div class="sa-panel-content">
+            @if (groupsLoaded && (groups == null || groups.Count == 0))
+            {
+                <div class="empty-state" style="margin:8px 0 12px 0;color:#6b7280;font-size:12px;">
+                    <div class="empty-text" style="margin-bottom:6px;">Du har inte skapat några grupper</div>
+                    <button class="sa-btn" style="font-size:12px;padding:6px 10px;border-radius:6px;border:none;background:#f3f4f6;color:#111827;cursor:pointer;" @onclick="GoToGroupManage">Skapa en grupp</button>
+                </div>
+            }
+            else if (groups != null)
+            {
+                @foreach (var group in filteredGroups)
+                {
+                    var isSelected = UI.SelectedGroupId == group.Id;
+                    var isFilteredGroup = UI.IsGroupFilterActive && UI.FilteredGroupId == group.Id;
+                    var itemStyle = isFilteredGroup
+                        ? "background:#1f2937;color:#fff;border:none;box-shadow:0 0 0 2px #374151"
+                        : (isSelected ? "background:#eef2ff;border:none;box-shadow:0 0 0 2px #c7d2fe" : string.Empty);
+                    <div class="sa-group-card@(isSelected ? " selected" : "")" @onclick="() => SelectGroup(group.Id)">
+                        <div class="sa-group-info">
+                            <span class="sa-group-name">@group.Name</span>
+                            @if (!string.IsNullOrWhiteSpace(DetermineGroupType(group)))
+                            {
+                                <span class="sa-group-type">@DetermineGroupType(group)</span>
+                            }
+                        </div>
+                        <span class="sa-group-count-chip">@FormatCount(GetCount(group.Id))</span>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .combined-sidebar {
+        height: calc(100vh - 120px); /* Fixed height to ensure scrollability */
+        display: flex;
+        flex-direction: column;
+        background: transparent; /* Remove white background */
+        border-radius: 8px;
+        overflow-y: auto; /* Single scroll for entire panel */
+        overflow-x: hidden; /* Prevent horizontal scroll */
+        padding-bottom: 20px; /* Add padding at bottom for better scroll */
+        scrollbar-width: thin; /* Thin scrollbar in Firefox */
+        scrollbar-color: transparent transparent; /* Hide scrollbar by default */
+    }
+
+    .combined-sidebar:hover {
+        scrollbar-color: #c1c1c1 #f1f1f1; /* Show scrollbar on hover */
+    }
+
+    .combined-sidebar::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .combined-sidebar::-webkit-scrollbar-track {
+        background: transparent; /* Hide track by default */
+    }
+
+    .combined-sidebar::-webkit-scrollbar-thumb {
+        background: transparent; /* Hide thumb by default */
+        border-radius: 4px;
+    }
+
+    .combined-sidebar:hover::-webkit-scrollbar-track {
+        background: #f1f1f1; /* Show track on hover */
+    }
+
+    .combined-sidebar:hover::-webkit-scrollbar-thumb {
+        background: #c1c1c1; /* Show thumb on hover */
+    }
+
+    .combined-sidebar:hover::-webkit-scrollbar-thumb:hover {
+        background: #a8a8a8; /* Darker on thumb hover */
+    }
+    
+    .sidebar-section {
+        padding: 0 0 16px 16px; /* No right padding - .sa-app already handles it */
+        overflow: visible; /* No individual scrolling - let parent handle it */
+        word-wrap: break-word; /* Ensure text wraps instead of overflowing */
+    }
+    
+    .sidebar-section:last-child {
+        /* Removed extra padding - margin-bottom on .combined-sidebar handles this */
+    }
+    
+    .sidebar-section:first-child {
+        flex: 0 0 auto; /* Let Platser take only the space it needs */
+        margin-bottom: 8px; /* Reduced gap between sections */
+    }
+    
+    .sidebar-section:last-child {
+        flex: 1; /* Let Grupper take remaining space */
+        min-height: 0; /* Allow flex item to shrink */
+    }
+    
+    .ls-header-row{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px 0}
+    .ls-plus{
+        border:none;
+        background:transparent;
+        color:#0b1e34;
+        font-size:20px;
+        line-height:1;
+        padding:6px;
+        cursor:pointer;
+        border-radius:50%;
+        transition:background-color 0.2s ease;
+        position:relative;
+    }
+    .ls-plus:hover{
+        background-color:#f1f5f9;
+    }
+    .ls-plus::after{
+        content:"Skapa ny plats";
+        position:absolute;
+        right:100%;
+        top:50%;
+        transform:translateY(-50%);
+        margin-right:8px;
+        background:#374151;
+        color:white;
+        padding:4px 8px;
+        border-radius:4px;
+        font-size:12px;
+        white-space:nowrap;
+        opacity:0;
+        pointer-events:none;
+        transition:opacity 0.2s ease;
+        z-index:9999;
+    }
+    .ls-plus:hover::after{
+        opacity:1;
+    }
+    .ls-plus.hide-tooltip::after{
+        opacity:0 !important;
+    }
+    .sa-tree-row{display:flex;align-items:center;gap:8px;padding:4px 0;}
+    .sa-tree-label{font-size:14px;line-height:20px;cursor:pointer;}
+    .sa-tree-edit{opacity:0;transition:opacity 0.2s;cursor:pointer;margin-left:4px;font-size:16px;color:#666;display:inline-flex;align-items:center}
+    .sa-tree-fav{opacity:0;transition:opacity 0.2s;cursor:pointer;margin-left:4px;color:#666;display:inline-flex;align-items:center}
+    .sa-tree-row:hover .sa-tree-edit,.sa-tree-row.is-active .sa-tree-edit{opacity:1}
+    .sa-tree-row:hover .sa-tree-fav,.sa-tree-row.is-fav .sa-tree-fav{opacity:1}
+    .sa-tree-toggle { cursor: pointer; }
+    
+    .sa-panel-header {
+        margin-bottom: 12px;
+    }
+    
+    .sa-panel-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+        margin: 0 0 8px 0;
+    }
+    
+    .sa-search input {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    
+    .sa-panel-content {
+        overflow: visible; /* No individual scrolling - let parent handle it */
+    }
+    
+    .sa-group-card {
+        padding: 8px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        margin-bottom: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+        overflow: hidden; /* Prevent content overflow */
+        word-wrap: break-word; /* Ensure text wraps */
+    }
+    
+    .sa-group-card:hover {
+        background: #f9fafb;
+    }
+    
+    .sa-group-card.selected {
+        background: #eef2ff;
+        border-color: #c7d2fe;
+    }
+    
+    .sa-group-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        overflow: hidden; /* Prevent overflow */
+        word-wrap: break-word; /* Ensure text wraps */
+    }
+    
+    .sa-group-name {
+        font-size: 13px;
+        font-weight: 500;
+        color: #374151;
+        overflow: hidden; /* Prevent overflow */
+        word-wrap: break-word; /* Ensure text wraps */
+        white-space: normal; /* Allow text to wrap */
+    }
+    
+    .sa-group-type {
+        font-size: 11px;
+        color: #6b7280;
+        overflow: hidden; /* Prevent overflow */
+        word-wrap: break-word; /* Ensure text wraps */
+        white-space: normal; /* Allow text to wrap */
+    }
+    
+    .sa-group-count-chip {
+        font-size: 11px;
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 2px 6px;
+        border-radius: 10px;
+        overflow: hidden; /* Prevent overflow */
+        word-wrap: break-word; /* Ensure text wraps */
+        white-space: nowrap; /* Keep count on single line */
+    }
+</style>
+
+<PlaceCreateModal IsOpen="@placeOpen" OnClose="ClosePlaceCreate" OnCreated="AfterPlaceCreated" />
+<PlaceEditModal IsOpen="@placeEditOpen" PlaceId="@editingPlaceId" OnClose="ClosePlaceEdit" OnSaved="AfterPlaceSaved" OnDeleted="AfterPlaceDeleted" />
+
+@code {
+    // Platser data
+    private SchedulerMVP.Data.Entities.Place? place;
+    private List<SchedulerMVP.Data.Entities.Place> places = new();
+    private List<SchedulerMVP.Data.Entities.Area> areas = new();
+    private List<TreeNode> roots = new();
+    private List<PlaceTreeNode> placeTreeNodes = new();
+    private HashSet<Guid> expanded = new();
+    private HashSet<Guid> expandedPlaces = new();
+    private bool placeOpen;
+    private bool placeEditOpen;
+    private Guid? editingPlaceId;
+    private HashSet<Guid> favoritePlaceIds = new();
+
+    // Grupper data
+    private List<SchedulerMVP.Data.Entities.Group>? groups;
+    private Dictionary<Guid,int> counts = new();
+    private bool placesLoaded;
+    private bool groupsLoaded;
+    private HashSet<string> selectedTypes = new(StringComparer.OrdinalIgnoreCase);
+    private List<string> groupTypes = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load places
+        places = await PlaceService.GetPlacesAsync();
+        placesLoaded = true;
+        await LoadFavoritesAsync();
+        await BuildPlaceTree();
+        
+        // Auto-select first place on first load if none selected (favoriter först)
+        if (UI.SelectedPlaceId == null && places.Count > 0)
+        {
+            var fav = places.Where(p => favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).FirstOrDefault();
+            var firstPlace = fav ?? places.OrderBy(p => p.Name).FirstOrDefault();
+            if (firstPlace is not null)
+            {
+                await SelectPlace(firstPlace.Id);
+            }
+        }
+        else if (UI.SelectedPlaceId is Guid pid)
+        {
+            // Ensure the selected place is expanded and has its areas loaded
+            await SelectPlace(pid);
+        }
+
+        // Load groups
+        try
+        {
+            var userId = UserContext.GetCurrentUserId();
+            var isAdmin = await UserContext.IsAdminAsync();
+            var gq = Db.Groups.AsQueryable();
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                gq = gq.Where(g => g.UserId == userId);
+            }
+            groups = await gq.OrderBy(g => g.Name).ToListAsync();
+            groupsLoaded = true;
+            groupTypes = groups.Select(g => DetermineGroupType(g))
+                               .Where(t => !string.IsNullOrWhiteSpace(t))
+                               .Distinct(StringComparer.OrdinalIgnoreCase)
+                               .OrderBy(t => t)
+                               .ToList();
+            await LoadCountsAsync();
+            UI.OnChanged += async () =>
+            {
+                await LoadCountsAsync();
+                // Open create place modal when requested globally (from onboarding)
+                if (UI.ShouldOpenPlaceCreateModal)
+                {
+                    UI.ShouldOpenPlaceCreateModal = false;
+                    placeOpen = true;
+                }
+                StateHasChanged();
+            };
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine($"Error loading groups: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Load all places and build the new tree structure
+        places = await PlaceService.GetPlacesAsync();
+        placesLoaded = true;
+        await LoadFavoritesAsync();
+        await BuildPlaceTree();
+        
+        // Auto-select first place on first load if none selected (favoriter först)
+        if (UI.SelectedPlaceId == null && places.Count > 0)
+        {
+            var fav = places.Where(p => favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).FirstOrDefault();
+            var firstPlace = fav ?? places.OrderBy(p => p.Name).FirstOrDefault();
+            if (firstPlace is not null)
+            {
+                await SelectPlace(firstPlace.Id);
+            }
+        }
+        else if (UI.SelectedPlaceId is Guid pid)
+        {
+            // Ensure the selected place is expanded and has its areas loaded
+            await SelectPlace(pid);
+        }
+    }
+
+    private async Task SelectPlace(Guid placeId)
+    {
+        UI.SelectedPlaceId = placeId;
+        place = await PlaceService.GetPlaceAsync(placeId);
+        areas = await PlaceService.GetAreasForPlaceAsync(placeId);
+        
+        // Expand the selected place
+        expandedPlaces.Clear();
+        expandedPlaces.Add(placeId);
+        
+        // Build tree for this place
+        BuildTree();
+        ExpandAllForCurrentPlace();
+        
+        // Select the top-most area for the chosen place
+        var first = roots.OrderBy(r => r.Area.Path).FirstOrDefault();
+        if (first is not null) UI.SelectedAreaId = first.Area.Id;
+        
+        ExpandToSelected();
+        UI.RaiseChanged();
+        StateHasChanged();
+    }
+
+    private async Task BuildPlaceTree()
+    {
+        placeTreeNodes = new List<PlaceTreeNode>();
+
+        // Sort: favorites first (alpha), then others (alpha)
+        var favs = places.Where(p => favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).ToList();
+        var nonFavs = places.Where(p => !favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).ToList();
+        var sortedPlaces = favs.Concat(nonFavs).ToList();
+        
+        foreach (var p in sortedPlaces)
+        {
+            var placeNode = new PlaceTreeNode(p);
+            
+            // Load areas for this place
+            var placeAreas = await PlaceService.GetAreasForPlaceAsync(p.Id);
+            
+            // Build area tree for this place
+            var idToNode = placeAreas.ToDictionary(a => a.Id, a => new TreeNode(a));
+            foreach (var a in placeAreas)
+            {
+                if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out var parent))
+                {
+                    parent.Children.Add(idToNode[a.Id]);
+                }
+            }
+            placeNode.AreaRoots = idToNode.Values.Where(n => n.Area.ParentAreaId == null).OrderBy(n => n.Area.Path).ToList();
+            
+            placeTreeNodes.Add(placeNode);
+        }
+    }
+
+    private void SelectArea(Guid id)
+    {
+        UI.SelectedAreaId = id;
+        ExpandToSelected();
+        UI.RaiseChanged();
+        StateHasChanged();
+        // Force immediate re-render of all components
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Toggle(Guid id)
+    {
+        if (!expanded.Add(id)) expanded.Remove(id);
+        StateHasChanged();
+    }
+
+    private bool IsExpanded(Guid id) => expanded.Contains(id);
+    private bool IsActive(Guid id) => UI.SelectedAreaId == id;
+
+    private void BuildTree()
+    {
+        var idToNode = areas.ToDictionary(a => a.Id, a => new TreeNode(a));
+        foreach (var a in areas)
+        {
+            if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out var parent))
+            {
+                parent.Children.Add(idToNode[a.Id]);
+            }
+        }
+        roots = idToNode.Values.Where(n => n.Area.ParentAreaId == null).OrderBy(n => n.Area.Path).ToList();
+        if (expanded.Count == 0)
+        {
+            foreach (var r in roots) expanded.Add(r.Area.Id);
+        }
+    }
+
+    private void ExpandToSelected()
+    {
+        if (UI.SelectedAreaId is not Guid aid) return;
+        // Expand all ancestors of selected
+        var area = areas.FirstOrDefault(a => a.Id == aid);
+        while (area != null && area.ParentAreaId is Guid pid)
+        {
+            expanded.Add(pid);
+            area = areas.FirstOrDefault(a => a.Id == pid);
+        }
+    }
+
+    private void ExpandAllForCurrentPlace()
+    {
+        foreach (var a in areas)
+        {
+            if (a.ParentAreaId is Guid pid)
+            {
+                expanded.Add(pid);
+            }
+        }
+        foreach (var r in roots)
+        {
+            expanded.Add(r.Area.Id);
+        }
+    }
+
+    private RenderFragment RenderPlaceNode(PlaceTreeNode placeNode, int depth) => builder =>
+    {
+        var seq = 0;
+        builder.OpenElement(seq++, "li");
+        builder.AddAttribute(seq++, "class", "sa-tree-item");
+
+        builder.OpenElement(seq++, "div");
+        var isFav = favoritePlaceIds.Contains(placeNode.Place.Id);
+        var rowClasses = "sa-tree-row" + (UI.SelectedPlaceId == placeNode.Place.Id ? " is-active" : string.Empty) + (isFav ? " is-fav" : string.Empty);
+        builder.AddAttribute(seq++, "class", rowClasses);
+        builder.AddAttribute(seq++, "style", $"padding-left:{Math.Max(0, depth*16)}px");
+        var hasChildren = placeNode.AreaRoots.Count > 0;
+
+        if (hasChildren)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-toggle");
+            builder.AddAttribute(seq++, "aria-expanded", IsPlaceExpanded(placeNode.Place.Id));
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceToggleClick(placeNode.Place.Id, e)));
+            builder.AddContent(seq++, IsPlaceExpanded(placeNode.Place.Id) ? "▾" : "▸");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-toggle placeholder");
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "sa-tree-label");
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceRowClick(placeNode.Place.Id, e)));
+        builder.AddContent(seq++, placeNode.Place.Name);
+        builder.CloseElement();
+
+        // Favorite star directly after the name
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "sa-tree-fav");
+        var favTitle = isFav ? "Ta bort som favorit" : "Gör till favorit";
+        builder.AddAttribute(seq++, "title", favTitle);
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceFavoriteClick(placeNode.Place.Id, e)));
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "material-symbols-outlined");
+        var fill = isFav ? 1 : 0;
+        builder.AddAttribute(seq++, "style", $"font-size:16px;line-height:1;font-variation-settings:\"FILL\" {fill};");
+        builder.AddContent(seq++, "star");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        // Edit icon that appears on hover/selection
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "sa-tree-edit");
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceEditClick(placeNode.Place.Id, e)));
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "material-symbols-outlined");
+        builder.AddAttribute(seq++, "style", "font-size:16px;line-height:1;");
+        builder.AddContent(seq++, "edit");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.CloseElement(); // row
+
+        if (placeNode.AreaRoots.Count > 0 && IsPlaceExpanded(placeNode.Place.Id))
+        {
+            builder.OpenElement(seq++, "ul");
+            builder.AddAttribute(seq++, "class", "sa-tree-list");
+            foreach (var areaRoot in placeNode.AreaRoots)
+            {
+                builder.AddContent(seq++, RenderNode(areaRoot, depth+1));
+            }
+            builder.CloseElement();
+        }
+
+        builder.CloseElement(); // li
+    };
+
+    private RenderFragment RenderNode(TreeNode node, int depth) => builder =>
+    {
+        var seq = 0;
+        builder.OpenElement(seq++, "li");
+        builder.AddAttribute(seq++, "class", "sa-tree-item");
+
+        builder.OpenElement(seq++, "div");
+        var rowClasses = "sa-tree-row" + (IsActive(node.Area.Id) ? " is-active" : string.Empty);
+        builder.AddAttribute(seq++, "class", rowClasses);
+        builder.AddAttribute(seq++, "style", $"padding-left:{Math.Max(0, depth*16)}px");
+        var hasChildren = node.Children.Count > 0;
+
+        if (hasChildren)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-toggle");
+            builder.AddAttribute(seq++, "aria-expanded", IsExpanded(node.Area.Id));
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnToggleClick(node.Area.Id, e)));
+            builder.AddContent(seq++, IsExpanded(node.Area.Id) ? "▾" : "▸");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-toggle placeholder");
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "sa-tree-label");
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnLabelClick(node.Area.Id, e)));
+        builder.AddContent(seq++, node.Area.Name);
+        builder.CloseElement();
+
+        builder.CloseElement(); // row
+
+        if (node.Children.Count > 0 && IsExpanded(node.Area.Id))
+        {
+            builder.OpenElement(seq++, "ul");
+            builder.AddAttribute(seq++, "class", "sa-tree-list");
+            foreach (var child in node.Children.OrderBy(c => c.Area.Path))
+            {
+                builder.AddContent(seq++, RenderNode(child, depth+1));
+            }
+            builder.CloseElement();
+        }
+
+        builder.CloseElement(); // li
+    };
+
+    private void OnToggleClick(Guid id, MouseEventArgs e)
+    {
+        if (UI.IsGroupFilterActive) return;
+        Toggle(id);
+    }
+
+    private void OnLabelClick(Guid id, MouseEventArgs e)
+    {
+        if (UI.IsGroupFilterActive) return;
+        SelectArea(id);
+    }
+
+    private void OnPlaceToggleClick(Guid placeId, MouseEventArgs e)
+    {
+        if (UI.IsGroupFilterActive) return;
+        TogglePlace(placeId);
+    }
+
+    private async void OnPlaceLabelClick(Guid placeId, MouseEventArgs e)
+    {
+        if (UI.IsGroupFilterActive) return;
+        await SelectPlace(placeId);
+    }
+
+    private async void OnPlaceRowClick(Guid placeId, MouseEventArgs e)
+    {
+        if (UI.IsGroupFilterActive) return;
+        // Toggle if already opened, else open this and close others
+        if (IsPlaceExpanded(placeId) && UI.SelectedPlaceId == placeId)
+        {
+            TogglePlace(placeId);
+        }
+        else
+        {
+            await SelectPlace(placeId);
+        }
+    }
+
+    private void OnPlaceEditClick(Guid placeId, MouseEventArgs e)
+    {
+        if (UI.IsGroupFilterActive) return;
+        // Prevent place selection when clicking edit
+        editingPlaceId = placeId;
+        placeEditOpen = true;
+        StateHasChanged();
+    }
+
+    private async void OnPlaceFavoriteClick(Guid placeId, MouseEventArgs e)
+    {
+        if (UI.IsGroupFilterActive) return;
+        if (!favoritePlaceIds.Add(placeId)) favoritePlaceIds.Remove(placeId);
+        await SaveFavoritesAsync();
+        await BuildPlaceTree();
+        StateHasChanged();
+    }
+
+    private void TogglePlace(Guid placeId)
+    {
+        if (!expandedPlaces.Add(placeId)) expandedPlaces.Remove(placeId);
+        StateHasChanged();
+    }
+
+    private bool IsPlaceExpanded(Guid placeId) => expandedPlaces.Contains(placeId);
+
+    private void OpenNewBookingModal()
+    {
+        // Set flag to open booking modal
+        UI.ShouldOpenBookingModal = true;
+        UI.RaiseChanged();
+    }
+
+    private void OpenCreatePlace()
+    {
+        placeOpen = true;
+        StateHasChanged();
+    }
+
+    private void GoToGroupManage()
+    {
+        Nav.NavigateTo("/grupper");
+    }
+
+    private Task ClosePlaceCreate()
+    {
+        placeOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private Task ClosePlaceEdit()
+    {
+        placeEditOpen = false;
+        editingPlaceId = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task AfterPlaceCreated()
+    {
+        places = await PlaceService.GetPlacesAsync();
+        await BuildPlaceTree();
+        
+        // Select the newly created place (last in the list)
+        var newPlace = places.LastOrDefault();
+        if (newPlace is not null)
+        {
+            await SelectPlace(newPlace.Id);
+        }
+    }
+
+    private async Task AfterPlaceSaved()
+    {
+        places = await PlaceService.GetPlacesAsync();
+        await BuildPlaceTree();
+        StateHasChanged();
+    }
+
+    private async Task AfterPlaceDeleted()
+    {
+        places = await PlaceService.GetPlacesAsync();
+        await BuildPlaceTree();
+        
+        // If the deleted place was selected, select the first available place
+        if (UI.SelectedPlaceId == editingPlaceId)
+        {
+            var firstPlace = places.FirstOrDefault();
+            if (firstPlace is not null)
+            {
+                await SelectPlace(firstPlace.Id);
+            }
+            else
+            {
+                UI.SelectedPlaceId = null;
+                UI.SelectedAreaId = null;
+                UI.RaiseChanged();
+            }
+        }
+        
+        StateHasChanged();
+    }
+
+    private sealed class TreeNode
+    {
+        public SchedulerMVP.Data.Entities.Area Area { get; }
+        public List<TreeNode> Children { get; } = new();
+        public TreeNode(SchedulerMVP.Data.Entities.Area area) { Area = area; }
+    }
+
+    private sealed class PlaceTreeNode
+    {
+        public SchedulerMVP.Data.Entities.Place Place { get; }
+        public List<TreeNode> AreaRoots { get; set; } = new();
+        public PlaceTreeNode(SchedulerMVP.Data.Entities.Place place) { Place = place; }
+    }
+
+    private async Task LoadFavoritesAsync()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", "favoritePlaceIds");
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var ids = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(json);
+                favoritePlaceIds = ids != null ? new HashSet<Guid>(ids) : new HashSet<Guid>();
+            }
+        }
+        catch { }
+    }
+
+    private async Task SaveFavoritesAsync()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(favoritePlaceIds.ToList());
+            await JS.InvokeVoidAsync("localStorage.setItem", "favoritePlaceIds", json);
+        }
+        catch { }
+    }
+
+    // Grupper methods
+    private IEnumerable<SchedulerMVP.Data.Entities.Group> filteredGroups => 
+        (groups ?? new()).Where(g =>
+            (selectedTypes.Count == 0 || (!string.IsNullOrWhiteSpace(DetermineGroupType(g)) && selectedTypes.Contains(DetermineGroupType(g)))))
+        .OrderBy(g => g.Name);
+    
+    private void SelectGroup(Guid groupId)
+    {
+        // Toggle group filter mode
+        if (UI.IsGroupFilterActive && UI.FilteredGroupId == groupId)
+        {
+            UI.FilteredGroupId = null;
+            UI.SelectedGroupId = null;
+            UI.IsGroupViewMode = false;
+            UI.GroupViewGroupId = null;
+        }
+        else
+        {
+            UI.FilteredGroupId = groupId;
+            UI.SelectedGroupId = groupId;
+            UI.IsGroupViewMode = true;
+            UI.GroupViewGroupId = groupId;
+        }
+        
+        UI.RaiseChanged();
+        StateHasChanged();
+    }
+
+    private async Task LoadCountsAsync()
+    {
+        try
+        {
+            if (UI.IsCalendarViewMode)
+            {
+                // Calendar mode: Count calendar bookings for the current week
+                var calendarBookings = await CalendarBookingService.GetBookingsForWeekAsync(UI.CurrentWeekStart);
+                var grouped = calendarBookings
+                    .GroupBy(cb => cb.GroupId)
+                    .Select(g => new { GroupId = g.Key, Cnt = g.Count() })
+                    .ToList();
+
+                counts = grouped.ToDictionary(x => x.GroupId, x => x.Cnt);
+            }
+            else if (UI.SelectedTemplateId is Guid templateId)
+            {
+                // Weekplanner mode: Count template bookings
+                var grouped = await Db.BookingTemplates
+                    .Where(bt => bt.ScheduleTemplateId == templateId)
+                    .GroupBy(bt => bt.GroupId)
+                    .Select(g => new { GroupId = g.Key, Cnt = g.Count() })
+                    .ToListAsync();
+
+                counts = grouped.ToDictionary(x => x.GroupId, x => x.Cnt);
+            }
+            else
+            {
+                counts.Clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine($"Error loading group counts: {ex.Message}");
+        }
+    }
+
+    private int GetCount(Guid groupId) => counts.TryGetValue(groupId, out var c) ? c : 0;
+    private static string FormatCount(int n) => n == 1 ? "1 tid" : $"{n} tider";
+
+    private void ToggleType(string type)
+    {
+        if (selectedTypes.Contains(type))
+            selectedTypes.Remove(type);
+        else
+            selectedTypes.Add(type);
+    }
+
+    private static string? DetermineGroupType(SchedulerMVP.Data.Entities.Group g)
+    {
+        // Prefer stored value
+        if (!string.IsNullOrWhiteSpace(g.GroupType))
+            return g.GroupType!.Trim();
+
+        // Derive from name as a non-persistent fallback
+        var name = g.Name?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(name)) return null;
+
+        if (name.StartsWith("F", StringComparison.OrdinalIgnoreCase)) return "U-Flick";
+        if (name.StartsWith("P", StringComparison.OrdinalIgnoreCase)) return "U-Pojk";
+        if (name.Equals("Herr U", StringComparison.OrdinalIgnoreCase)) return "Akademi";
+        if (name.Equals("P19", StringComparison.OrdinalIgnoreCase)) return "Akademi";
+        if (name.Contains("Dam", StringComparison.OrdinalIgnoreCase)) return "Senior";
+        if (name.Contains("Herr", StringComparison.OrdinalIgnoreCase)) return "Senior";
+        return null;
+    }
+}

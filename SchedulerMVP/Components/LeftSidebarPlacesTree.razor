@@ -1,0 +1,536 @@
+@inject SchedulerMVP.Services.IPlaceService PlaceService
+@inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
+@inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Services.BookingDialogService BookingDialog
+@inject IJSRuntime JS
+
+<div>
+    <div class="ls-header-row">
+        <h6 class="sa-panel-title">Platser & ytor</h6>
+        <button class="ls-plus @(placeOpen ? "hide-tooltip" : "")" @onclick="OpenCreatePlace">+</button>
+    </div>
+    <style>
+        .ls-header-row{display:flex;justify-content:space-between;align-items:center;margin:8px 0 10px 0}
+        .ls-plus{
+            border:none;
+            background:transparent;
+            color:#0b1e34;
+            font-size:20px;
+            line-height:1;
+            padding:6px;
+            cursor:pointer;
+            border-radius:50%;
+            transition:background-color 0.2s ease;
+            position:relative;
+        }
+        .ls-plus:hover{
+            background-color:#f1f5f9;
+        }
+        .ls-plus::after{
+            content:"Skapa ny plats";
+            position:absolute;
+            right:100%;
+            top:50%;
+            transform:translateY(-50%);
+            margin-right:8px;
+            background:#374151;
+            color:white;
+            padding:4px 8px;
+            border-radius:4px;
+            font-size:12px;
+            white-space:nowrap;
+            opacity:0;
+            pointer-events:none;
+            transition:opacity 0.2s ease;
+            z-index:9999;
+        }
+        .ls-plus:hover::after{
+            opacity:1;
+        }
+        .ls-plus.hide-tooltip::after{
+            opacity:0 !important;
+        }
+        .sa-tree-row{display:flex;align-items:center;gap:8px;padding:4px 0;}
+        .sa-tree-label{font-size:14px;line-height:20px;cursor:pointer;}
+        .sa-tree-edit{opacity:0;transition:opacity 0.2s;cursor:pointer;margin-left:4px;font-size:16px;color:#666;display:inline-flex;align-items:center}
+        .sa-tree-fav{opacity:0;transition:opacity 0.2s;cursor:pointer;margin-left:4px;color:#666;display:inline-flex;align-items:center}
+        .sa-tree-row:hover .sa-tree-edit,.sa-tree-row.is-active .sa-tree-edit{opacity:1}
+        .sa-tree-row:hover .sa-tree-fav,.sa-tree-row.is-fav .sa-tree-fav{opacity:1}
+        .sa-tree-toggle { cursor: pointer; }
+    </style>
+    
+    @if (places.Count == 0)
+    {
+        <p>Laddar…</p>
+    }
+    else
+    {
+        <ul class="sa-tree-list">
+            @foreach (var placeNode in placeTreeNodes)
+            {
+                @RenderPlaceNode(placeNode, 0)
+            }
+        </ul>
+        <div class="sa-create-booking" style="margin-top: 10px; display: none;">
+            <button class="sa-btn" @onclick="OpenNewBookingModal">Ny bokning</button>
+        </div>
+    }
+
+    <PlaceCreateModal IsOpen="@placeOpen" OnClose="ClosePlaceCreate" OnCreated="AfterPlaceCreated" />
+    <PlaceEditModal IsOpen="@placeEditOpen" PlaceId="@editingPlaceId" OnClose="ClosePlaceEdit" OnSaved="AfterPlaceSaved" OnDeleted="AfterPlaceDeleted" />
+</div>
+
+@code {
+    private SchedulerMVP.Data.Entities.Place? place;
+    private List<SchedulerMVP.Data.Entities.Place> places = new();
+    private List<SchedulerMVP.Data.Entities.Area> areas = new();
+    private List<TreeNode> roots = new();
+    private List<PlaceTreeNode> placeTreeNodes = new();
+    private HashSet<Guid> expanded = new();
+    private HashSet<Guid> expandedPlaces = new();
+    // Template selection is managed globally in the top header now
+    private bool placeOpen;
+    private bool placeEditOpen;
+    private Guid? editingPlaceId;
+    private HashSet<Guid> favoritePlaceIds = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Load all places and build the new tree structure
+        places = await PlaceService.GetPlacesAsync();
+        await LoadFavoritesAsync();
+        await BuildPlaceTree();
+        
+        // Auto-select first place on first load if none selected (favoriter först)
+        if (UI.SelectedPlaceId == null && places.Count > 0)
+        {
+            var fav = places.Where(p => favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).FirstOrDefault();
+            var firstPlace = fav ?? places.OrderBy(p => p.Name).FirstOrDefault();
+            if (firstPlace is not null)
+            {
+                await SelectPlace(firstPlace.Id);
+            }
+        }
+        else if (UI.SelectedPlaceId is Guid pid)
+        {
+            // Ensure the selected place is expanded and has its areas loaded
+            await SelectPlace(pid);
+        }
+    }
+
+    private async Task SelectPlace(Guid placeId)
+    {
+        UI.SelectedPlaceId = placeId;
+        place = await PlaceService.GetPlaceAsync(placeId);
+        areas = await PlaceService.GetAreasForPlaceAsync(placeId);
+        
+        // Expand the selected place
+        expandedPlaces.Clear();
+        expandedPlaces.Add(placeId);
+        
+        // Build tree for this place
+        BuildTree();
+        ExpandAllForCurrentPlace();
+        
+        // Select the top-most area for the chosen place
+        var first = roots.OrderBy(r => r.Area.Path).FirstOrDefault();
+        if (first is not null) UI.SelectedAreaId = first.Area.Id;
+        
+        ExpandToSelected();
+        UI.RaiseChanged();
+        StateHasChanged();
+    }
+
+    private async Task BuildPlaceTree()
+    {
+        placeTreeNodes = new List<PlaceTreeNode>();
+
+        // Sort: favorites first (alpha), then others (alpha)
+        var favs = places.Where(p => favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).ToList();
+        var nonFavs = places.Where(p => !favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).ToList();
+        var sortedPlaces = favs.Concat(nonFavs).ToList();
+        
+        foreach (var p in sortedPlaces)
+        {
+            var placeNode = new PlaceTreeNode(p);
+            
+            // Load areas for this place
+            var placeAreas = await PlaceService.GetAreasForPlaceAsync(p.Id);
+            
+            // Build area tree for this place
+            var idToNode = placeAreas.ToDictionary(a => a.Id, a => new TreeNode(a));
+            foreach (var a in placeAreas)
+            {
+                if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out var parent))
+                {
+                    parent.Children.Add(idToNode[a.Id]);
+                }
+            }
+            placeNode.AreaRoots = idToNode.Values.Where(n => n.Area.ParentAreaId == null).OrderBy(n => n.Area.Path).ToList();
+            
+            placeTreeNodes.Add(placeNode);
+        }
+    }
+
+    // Template selection handled in header
+
+    private void SelectArea(Guid id)
+    {
+        UI.SelectedAreaId = id;
+        ExpandToSelected();
+        UI.RaiseChanged();
+        StateHasChanged();
+        // Force immediate re-render of all components
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Toggle(Guid id)
+    {
+        if (!expanded.Add(id)) expanded.Remove(id);
+        StateHasChanged();
+    }
+
+    private bool IsExpanded(Guid id) => expanded.Contains(id);
+    private bool IsActive(Guid id) => UI.SelectedAreaId == id;
+
+    private void BuildTree()
+    {
+        var idToNode = areas.ToDictionary(a => a.Id, a => new TreeNode(a));
+        foreach (var a in areas)
+        {
+            if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out var parent))
+            {
+                parent.Children.Add(idToNode[a.Id]);
+            }
+        }
+        roots = idToNode.Values.Where(n => n.Area.ParentAreaId == null).OrderBy(n => n.Area.Path).ToList();
+        if (expanded.Count == 0)
+        {
+            foreach (var r in roots) expanded.Add(r.Area.Id);
+        }
+    }
+
+    private void ExpandToSelected()
+    {
+        if (UI.SelectedAreaId is not Guid aid) return;
+        // Expand all ancestors of selected
+        var area = areas.FirstOrDefault(a => a.Id == aid);
+        while (area != null && area.ParentAreaId is Guid pid)
+        {
+            expanded.Add(pid);
+            area = areas.FirstOrDefault(a => a.Id == pid);
+        }
+    }
+
+    private void ExpandAllForCurrentPlace()
+    {
+        foreach (var a in areas)
+        {
+            if (a.ParentAreaId is Guid pid)
+            {
+                expanded.Add(pid);
+            }
+        }
+        foreach (var r in roots)
+        {
+            expanded.Add(r.Area.Id);
+        }
+    }
+
+    private RenderFragment RenderPlaceNode(PlaceTreeNode placeNode, int depth) => builder =>
+    {
+        var seq = 0;
+        builder.OpenElement(seq++, "li");
+        builder.AddAttribute(seq++, "class", "sa-tree-item");
+
+        builder.OpenElement(seq++, "div");
+        var isFav = favoritePlaceIds.Contains(placeNode.Place.Id);
+        var rowClasses = "sa-tree-row" + (UI.SelectedPlaceId == placeNode.Place.Id ? " is-active" : string.Empty) + (isFav ? " is-fav" : string.Empty);
+        builder.AddAttribute(seq++, "class", rowClasses);
+        builder.AddAttribute(seq++, "style", $"padding-left:{Math.Max(0, depth*16)}px");
+        var hasChildren = placeNode.AreaRoots.Count > 0;
+
+        if (hasChildren)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-toggle");
+            builder.AddAttribute(seq++, "aria-expanded", IsPlaceExpanded(placeNode.Place.Id));
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceToggleClick(placeNode.Place.Id, e)));
+            builder.AddContent(seq++, IsPlaceExpanded(placeNode.Place.Id) ? "▾" : "▸");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-toggle placeholder");
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "sa-tree-label");
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceRowClick(placeNode.Place.Id, e)));
+        builder.AddContent(seq++, placeNode.Place.Name);
+        builder.CloseElement();
+
+        // Favorite star directly after the name
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "sa-tree-fav");
+        var favTitle = isFav ? "Ta bort som favorit" : "Gör till favorit";
+        builder.AddAttribute(seq++, "title", favTitle);
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceFavoriteClick(placeNode.Place.Id, e)));
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "material-symbols-outlined");
+        var fill = isFav ? 1 : 0;
+        builder.AddAttribute(seq++, "style", $"font-size:16px;line-height:1;font-variation-settings:\"FILL\" {fill};");
+        builder.AddContent(seq++, "star");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        // Edit icon that appears on hover/selection
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "sa-tree-edit");
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceEditClick(placeNode.Place.Id, e)));
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "material-symbols-outlined");
+        builder.AddAttribute(seq++, "style", "font-size:16px;line-height:1;");
+        builder.AddContent(seq++, "edit");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.CloseElement(); // row
+
+        if (placeNode.AreaRoots.Count > 0 && IsPlaceExpanded(placeNode.Place.Id))
+        {
+            builder.OpenElement(seq++, "ul");
+            builder.AddAttribute(seq++, "class", "sa-tree-list");
+            foreach (var areaRoot in placeNode.AreaRoots)
+            {
+                builder.AddContent(seq++, RenderNode(areaRoot, depth+1));
+            }
+            builder.CloseElement();
+        }
+
+        builder.CloseElement(); // li
+    };
+
+    private RenderFragment RenderNode(TreeNode node, int depth) => builder =>
+    {
+        var seq = 0;
+        builder.OpenElement(seq++, "li");
+        builder.AddAttribute(seq++, "class", "sa-tree-item");
+
+        builder.OpenElement(seq++, "div");
+        var rowClasses = "sa-tree-row" + (IsActive(node.Area.Id) ? " is-active" : string.Empty);
+        builder.AddAttribute(seq++, "class", rowClasses);
+        builder.AddAttribute(seq++, "style", $"padding-left:{Math.Max(0, depth*16)}px");
+        var hasChildren = node.Children.Count > 0;
+
+        if (hasChildren)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-toggle");
+            builder.AddAttribute(seq++, "aria-expanded", IsExpanded(node.Area.Id));
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnToggleClick(node.Area.Id, e)));
+            builder.AddContent(seq++, IsExpanded(node.Area.Id) ? "▾" : "▸");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-toggle placeholder");
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "sa-tree-label");
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnLabelClick(node.Area.Id, e)));
+        builder.AddContent(seq++, node.Area.Name);
+        builder.CloseElement();
+
+        builder.CloseElement(); // row
+
+        if (node.Children.Count > 0 && IsExpanded(node.Area.Id))
+        {
+            builder.OpenElement(seq++, "ul");
+            builder.AddAttribute(seq++, "class", "sa-tree-list");
+            foreach (var child in node.Children.OrderBy(c => c.Area.Path))
+            {
+                builder.AddContent(seq++, RenderNode(child, depth+1));
+            }
+            builder.CloseElement();
+        }
+
+        builder.CloseElement(); // li
+    };
+
+    private void OnToggleClick(Guid id, MouseEventArgs e)
+    {
+        Toggle(id);
+    }
+
+    private void OnLabelClick(Guid id, MouseEventArgs e)
+    {
+        SelectArea(id);
+    }
+
+    private void OnPlaceToggleClick(Guid placeId, MouseEventArgs e)
+    {
+        TogglePlace(placeId);
+    }
+
+    private async void OnPlaceLabelClick(Guid placeId, MouseEventArgs e)
+    {
+        await SelectPlace(placeId);
+    }
+
+    private async void OnPlaceRowClick(Guid placeId, MouseEventArgs e)
+    {
+        // Toggle if already opened, else open this and close others
+        if (IsPlaceExpanded(placeId) && UI.SelectedPlaceId == placeId)
+        {
+            TogglePlace(placeId);
+        }
+        else
+        {
+            await SelectPlace(placeId);
+        }
+    }
+
+    private void OnPlaceEditClick(Guid placeId, MouseEventArgs e)
+    {
+        // Prevent place selection when clicking edit
+        editingPlaceId = placeId;
+        placeEditOpen = true;
+        StateHasChanged();
+    }
+
+    private async void OnPlaceFavoriteClick(Guid placeId, MouseEventArgs e)
+    {
+        if (!favoritePlaceIds.Add(placeId)) favoritePlaceIds.Remove(placeId);
+        await SaveFavoritesAsync();
+        await BuildPlaceTree();
+        StateHasChanged();
+    }
+
+    private void TogglePlace(Guid placeId)
+    {
+        if (!expandedPlaces.Add(placeId)) expandedPlaces.Remove(placeId);
+        StateHasChanged();
+    }
+
+    private bool IsPlaceExpanded(Guid placeId) => expandedPlaces.Contains(placeId);
+
+    private void OpenNewBookingModal()
+    {
+        // Set flag to open booking modal
+        UI.ShouldOpenBookingModal = true;
+        UI.RaiseChanged();
+    }
+
+    // Template actions removed from sidebar
+
+    private void OpenCreatePlace()
+    {
+        placeOpen = true;
+        StateHasChanged();
+    }
+
+    // Template modal callbacks removed
+
+    private Task ClosePlaceCreate()
+    {
+        placeOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private Task ClosePlaceEdit()
+    {
+        placeEditOpen = false;
+        editingPlaceId = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task AfterPlaceCreated()
+    {
+        places = await PlaceService.GetPlacesAsync();
+        await BuildPlaceTree();
+        
+        // Select the newly created place (last in the list)
+        var newPlace = places.LastOrDefault();
+        if (newPlace is not null)
+        {
+            await SelectPlace(newPlace.Id);
+        }
+    }
+
+    private async Task AfterPlaceSaved()
+    {
+        places = await PlaceService.GetPlacesAsync();
+        await BuildPlaceTree();
+        StateHasChanged();
+    }
+
+    private async Task AfterPlaceDeleted()
+    {
+        places = await PlaceService.GetPlacesAsync();
+        await BuildPlaceTree();
+        
+        // If the deleted place was selected, select the first available place
+        if (UI.SelectedPlaceId == editingPlaceId)
+        {
+            var firstPlace = places.FirstOrDefault();
+            if (firstPlace is not null)
+            {
+                await SelectPlace(firstPlace.Id);
+            }
+            else
+            {
+                UI.SelectedPlaceId = null;
+                UI.SelectedAreaId = null;
+                UI.RaiseChanged();
+            }
+        }
+        
+        StateHasChanged();
+    }
+
+    private sealed class TreeNode
+    {
+        public SchedulerMVP.Data.Entities.Area Area { get; }
+        public List<TreeNode> Children { get; } = new();
+        public TreeNode(SchedulerMVP.Data.Entities.Area area) { Area = area; }
+    }
+
+    private sealed class PlaceTreeNode
+    {
+        public SchedulerMVP.Data.Entities.Place Place { get; }
+        public List<TreeNode> AreaRoots { get; set; } = new();
+        public PlaceTreeNode(SchedulerMVP.Data.Entities.Place place) { Place = place; }
+    }
+
+    private async Task LoadFavoritesAsync()
+    {
+        try
+        {
+            var json = await JS.InvokeAsync<string>("localStorage.getItem", "favoritePlaceIds");
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var ids = System.Text.Json.JsonSerializer.Deserialize<List<Guid>>(json);
+                favoritePlaceIds = ids != null ? new HashSet<Guid>(ids) : new HashSet<Guid>();
+            }
+        }
+        catch { }
+    }
+
+    private async Task SaveFavoritesAsync()
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(favoritePlaceIds.ToList());
+            await JS.InvokeVoidAsync("localStorage.setItem", "favoritePlaceIds", json);
+        }
+        catch { }
+    }
+}
+
+

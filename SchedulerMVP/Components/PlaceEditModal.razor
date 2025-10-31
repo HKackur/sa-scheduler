@@ -1,0 +1,113 @@
+@inject SchedulerMVP.Services.IPlaceService PlaceService
+@inject SchedulerMVP.Services.UIState UI
+
+@if (IsOpen && PlaceId.HasValue)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="OnBackdrop"></div>
+    <div class="bm-modal">
+        <div class="bm-header">
+            <h2 class="bm-title">Redigera plats</h2>
+        </div>
+        <div class="bm-field">
+            <label class="bm-label">Platsnamn</label>
+            <input class="tb-select" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
+        </div>
+        <div class="bm-field">
+            <label class="bm-label">Standard längd på bokning</label>
+            <div class="bm-inline">
+                <input class="tb-select bm-w-full" value="@durationText" @oninput="OnDurationInput" />
+                <span class="bm-suffix">min</span>
+            </div>
+        </div>
+        <div class="bm-actions">
+            <button type="button" @onclick="OnDelete" class="btn-danger-left">Ta bort</button>
+            <div style="margin-left:auto;display:flex;gap:12px;">
+                <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+                <button type="button" @onclick="OnSave" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Spara</button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px 28px 0 28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:12px}
+        .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+        .bm-w-full{width:100%}
+        .bm-inline{display:flex;align-items:center;gap:8px}
+        .bm-suffix{font-size:14px;color:#6b7280}
+        .bm-actions{display:flex;align-items:center;margin-top:8px}
+        .btn-outline{padding:10px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720}
+        .btn-primary{padding:10px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff}
+        .btn-danger-left{padding:10px 16px;border:none;border-radius:10px;background:#dc3545;color:#fff}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid? PlaceId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnDeleted { get; set; }
+
+    private string name = string.Empty;
+    private string durationText = "90";
+    private SchedulerMVP.Data.Entities.Place? place;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && PlaceId.HasValue)
+        {
+            await LoadPlace();
+        }
+    }
+
+    private async Task LoadPlace()
+    {
+        if (PlaceId.HasValue)
+        {
+            place = await PlaceService.GetPlaceAsync(PlaceId.Value);
+            if (place != null)
+            {
+                name = place.Name;
+                durationText = place.DefaultDurationMin.ToString();
+            }
+        }
+    }
+
+    private void OnNameInput(ChangeEventArgs e) => name = e.Value?.ToString() ?? string.Empty;
+    private void OnDurationInput(ChangeEventArgs e) => durationText = e.Value?.ToString() ?? "";
+
+    private async Task OnSave()
+    {
+        if (place != null && !string.IsNullOrWhiteSpace(name) && int.TryParse(durationText, out var duration))
+        {
+            place.Name = name;
+            place.DefaultDurationMin = duration;
+            await PlaceService.UpdatePlaceAsync(place);
+            
+            IsOpen = false;
+            await OnSaved.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private async Task OnDelete()
+    {
+        if (place != null)
+        {
+            await PlaceService.DeletePlaceAsync(place.Id);
+            
+            IsOpen = false;
+            await OnDeleted.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private async Task OnCancel() => await CloseAsync();
+    private async Task OnBackdrop(MouseEventArgs _) => await CloseAsync();
+
+    private async Task CloseAsync()
+    {
+        IsOpen = false;
+        await OnClose.InvokeAsync();
+    }
+}

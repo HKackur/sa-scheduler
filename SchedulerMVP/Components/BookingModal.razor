@@ -1,0 +1,986 @@
+@using SchedulerMVP.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@using System.Threading
+@inject SchedulerMVP.Data.AppDbContext Db
+@inject SchedulerMVP.Services.UserContextService UserContext
+@inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Services.IConflictService ConflictService
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="CloseModal"></div>
+    
+    <div class="bm-modal" @onclick="CloseAreaDropdown">
+        <div class="bm-header">
+            <h2 class="bm-title">Skapa bokning</h2>
+        </div>
+        
+        @* Group Selection *@
+        <div class="bm-field">
+            <label class="bm-label">Grupp</label>
+            <select @bind="SelectedGroupId" @bind:event="onchange" class="bm-input">
+                <option value="">Välj grupp</option>
+                @if (Groups != null)
+                {
+                    @foreach (var group in Groups)
+                    {
+                        <option value="@group.Id">@group.Name</option>
+                    }
+                }
+            </select>
+        </div>
+        
+        @* Place Selection *@
+        <div class="bm-field">
+            <label class="bm-label">Plats</label>
+            <div class="bm-custom-select" @onclick:stopPropagation="true">
+                <div class="bm-custom-select-trigger" @onclick="TogglePlaceDropdown">
+                    @if (SelectedPlaceId.HasValue && AvailablePlaces != null)
+                    {
+                        var selectedPlace = AvailablePlaces.FirstOrDefault(p => p.Id == SelectedPlaceId.Value);
+                        if (selectedPlace != null)
+                        {
+                            <span class="bm-place-name">@selectedPlace.Name</span>
+                        }
+                    }
+                    else
+                    {
+                        <span class="bm-placeholder">Välj plats</span>
+                    }
+                    <span class="bm-dropdown-icon @(showPlaceDropdown ? "open" : "")"></span>
+                </div>
+                
+                @if (showPlaceDropdown && AvailablePlaces != null)
+                {
+                    <div class="bm-custom-select-dropdown">
+                        @foreach (var place in AvailablePlaces)
+                        {
+                            var isSelected = SelectedPlaceId == place.Id;
+                            <div class="bm-dropdown-option @(isSelected ? "selected" : "")" 
+                                 @onclick="() => SelectPlace(place.Id)">
+                                <span class="bm-place-name">@place.Name</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+        
+        @* Area Selection *@
+        <div class="bm-field">
+            <label class="bm-label">Yta</label>
+            <div class="bm-custom-select" @onclick:stopPropagation="true">
+                <div class="bm-custom-select-trigger" @onclick="() => ToggleAreaDropdown()">
+                    @if (SelectedAreaId.HasValue && AvailableAreas != null)
+                    {
+                        var selectedArea = AvailableAreas.FirstOrDefault(a => a.Id == SelectedAreaId.Value);
+                        if (selectedArea != null)
+                        {
+                            var isAvailable = GetAreaAvailability(selectedArea.Id);
+                            <div class="bm-selected-area">
+                                <span class="bm-availability-icon @(isAvailable ? "available" : "unavailable")"></span>
+                                <span class="bm-area-name">@selectedArea.Name</span>
+                                @if (!isAvailable)
+                                {
+                                    <span class="bm-unavailable-text">(Upptagen)</span>
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <span class="bm-placeholder">Välj yta</span>
+                    }
+                    <span class="bm-dropdown-icon @(showAreaDropdown ? "open" : "")"></span>
+                </div>
+                
+                @if (showAreaDropdown && AvailableAreas != null)
+                {
+                    <div class="bm-custom-select-dropdown">
+                        @foreach (var area in AvailableAreas)
+                        {
+                            var isAvailable = GetAreaAvailability(area.Id);
+                            var isSelected = SelectedAreaId == area.Id;
+                            <div class="bm-dropdown-option @(isSelected ? "selected" : "") @(isAvailable ? "available" : "unavailable")" 
+                                 @onclick="() => SelectArea(area.Id)">
+                                <span class="bm-availability-icon @(isAvailable ? "available" : "unavailable")"></span>
+                                <span class="bm-area-name">@area.Name</span>
+                                @if (!isAvailable)
+                                {
+                                    <span class="bm-unavailable-text">(Upptagen)</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* Day Selection - Different for Calendar vs Weekplanner mode *@
+        @if (UI.IsCalendarViewMode)
+        {
+            @* Calendar mode: Date picker *@
+            <div class="bm-field">
+                <label class="bm-label">Datum</label>
+                <input type="date" @bind="SelectedDate" class="bm-input" />
+            </div>
+        }
+        else
+        {
+            @* Weekplanner mode: Weekday picker *@
+            <div class="bm-field">
+                <div class="bm-days">
+                    @for (var checkboxDay = 1; checkboxDay <= 7; checkboxDay++)
+                    {
+                        var dayIndex = checkboxDay; // capture per-iteration to avoid closure bug
+                        var dayName = GetDayName(dayIndex);
+                        var isChecked = SelectedDays.Contains(dayIndex);
+                        <div class="bm-day">
+                            <div class="bm-day-label">@dayName</div>
+                            <input class="bm-checkbox" type="checkbox" checked="@isChecked" @onchange="(e) => OnDayCheckboxChanged(dayIndex, e.Value)" />
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @* Time Selection *@
+        <div class="bm-field">
+            <div class="bm-time-row">
+                <div>
+                    <label class="bm-label">Starttid</label>
+                    <div class="bm-select-wrap">
+                        <input type="time" value="@StartTime" @onchange="OnStartTimeChanged" class="bm-input" />
+                    </div>
+                </div>
+                <div>
+                    <label class="bm-label">Sluttid</label>
+                    <div class="bm-select-wrap">
+                        <input type="time" value="@EndTime" @onchange="OnEndTimeChanged" class="bm-input" />
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        @if (conflictMessages.Count > 0)
+        {
+            <div class="bm-field" style="margin-top:4px;">
+                <div style="padding:10px 12px;border:1px solid #fecaca;background:#fff1f2;color:#7f1d1d;border-radius:10px;font-size:13px;">
+                    <div style="font-weight:700;margin-bottom:4px;">Konflikt</div>
+                    @foreach (var msg in conflictMessages)
+                    {
+                        <div>• @msg</div>
+                    }
+                </div>
+            </div>
+        }
+        
+        @* Övrigt (toggle) *@
+        <div class="bm-field" style="margin-top:12px;">
+            <button type="button" @onclick="ToggleExtras" style="background:transparent;border:none;color:#0b1e34;cursor:pointer;padding:0;font-weight:600;text-align:left;">@(showExtras ? "Dölj alternativ" : "Fler alternativ")</button>
+        </div>
+        @if (showExtras)
+        {
+            <div class="bm-field">
+                <div style="display:grid;gap:12px;grid-template-columns:1fr;">
+                    <div>
+                        <label class="bm-label">Notering</label>
+                        <textarea class="bm-input" rows="3" @bind="Notes"></textarea>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label class="bm-label">Kontaktperson</label>
+                            <input class="bm-input" @bind="ContactName" />
+                        </div>
+                        <div>
+                            <label class="bm-label">Telefon</label>
+                            <input class="bm-input" @bind="ContactPhone" />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="bm-label">E‑post</label>
+                        <input class="bm-input" @bind="ContactEmail" />
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* Action Buttons *@
+        <div class="bm-actions">
+            <button type="button" @onclick="CloseModal" class="btn-outline">Avbryt</button>
+            <button type="button" @onclick="SaveBookingTemplate" class="btn-primary" disabled="@hasConflicts">Spara</button>
+        </div>
+    </div>
+    
+    <style>
+        /* ============================================
+           BOOKING MODAL - STRUCTURE
+           ============================================ */
+        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px 28px 0 28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:12px}
+        .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+        
+        /* ============================================
+           BOOKING MODAL - INPUT STYLING
+           All inputs use .bm-input for consistency
+           All inputs have same height (40px) except textarea (80px)
+           ============================================ */
+        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
+        .bm-input[type="time"],.bm-input[type="date"]{padding:10px 12px}
+        .bm-input[type="time"]::-webkit-calendar-picker-indicator,.bm-input[type="date"]::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer}
+        textarea.bm-input{min-height:80px;padding:10px 12px;resize:vertical}
+        select.bm-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;cursor:pointer;padding-right:40px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 24 24' width='20'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:20px 20px}
+        
+        /* ============================================
+           BOOKING MODAL - DAY SELECTION
+           ============================================ */
+        .bm-days{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-start;margin-top:4px;margin-bottom:4px}
+        .bm-day{display:flex;flex-direction:column;align-items:center;width:44px}
+        .bm-day-label{font-weight:600;margin-bottom:6px;color:#0f1720;font-size:12px;text-align:center}
+        .bm-checkbox{appearance:none;width:20px;height:20px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;position:relative;display:inline-block}
+        .bm-checkbox:checked{background:#1761a5;border-color:#1761a5}
+        .bm-checkbox:checked::after{content:"";position:absolute;left:5px;top:2px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+        
+        /* ============================================
+           BOOKING MODAL - TIME SELECTION
+           ============================================ */
+        .bm-time-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+        .bm-time-row > div{box-sizing:border-box;min-width:0}
+        
+        /* ============================================
+           BOOKING MODAL - CUSTOM SELECTS (Place/Area)
+           ============================================ */
+        .bm-custom-select{position:relative;width:100%;box-sizing:border-box}
+        .bm-custom-select-trigger{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #dcdee2;border-radius:4px;background-color:#f3f5f7;cursor:pointer;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;min-height:40px;box-sizing:border-box;width:100%}
+        .bm-custom-select-trigger:hover{border-color:#cbd5e1}
+        .bm-selected-area{display:flex;align-items:center;gap:8px;flex:1}
+        .bm-placeholder{color:#9ca3af}
+        .bm-area-name{flex:1;font-size:12px;font-weight:400;color:#000}
+        .bm-availability-icon{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+        .bm-availability-icon.available{background-color:#10b981}
+        .bm-availability-icon.unavailable{background-color:#ef4444}
+        .bm-unavailable-text{color:#9ca3af;font-size:11px}
+        .bm-dropdown-icon{display:inline-block;width:20px;height:20px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 24 24' width='20'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center;background-size:20px 20px;flex-shrink:0;transition:transform 0.2s}
+        .bm-dropdown-icon.open{transform:rotate(180deg)}
+        .bm-custom-select-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #E3E8EE;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:1000;max-height:200px;overflow-y:auto;margin-top:2px}
+        .bm-dropdown-option{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:12px}
+        .bm-dropdown-option:last-child{border-bottom:none}
+        .bm-dropdown-option:hover{background-color:#f8fafc}
+        .bm-dropdown-option.selected{background-color:#eff6ff;color:#1d4ed8}
+        .bm-dropdown-option.unavailable{color:#9ca3af;cursor:not-allowed}
+        .bm-dropdown-option.unavailable:hover{background-color:#fef2f2}
+        
+        /* ============================================
+           BOOKING MODAL - ACTIONS
+           ============================================ */
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
+        .btn-outline{padding:10px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720;cursor:pointer}
+        .btn-primary{padding:10px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff;cursor:pointer}
+        .bm-option-unavailable{color:#9ca3af;background-color:#f9fafb}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Area? SelectedArea { get; set; }
+    [Parameter] public Place? SelectedPlace { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public string? PrefilledStartTime { get; set; }
+    [Parameter] public string? PrefilledEndTime { get; set; }
+    [Parameter] public Guid? PrefilledGroupId { get; set; }
+    [Parameter] public int? PrefilledDay { get; set; }
+    
+    private List<int> SelectedDays { get; set; } = new();
+    private Guid? SelectedGroupId { get; set; }
+    private DateTime SelectedDate { get; set; } = DateTime.Today;
+    private string StartTime { get; set; } = "08:00";
+    private string EndTime { get; set; } = "09:00";
+    private List<Group>? Groups;
+    private int currentDurationMinutes = 60; // Track current duration
+    private bool isUpdatingTime = false; // Prevent recursive updates
+    private bool hasConflicts = false;
+    private List<string> conflictMessages = new();
+    private string? Notes;
+    private string? ContactName;
+    private string? ContactPhone;
+    private string? ContactEmail;
+    private bool showExtras = false;
+    
+    // Place selection properties
+    private Guid? SelectedPlaceId { get; set; }
+    private List<Place>? AvailablePlaces;
+    private bool showPlaceDropdown = false;
+    
+    // Area selection properties
+    private Guid? SelectedAreaId { get; set; }
+    private List<Area>? AvailableAreas;
+    private Dictionary<Guid, bool> AreaAvailability = new();
+    private bool showAreaDropdown = false;
+    
+    // Semaphore to prevent concurrent availability checks and race conditions
+    private readonly SemaphoreSlim availabilityCheckLock = new SemaphoreSlim(1, 1);
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            // Clear previous area availability data to force refresh
+            AreaAvailability.Clear();
+            
+            // Set the initially selected place (default to the place the user clicked on)
+            // This must be set BEFORE loading areas, as LoadAvailableAreasAsync depends on SelectedPlaceId
+            if (SelectedPlace != null)
+            {
+                SelectedPlaceId = SelectedPlace.Id;
+            }
+            
+            // Load groups from database FIRST - we need them before setting SelectedGroupId
+            await LoadGroupsAsync();
+            
+            // Preselect group: Always use UI.FilteredGroupId if group filter is active
+            // This is the same value used to filter the week view
+            if (UI.IsGroupFilterActive && UI.FilteredGroupId.HasValue)
+            {
+                SelectedGroupId = UI.FilteredGroupId;
+            }
+            else if (PrefilledGroupId.HasValue)
+            {
+                SelectedGroupId = PrefilledGroupId;
+            }
+            else
+            {
+                SelectedGroupId = null;
+            }
+            
+            // Force UI update to reflect selected group
+            StateHasChanged();
+            
+            // Load available places
+            await LoadAvailablePlacesAsync();
+            
+            // Load available areas for the place (now that SelectedPlaceId is set)
+            await LoadAvailableAreasAsync();
+            
+            // Set the initially selected area (default to the area the user clicked on)
+            // This must be set AFTER loading areas, so AvailableAreas is populated
+            if (SelectedArea != null)
+            {
+                SelectedAreaId = SelectedArea.Id;
+            }
+            
+            // Reset selected days
+            SelectedDays.Clear();
+            
+            // Pre-fill day if provided (Weekplanner mode)
+            if (PrefilledDay.HasValue && PrefilledDay.Value >= 1 && PrefilledDay.Value <= 7)
+            {
+                SelectedDays.Add(PrefilledDay.Value);
+            }
+            
+            // Initialize date for Calendar mode
+            if (UI.IsCalendarViewMode)
+            {
+                // Set to a date from the current week being displayed
+                // If PrefilledDay is provided, use that day of the current week
+                if (PrefilledDay.HasValue && PrefilledDay.Value >= 1 && PrefilledDay.Value <= 7)
+                {
+                    var currentWeekStart = UI.CurrentWeekStart;
+                    SelectedDate = currentWeekStart.AddDays(PrefilledDay.Value - 1).ToDateTime(TimeOnly.MinValue);
+                }
+                else
+                {
+                    // Default to Monday of current week
+                    SelectedDate = UI.CurrentWeekStart.ToDateTime(TimeOnly.MinValue);
+                }
+            }
+            
+            // Initialize times based on place default duration
+            if (SelectedPlace != null)
+            {
+                currentDurationMinutes = SelectedPlace.DefaultDurationMin;
+                
+                // Use prefilled times if provided, otherwise use defaults
+                StartTime = !string.IsNullOrEmpty(PrefilledStartTime) ? PrefilledStartTime : "08:00";
+                if (!string.IsNullOrEmpty(PrefilledEndTime))
+                {
+                    EndTime = PrefilledEndTime!;
+                    currentDurationMinutes = GetDurationInMinutes(StartTime, EndTime);
+                }
+                else
+                {
+                    EndTime = AddMinutesToTime(StartTime, currentDurationMinutes);
+                }
+                
+                // Console.WriteLine($"=== BOOKING MODAL INIT ===");
+                // Console.WriteLine($"Place: {SelectedPlace.Name}");
+                // Console.WriteLine($"Default Duration: {currentDurationMinutes} minutes");
+                // Console.WriteLine($"PrefilledStartTime: {PrefilledStartTime}");
+                // Console.WriteLine($"Start Time: {StartTime}");
+                // Console.WriteLine($"End Time: {EndTime}");
+                // Console.WriteLine($"Prefilled Day: {PrefilledDay}");
+            }
+            
+            // Check availability for ALL areas in the dropdown after all parameters are set
+            // This ensures the availability indicators are correct from the start
+            await CheckAllAreasAvailabilityAsync();
+            
+            // Then check conflicts for the selected area
+            await RecheckConflictsAsync();
+        }
+    }
+    
+    private async Task LoadGroupsAsync()
+    {
+        try
+        {
+            var userId = UserContext.GetCurrentUserId();
+            var isAdmin = await UserContext.IsAdminAsync();
+            var query = Db.Groups.AsQueryable();
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                query = query.Where(g => g.UserId == userId || g.UserId == null);
+            }
+            Groups = await query.OrderBy(g => g.Name).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine($"Error loading groups: {ex.Message}");
+        }
+    }
+    
+    private async Task LoadAvailablePlacesAsync()
+    {
+        try
+        {
+            AvailablePlaces = await Db.Places.OrderBy(p => p.Name).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine($"Error loading places: {ex.Message}");
+        }
+    }
+    
+    private async Task LoadAvailableAreasAsync()
+    {
+        if (!SelectedPlaceId.HasValue) return;
+        
+        try
+        {
+            // Load all areas for the current place, ordered by path for hierarchical display
+            AvailableAreas = await Db.Areas
+                .Where(a => a.PlaceId == SelectedPlaceId.Value)
+                .OrderBy(a => a.Path)
+                .ToListAsync();
+            
+            // Check availability for all areas
+            await CheckAllAreasAvailabilityAsync();
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine($"Error loading areas: {ex.Message}");
+        }
+    }
+    
+    private async Task CheckAllAreasAvailabilityAsync()
+    {
+        // Use semaphore to ensure only one availability check runs at a time
+        // This prevents race conditions and ensures UI updates are consistent
+        await availabilityCheckLock.WaitAsync();
+        try
+        {
+            if (AvailableAreas == null) return;
+            
+            // Don't check availability if we don't have the required parameters
+            // For Calendar mode: need SelectedDate
+            // For Weekplanner mode: need SelectedTemplateId and SelectedDays
+            if (UI.IsCalendarViewMode)
+            {
+                if (SelectedDate == default(DateTime))
+                {
+                    // Can't check availability without a date
+                    return;
+                }
+            }
+            else
+            {
+                if (!UI.SelectedTemplateId.HasValue || SelectedDays.Count == 0)
+                {
+                    // Can't check availability without template and days
+                    // Default all to available for now
+                    foreach (var area in AvailableAreas)
+                    {
+                        AreaAvailability[area.Id] = true;
+                    }
+                    return;
+                }
+            }
+            
+            AreaAvailability.Clear();
+            
+            // Parse current time selection
+            var sp = StartTime.Split(':'); 
+            var ep = EndTime.Split(':');
+            var s = int.Parse(sp[0]) * 60 + int.Parse(sp[1]);
+            var e = int.Parse(ep[0]) * 60 + int.Parse(ep[1]);
+            
+            foreach (var area in AvailableAreas)
+            {
+                bool isAvailable = true;
+                
+                if (UI.IsCalendarViewMode)
+                {
+                    // Check calendar conflicts for the selected date
+                    var conflicts = await ConflictService.CheckCalendarConflictsAsync(area.Id, DateOnly.FromDateTime(SelectedDate), s, e, null);
+                    isAvailable = conflicts.Count == 0;
+                }
+                else
+                {
+                    // Check template conflicts for selected days
+                    // We already verified SelectedTemplateId and SelectedDays.Count > 0 above
+                    foreach (var day in SelectedDays)
+                    {
+                        var conflicts = await ConflictService.CheckAreaConflictsAsync(area.Id, day, s, e, null, UI.SelectedTemplateId!.Value);
+                        if (conflicts.Count > 0)
+                        {
+                            isAvailable = false;
+                            break; // Once a conflict is found, mark as unavailable
+                        }
+                    }
+                }
+                
+                AreaAvailability[area.Id] = isAvailable;
+            }
+            
+            // Force UI update after availability is checked
+            StateHasChanged();
+        }
+        finally
+        {
+            availabilityCheckLock.Release();
+        }
+    }
+    
+    private bool GetAreaAvailability(Guid areaId)
+    {
+        return AreaAvailability.TryGetValue(areaId, out bool isAvailable) ? isAvailable : true;
+    }
+    
+    private async Task ToggleAreaDropdown()
+    {
+        // Before opening dropdown, ALWAYS refresh availability to ensure it's up-to-date
+        // This ensures availability is correct even if modals was opened without PrefilledDay
+        if (!showAreaDropdown && AvailableAreas != null)
+        {
+            // Force refresh availability before showing dropdown
+            // StateHasChanged() is called internally by CheckAllAreasAvailabilityAsync()
+            await CheckAllAreasAvailabilityAsync();
+        }
+        showAreaDropdown = !showAreaDropdown;
+        StateHasChanged();
+    }
+    
+    private void CloseAreaDropdown()
+    {
+        showAreaDropdown = false;
+        showPlaceDropdown = false;
+        StateHasChanged();
+    }
+    
+    private async Task SelectArea(Guid areaId)
+    {
+        SelectedAreaId = areaId;
+        showAreaDropdown = false;
+        
+        if (AvailableAreas != null)
+        {
+            var newArea = AvailableAreas.FirstOrDefault(a => a.Id == areaId);
+            if (newArea != null)
+            {
+                // We need to update the parent component's SelectedArea
+                // This will be handled by the OnSave method
+            }
+        }
+        
+        // Recheck all areas availability when area is selected, then check conflicts
+        // StateHasChanged() is called by CheckAllAreasAvailabilityAsync() and RecheckConflictsAsync()
+        await CheckAllAreasAvailabilityAsync();
+        await RecheckConflictsAsync();
+    }
+    
+    private void TogglePlaceDropdown()
+    {
+        showPlaceDropdown = !showPlaceDropdown;
+        StateHasChanged();
+    }
+    
+    private void ClosePlaceDropdown()
+    {
+        showPlaceDropdown = false;
+        StateHasChanged();
+    }
+    
+    private async Task SelectPlace(Guid placeId)
+    {
+        SelectedPlaceId = placeId;
+        showPlaceDropdown = false;
+        
+        // Clear selected area when place changes
+        SelectedAreaId = null;
+        AvailableAreas = null;
+        
+        // Load areas for the new place
+        await LoadAvailableAreasAsync();
+        
+        await RecheckConflictsAsync();
+        StateHasChanged();
+    }
+    
+    private async void OnStartTimeChanged(ChangeEventArgs e)
+    {
+        if (isUpdatingTime) return;
+        
+        StartTime = e.Value?.ToString() ?? "08:00";
+        // Update end time to maintain current duration
+        EndTime = AddMinutesToTime(StartTime, currentDurationMinutes);
+        // Check all areas first, then check conflicts (conflict check also updates availability for selected area)
+        // StateHasChanged() is called by CheckAllAreasAvailabilityAsync() and RecheckConflictsAsync()
+        await CheckAllAreasAvailabilityAsync();
+        await RecheckConflictsAsync();
+    }
+
+    private async void OnEndTimeChanged(ChangeEventArgs e)
+    {
+        if (isUpdatingTime) return;
+        
+        EndTime = e.Value?.ToString() ?? "09:00";
+        // Update current duration based on new end time
+        currentDurationMinutes = GetDurationInMinutes(StartTime, EndTime);
+        // Check all areas first, then check conflicts (conflict check also updates availability for selected area)
+        // StateHasChanged() is called by CheckAllAreasAvailabilityAsync() and RecheckConflictsAsync()
+        await CheckAllAreasAvailabilityAsync();
+        await RecheckConflictsAsync();
+    }
+
+    private string AddMinutesToTime(string time, int minutes)
+    {
+        var parts = time.Split(':');
+        var totalMinutes = int.Parse(parts[0]) * 60 + int.Parse(parts[1]) + minutes;
+        var hours = totalMinutes / 60;
+        var mins = totalMinutes % 60;
+        
+        // Handle day overflow
+        if (hours >= 24)
+        {
+            hours = hours % 24;
+        }
+        
+        return $"{hours:00}:{mins:00}";
+    }
+    
+    private int GetDurationInMinutes(string startTime, string endTime)
+    {
+        var startParts = startTime.Split(':');
+        var endParts = endTime.Split(':');
+        var startMinutes = int.Parse(startParts[0]) * 60 + int.Parse(startParts[1]);
+        var endMinutes = int.Parse(endParts[0]) * 60 + int.Parse(endParts[1]);
+        
+        // Handle day overflow
+        if (endMinutes < startMinutes)
+        {
+            endMinutes += 24 * 60; // Add 24 hours
+        }
+        
+        return endMinutes - startMinutes;
+    }
+    
+    private List<string> GetTimeOptions()
+    {
+        var options = new List<string>();
+        
+        // Add 15-minute interval options
+        for (var hour = 0; hour < 24; hour++)
+        {
+            for (var minute = 0; minute < 60; minute += 15)
+            {
+                options.Add($"{hour:00}:{minute:00}");
+            }
+        }
+        
+        // Add the calculated end time if it's not already in the list
+        if (!string.IsNullOrEmpty(EndTime) && !options.Contains(EndTime))
+        {
+            options.Add(EndTime);
+            options.Sort(); // Keep them sorted
+        }
+        
+        return options;
+    }
+
+    private async void OnDayCheckboxChanged(int day, object? value)
+    {
+        if (value is bool isChecked)
+        {
+            if (isChecked)
+            {
+                if (!SelectedDays.Contains(day))
+                    SelectedDays.Add(day);
+            }
+            else
+            {
+                SelectedDays.Remove(day);
+            }
+            // Check all areas first, then check conflicts (conflict check also updates availability for selected area)
+            // StateHasChanged() is called by CheckAllAreasAvailabilityAsync() and RecheckConflictsAsync()
+            await CheckAllAreasAvailabilityAsync();
+            await RecheckConflictsAsync();
+        }
+    }
+    
+    private void TestButton()
+    {
+        // Console.WriteLine("=== TEST BUTTON CLICKED ===");
+    }
+    
+    private async Task SaveBookingTemplate()
+    {
+        // Console.WriteLine("=== SAVE BOOKING START ===");
+        // Console.WriteLine($"Mode: {(UI.IsCalendarViewMode ? "Calendar" : "Weekplanner")}");
+        // Console.WriteLine($"SelectedArea: {SelectedArea?.Name ?? "NULL"}");
+        // Console.WriteLine($"SelectedGroupId: {SelectedGroupId}");
+        // Console.WriteLine($"StartTime: {StartTime}");
+        // Console.WriteLine($"EndTime: {EndTime}");
+
+        // Get the selected area
+        var targetArea = SelectedArea;
+        if (SelectedAreaId.HasValue && AvailableAreas != null)
+        {
+            var selectedAreaFromList = AvailableAreas.FirstOrDefault(a => a.Id == SelectedAreaId.Value);
+            if (selectedAreaFromList != null)
+            {
+                targetArea = selectedAreaFromList;
+            }
+        }
+        
+        if (!SelectedPlaceId.HasValue)
+        {
+            // Console.WriteLine("ERROR: No place selected");
+            return;
+        }
+        if (targetArea == null)
+        {
+            // Console.WriteLine("ERROR: No area selected");
+            return;
+        }
+        if (!SelectedGroupId.HasValue)
+        {
+            // Console.WriteLine("ERROR: No group selected");
+            return;
+        }
+
+        // Validate based on mode
+        if (UI.IsCalendarViewMode)
+        {
+            // Calendar mode: validate date
+            if (SelectedDate == default)
+            {
+                // Console.WriteLine("ERROR: No date selected");
+                return;
+            }
+        }
+        else
+        {
+            // Weekplanner mode: validate template and days
+            if (!UI.SelectedTemplateId.HasValue)
+            {
+                // Console.WriteLine("ERROR: No ScheduleTemplate selected");
+                return;
+            }
+            if (SelectedDays.Count == 0)
+            {
+                // Console.WriteLine("ERROR: No days selected");
+                return;
+            }
+        }
+
+        try
+        {
+            var startParts = StartTime.Split(':');
+            var endParts = EndTime.Split(':');
+            var startMin = int.Parse(startParts[0]) * 60 + int.Parse(startParts[1]);
+            var endMin = int.Parse(endParts[0]) * 60 + int.Parse(endParts[1]);
+
+            if (UI.IsCalendarViewMode)
+            {
+                if (hasConflicts) return;
+                // Calendar mode: Create calendar booking
+                var calendarBooking = new CalendarBooking
+                {
+                    Id = Guid.NewGuid(),
+                    Date = DateOnly.FromDateTime(SelectedDate),
+                    AreaId = targetArea.Id,
+                    GroupId = SelectedGroupId.Value,
+                    StartMin = startMin,
+                    EndMin = endMin,
+                    Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes,
+                    ContactName = ContactName,
+                    ContactPhone = ContactPhone,
+                    ContactEmail = ContactEmail
+                };
+                calendarBooking.CreatedAt = DateTime.UtcNow;
+
+                Db.CalendarBookings.Add(calendarBooking);
+                // Console.WriteLine($"Created calendar booking for date {SelectedDate:yyyy-MM-dd}");
+            }
+            else
+            {
+                // Weekplanner mode: Create template bookings
+                if (hasConflicts) return;
+                foreach (var day in SelectedDays)
+                {
+                    // Normalize weekday into 1-7 (Mon-Sun)
+                    var normalizedDay = day;
+                    if (normalizedDay < 1) normalizedDay = 1;
+                    if (normalizedDay > 7) normalizedDay = 7;
+                    var template = new BookingTemplate
+                    {
+                        Id = Guid.NewGuid(),
+                        ScheduleTemplateId = UI.SelectedTemplateId!.Value,
+                        AreaId = targetArea.Id,
+                        GroupId = SelectedGroupId.Value,
+                        DayOfWeek = normalizedDay,
+                        StartMin = startMin,
+                        EndMin = endMin,
+                        Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes,
+                        ContactName = ContactName,
+                        ContactPhone = ContactPhone,
+                        ContactEmail = ContactEmail
+                    };
+                    template.CreatedAt = DateTime.UtcNow;
+
+                    Db.BookingTemplates.Add(template);
+                    // Console.WriteLine($"Created booking template for weekday {normalizedDay}");
+                }
+            }
+
+            var result = await Db.SaveChangesAsync();
+            // Console.WriteLine($"Database save result: {result} rows affected");
+
+            // Navigate to the selected place and area if different from current
+            if (SelectedPlaceId.HasValue && SelectedPlaceId.Value != SelectedPlace?.Id)
+            {
+                // Update the UI state to navigate to the selected place
+                UI.SelectedPlaceId = SelectedPlaceId.Value;
+            }
+            if (targetArea != null && targetArea.Id != SelectedArea?.Id)
+            {
+                // Update the UI state to navigate to the selected area
+                UI.SelectedAreaId = targetArea.Id;
+            }
+            
+            await OnSave.InvokeAsync();
+            // Console.WriteLine("=== SAVE BOOKING SUCCESS ===");
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine("=== SAVE BOOKING ERROR ===");
+            // Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    private async Task RecheckConflictsAsync()
+    {
+        conflictMessages.Clear();
+        hasConflicts = false;
+        
+        // Get the current area ID - use SelectedAreaId if available, otherwise SelectedArea parameter
+        Guid? currentAreaId = null;
+        if (SelectedAreaId.HasValue)
+        {
+            currentAreaId = SelectedAreaId.Value;
+        }
+        else if (SelectedArea != null)
+        {
+            currentAreaId = SelectedArea.Id;
+        }
+        
+        if (!currentAreaId.HasValue) { StateHasChanged(); return; }
+
+        // Parse times
+        var sp = StartTime.Split(':'); var ep = EndTime.Split(':');
+        var s = int.Parse(sp[0]) * 60 + int.Parse(sp[1]);
+        var e = int.Parse(ep[0]) * 60 + int.Parse(ep[1]);
+
+        if (UI.IsCalendarViewMode)
+        {
+            // Calendar: check conflicts for the selected date
+            var conflicts = await ConflictService.CheckCalendarConflictsAsync(currentAreaId.Value, DateOnly.FromDateTime(SelectedDate), s, e, null);
+            if (conflicts.Count > 0)
+            {
+                hasConflicts = true;
+                foreach (var c in conflicts)
+                {
+                    var from = $"{c.StartMin/60:00}:{c.StartMin%60:00}"; var to = $"{c.EndMin/60:00}:{c.EndMin%60:00}";
+                    conflictMessages.Add($"{GetDayName(c.DayOfWeek)} • {from}-{to} • {c.OtherAreaName} ({c.OtherGroupName})");
+                }
+            }
+        }
+        else
+        {
+            // Weekplanner: check per selected day within the current template only
+            if (!UI.SelectedTemplateId.HasValue || SelectedDays.Count == 0) { StateHasChanged(); return; }
+            foreach (var d in SelectedDays.OrderBy(d => d))
+            {
+                var conflicts = await ConflictService.CheckAreaConflictsAsync(currentAreaId.Value, d, s, e, null, UI.SelectedTemplateId.Value);
+                if (conflicts.Count > 0)
+                {
+                    hasConflicts = true;
+                    var first = conflicts.First();
+                    var from = $"{first.StartMin/60:00}:{first.StartMin%60:00}"; var to = $"{first.EndMin/60:00}:{first.EndMin%60:00}";
+                    conflictMessages.Add($"{GetDayName(d)} • {from}-{to} • {first.OtherAreaName} ({first.OtherGroupName})");
+                }
+            }
+        }
+        
+        // Update area availability indicator to match conflict status
+        // This ensures the green/red indicator is always accurate and synced with conflict detection
+        if (currentAreaId.HasValue)
+        {
+            AreaAvailability[currentAreaId.Value] = !hasConflicts;
+        }
+        
+        StateHasChanged();
+    }
+
+    private void ToggleExtras() => showExtras = !showExtras;
+    
+    private void CloseModal()
+    {
+        showAreaDropdown = false; // Close area dropdown when modal closes
+        showPlaceDropdown = false; // Close place dropdown when modal closes
+        OnClose.InvokeAsync();
+    }
+    
+    private string GetDayName(int day)
+    {
+        return day switch
+        {
+            1 => "Måndag",
+            2 => "Tisdag",
+            3 => "Onsdag",
+            4 => "Torsdag",
+            5 => "Fredag",
+            6 => "Lördag",
+            7 => "Söndag",
+            _ => "Okänd"
+        };
+    }
+    
+    private DateTime GetWeekStart()
+    {
+        var today = DateTime.Today;
+        var daysSinceMonday = (int)today.DayOfWeek - 1;
+        if (daysSinceMonday == -1) daysSinceMonday = 6; // Sunday
+        return today.AddDays(-daysSinceMonday);
+    }
+}

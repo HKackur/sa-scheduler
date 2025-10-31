@@ -1,0 +1,256 @@
+@page "/"
+@using SchedulerMVP.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Data.AppDbContext Db
+
+<PageTitle>@UI.PageTitle</PageTitle>
+
+<div class="sa-app">
+    <div class="sa-shell-new">
+        <main class="sa-panel sa-center-new">
+            <WeekGrid OnOpenModal="OpenBookingModal" OnOpenCalendarBookingEdit="OpenCalendarBookingEditModal" OnOpenTemplateEdit="OpenTemplateEditModal" />
+        </main>
+        <aside class="sa-panel sa-right-new">
+            <CombinedSidebar />
+        </aside>
+    </div>
+</div>
+
+<BookingModal 
+    IsOpen="@UI.ShouldOpenBookingModal"
+    SelectedArea="@selectedArea"
+    SelectedPlace="@selectedPlace"
+    PrefilledDay="@prefilledDay"
+    PrefilledStartTime="@prefilledStartTime"
+    PrefilledEndTime="@prefilledEndTime"
+    PrefilledGroupId="@GetPrefilledGroupId()"
+    OnClose="CloseBookingModal"
+    OnSave="OnBookingSaved" />
+
+<CalendarCopyTemplateModal 
+    IsOpen="@UI.ShouldOpenCopyTemplateModal"
+    OnClose="CloseCopyTemplateModal"
+    OnCopied="RefreshAfterTemplateCopy" />
+
+<CalendarBookingEditModal 
+    IsOpen="@calendarEditOpen"
+    Booking="@calendarEditBooking"
+    OnClose="CloseCalendarEditModal"
+    OnSave="RefreshAfterCalendarEdit" />
+
+<BookingTemplateEditModal 
+    IsOpen="@templateEditOpen"
+    TemplateId="@templateEditId"
+    OnClose="CloseTemplateEditModal"
+    OnChanged="RefreshAfterTemplateEdit" />
+
+<ToastUndo />
+
+@code {
+    private Area? selectedArea;
+    private Place? selectedPlace;
+    private int? prefilledDay;
+    private string? prefilledStartTime;
+    private string? prefilledEndTime;
+    
+    private bool calendarEditOpen = false;
+    private CalendarBooking? calendarEditBooking = null;
+    
+    private bool templateEditOpen = false;
+    private Guid? templateEditId = null;
+    
+    protected override void OnInitialized()
+    {
+        UI.OnChanged += StateHasChanged;
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Watch for modal open requests
+            UI.OnChanged += async () =>
+            {
+                if (UI.ShouldOpenBookingModal)
+                {
+                    // Default values when opening from UI state
+                    await OpenBookingModal((1, "08:00"));
+                }
+            };
+        }
+    }
+    
+    private async Task OpenBookingModal((int dayOfWeek, string startTime) data)
+    {
+        Console.WriteLine("=== OPENBOOKINGMODAL START ===");
+        Console.WriteLine($"UI.SelectedAreaId: {UI.SelectedAreaId}");
+        Console.WriteLine($"DayOfWeek: {data.dayOfWeek}, StartTime: {data.startTime}");
+        
+        if (UI.SelectedAreaId.HasValue)
+        {
+            try
+            {
+                // Load area and place data from database
+                selectedArea = await Db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+                // Console.WriteLine($"Loaded area: {selectedArea?.Name ?? "NULL"} (Id: {selectedArea?.Id})");
+                
+                if (selectedArea?.Place != null)
+                {
+                    selectedPlace = selectedArea.Place;
+                    
+                    // Store prefilled values for the modal
+                    prefilledDay = data.dayOfWeek;
+                    prefilledStartTime = data.startTime;
+                    
+                    // Calculate end time based on place's default duration
+                    if (selectedPlace.DefaultDurationMin > 0)
+                    {
+                        var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
+                        var endMinutes = startMinutes + selectedPlace.DefaultDurationMin;
+                        var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
+                        prefilledEndTime = endTime.ToString("HH:mm");
+                    }
+                    
+                    Console.WriteLine($"Prefilled values: day={prefilledDay}, start={prefilledStartTime}, end={prefilledEndTime}");
+                    
+                    UI.ShouldOpenBookingModal = true;
+                    StateHasChanged();
+                    Console.WriteLine("=== OPENBOOKINGMODAL SUCCESS ===");
+                }
+                else
+                {
+                    // Console.WriteLine("ERROR: Could not load area or place");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Console.WriteLine($"Error opening modal: {ex.Message}");
+            }
+        }
+        else
+        {
+            // Console.WriteLine("ERROR: No area selected");
+        }
+    }
+    
+    private void CloseBookingModal()
+    {
+        UI.ShouldOpenBookingModal = false;
+        prefilledDay = null;
+        prefilledStartTime = null;
+        prefilledEndTime = null;
+        StateHasChanged();
+    }
+    
+    private Guid? GetPrefilledGroupId()
+    {
+        var groupId = UI.IsGroupFilterActive ? UI.FilteredGroupId : null;
+        Console.WriteLine($"=== GetPrefilledGroupId ===");
+        Console.WriteLine($"UI.IsGroupFilterActive: {UI.IsGroupFilterActive}");
+        Console.WriteLine($"UI.FilteredGroupId: {UI.FilteredGroupId}");
+        Console.WriteLine($"Returning groupId: {groupId}");
+        return groupId;
+    }
+    
+    private async Task OnBookingSaved()
+    {
+        UI.ShouldOpenBookingModal = false;
+        prefilledDay = null;
+        prefilledStartTime = null;
+        prefilledEndTime = null;
+        
+        StateHasChanged();
+        
+        // Notify WeekGrid to refresh
+        UI.RaiseChanged();
+    }
+    
+    private void CloseCopyTemplateModal()
+    {
+        UI.ShouldOpenCopyTemplateModal = false;
+        StateHasChanged();
+    }
+    
+    private async Task RefreshAfterTemplateCopy()
+    {
+        UI.ShouldOpenCopyTemplateModal = false;
+        StateHasChanged();
+        
+        // Notify WeekGrid to refresh after template copy
+        UI.RaiseChanged();
+    }
+    
+    private async Task OpenCalendarBookingEditModal(Guid bookingId)
+    {
+        try
+        {
+            // Load the calendar booking with all related data
+            calendarEditBooking = await Db.CalendarBookings
+                .Include(cb => cb.Area)
+                    .ThenInclude(a => a.Place)
+                .Include(cb => cb.Group)
+                .FirstOrDefaultAsync(cb => cb.Id == bookingId);
+            
+            if (calendarEditBooking != null)
+            {
+                calendarEditOpen = true;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error opening calendar booking edit modal: {ex.Message}");
+        }
+    }
+    
+    private void CloseCalendarEditModal()
+    {
+        calendarEditOpen = false;
+        calendarEditBooking = null;
+        StateHasChanged();
+    }
+    
+    private async Task RefreshAfterCalendarEdit()
+    {
+        calendarEditOpen = false;
+        calendarEditBooking = null;
+        StateHasChanged();
+        
+        // Notify WeekGrid to refresh after edit
+        UI.RaiseChanged();
+    }
+    
+    private async Task OpenTemplateEditModal(Guid templateId)
+    {
+        try
+        {
+            templateEditId = templateId;
+            templateEditOpen = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error opening template edit modal: {ex.Message}");
+        }
+    }
+    
+    private void CloseTemplateEditModal()
+    {
+        templateEditOpen = false;
+        templateEditId = null;
+        StateHasChanged();
+    }
+    
+    private async Task RefreshAfterTemplateEdit()
+    {
+        templateEditOpen = false;
+        templateEditId = null;
+        StateHasChanged();
+        
+        // Notify WeekGrid to refresh after template edit
+        UI.RaiseChanged();
+    }
+}
+
+

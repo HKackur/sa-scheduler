@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+if [ -f Makefile ]; then
+  echo "Pre-commit: Checking Blazor routes..."
+  if ! make routes; then
+    echo "Pre-commit failed: Duplicate routes detected. Fix before commit." >&2
+    exit 1
+  fi
+fi
+exit 0

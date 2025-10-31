@@ -1,0 +1,232 @@
+@using SchedulerMVP.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Data.AppDbContext Db
+@inject SchedulerMVP.Services.ICalendarBookingService CalendarBookingService
+@inject SchedulerMVP.Services.UserContextService UserContext
+
+<div class="sa-panel">
+    <div class="sa-panel-header">
+        <h6 class="sa-panel-title">Grupper</h6>
+        <div class="sa-search">
+            <input type="text" placeholder="Sök..." @bind="searchTerm" />
+        </div>
+        @if (groupTypes.Any())
+        {
+            <div class="sa-type-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+                @foreach (var t in groupTypes)
+                {
+                    var active = selectedTypes.Contains(t);
+                    <button type="button" class="sa-chip @(active ? "active" : null)" style="border:1px solid #d1d5db;border-radius:999px;background:@(active?"#111827":"#f1f5f9");color:@(active?"#fff":"#111827");padding:2px 8px;font-size:11px" @onclick="() => ToggleType(t)">@t</button>
+                }
+            </div>
+        }
+    </div>
+    
+    <div class="sa-panel-content">
+        @if (groups != null)
+        {
+            @foreach (var group in filteredGroups)
+            {
+                var isSelected = UI.SelectedGroupId == group.Id;
+                var isFilteredGroup = UI.IsGroupFilterActive && UI.FilteredGroupId == group.Id;
+                var itemStyle = isFilteredGroup
+                    ? "background:#1f2937;color:#fff;border:none;box-shadow:0 0 0 2px #374151"
+                    : (isSelected ? "background:#eef2ff;border:none;box-shadow:0 0 0 2px #c7d2fe" : string.Empty);
+                <div class="sa-group-card@(isSelected ? " selected" : "")" @onclick="() => SelectGroup(group.Id)">
+                    <div class="sa-group-info">
+                        <span class="sa-group-name">@group.Name</span>
+                        @if (!string.IsNullOrWhiteSpace(DetermineGroupType(group)))
+                        {
+                            <span class="sa-group-type">@DetermineGroupType(group)</span>
+                        }
+                    </div>
+                    <span class="sa-group-count-chip">@FormatCount(GetCount(group.Id))</span>
+                </div>
+            }
+        }
+    </div>
+    
+    <!-- Test Filter Toggle Button -->
+    <div style="margin-top: 15px; padding: 10px; border-top: 1px solid #e5e7eb; background: #f9fafb;">
+        <button @onclick="ToggleTestFilter" style="width: 100%; background: @(isTestFilterActive ? "#dc2626" : "#059669"); color: white; border: none; padding: 12px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            @(isTestFilterActive ? "Stäng testfilter" : "Aktivera testfilter (Dam A)")
+        </button>
+    </div>
+</div>
+
+@code {
+    private List<SchedulerMVP.Data.Entities.Group>? groups;
+    private string searchTerm = "";
+    private Dictionary<Guid,int> counts = new();
+    private HashSet<string> selectedTypes = new(StringComparer.OrdinalIgnoreCase);
+    private List<string> groupTypes = new();
+    private bool isTestFilterActive = false;
+    
+    private IEnumerable<SchedulerMVP.Data.Entities.Group> filteredGroups => 
+        (groups ?? new()).Where(g =>
+            (string.IsNullOrEmpty(searchTerm) || g.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
+            (selectedTypes.Count == 0 || (!string.IsNullOrWhiteSpace(DetermineGroupType(g)) && selectedTypes.Contains(DetermineGroupType(g)))))
+        .OrderBy(g => g.Name);
+    
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var userId = UserContext.GetCurrentUserId();
+            var isAdmin = await UserContext.IsAdminAsync();
+            var query = Db.Groups.AsQueryable();
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                query = query.Where(g => g.UserId == userId);
+            }
+            groups = await query.OrderBy(g => g.Name).ToListAsync();
+            groupTypes = groups.Select(g => DetermineGroupType(g))
+                               .Where(t => !string.IsNullOrWhiteSpace(t))
+                               .Distinct(StringComparer.OrdinalIgnoreCase)
+                               .OrderBy(t => t)
+                               .ToList();
+            await LoadCountsAsync();
+            UI.OnChanged += async () =>
+            {
+                await LoadCountsAsync();
+                StateHasChanged();
+            };
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine("Error loading groups: " + ex.Message);
+        }
+    }
+    
+    private void SelectGroup(Guid groupId)
+    {
+        Console.WriteLine($"SelectGroup called with groupId: {groupId}");
+        Console.WriteLine($"Current UI.IsGroupFilterActive: {UI.IsGroupFilterActive}");
+        Console.WriteLine($"Current UI.FilteredGroupId: {UI.FilteredGroupId}");
+        
+        // If already filtering this group, exit group filter mode
+        if (UI.IsGroupFilterActive && UI.FilteredGroupId == groupId)
+        {
+            Console.WriteLine("Exiting group filter mode");
+            UI.FilteredGroupId = null;
+            UI.SelectedGroupId = null; // Clear selection when exiting group filter mode
+        }
+        // If filtering a different group, switch to this group
+        else if (UI.IsGroupFilterActive)
+        {
+            Console.WriteLine("Switching to different group filter");
+            UI.FilteredGroupId = groupId;
+            UI.SelectedGroupId = groupId;
+        }
+        // If not filtering any group, start filtering this group
+        else
+        {
+            Console.WriteLine("Starting group filter mode");
+            UI.FilteredGroupId = groupId;
+            UI.SelectedGroupId = groupId;
+        }
+        
+        Console.WriteLine($"After change - UI.IsGroupFilterActive: {UI.IsGroupFilterActive}");
+        Console.WriteLine($"After change - UI.FilteredGroupId: {UI.FilteredGroupId}");
+        
+        // Trigger UI refresh to update the WeekGrid
+        UI.RaiseChanged();
+        StateHasChanged();
+    }
+
+    private void ToggleTestFilter()
+    {
+        isTestFilterActive = !isTestFilterActive;
+        
+        if (isTestFilterActive)
+        {
+            // Find Dam A group and set as filtered
+            var damAGroup = groups?.FirstOrDefault(g => g.Name == "Dam A");
+            if (damAGroup != null)
+            {
+                UI.FilteredGroupId = damAGroup.Id;
+                UI.SelectedGroupId = damAGroup.Id;
+            }
+        }
+        else
+        {
+            // Clear group filter
+            UI.FilteredGroupId = null;
+            UI.SelectedGroupId = null;
+        }
+        
+        // Trigger UI refresh
+        UI.RaiseChanged();
+        StateHasChanged();
+    }
+
+    private async Task LoadCountsAsync()
+    {
+        try
+        {
+            if (UI.IsCalendarViewMode)
+            {
+                // Calendar mode: Count calendar bookings for the current week
+                var calendarBookings = await CalendarBookingService.GetBookingsForWeekAsync(UI.CurrentWeekStart);
+                var grouped = calendarBookings
+                    .GroupBy(cb => cb.GroupId)
+                    .Select(g => new { GroupId = g.Key, Cnt = g.Count() })
+                    .ToList();
+
+                counts = grouped.ToDictionary(x => x.GroupId, x => x.Cnt);
+            }
+            else if (UI.SelectedTemplateId is Guid templateId)
+            {
+                // Weekplanner mode: Count template bookings
+                var grouped = await Db.BookingTemplates
+                    .Where(bt => bt.ScheduleTemplateId == templateId)
+                    .GroupBy(bt => bt.GroupId)
+                    .Select(g => new { GroupId = g.Key, Cnt = g.Count() })
+                    .ToListAsync();
+
+                counts = grouped.ToDictionary(x => x.GroupId, x => x.Cnt);
+            }
+            else
+            {
+                counts.Clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine("Error loading group counts: " + ex.Message);
+        }
+    }
+
+    private int GetCount(Guid groupId) => counts.TryGetValue(groupId, out var c) ? c : 0;
+    private static string FormatCount(int n) => n == 1 ? "1 tid" : n + " tider";
+
+    private void ToggleType(string type)
+    {
+        if (selectedTypes.Contains(type))
+            selectedTypes.Remove(type);
+        else
+            selectedTypes.Add(type);
+    }
+
+    private static string? DetermineGroupType(SchedulerMVP.Data.Entities.Group g)
+    {
+        // Prefer stored value
+        if (!string.IsNullOrWhiteSpace(g.GroupType))
+            return g.GroupType!.Trim();
+
+        // Derive from name as a non-persistent fallback
+        var name = g.Name?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(name)) return null;
+
+        if (name.StartsWith("F", StringComparison.OrdinalIgnoreCase)) return "U-Flick";
+        if (name.StartsWith("P", StringComparison.OrdinalIgnoreCase)) return "U-Pojk";
+        if (name.Equals("Herr U", StringComparison.OrdinalIgnoreCase)) return "Akademi";
+        if (name.Equals("P19", StringComparison.OrdinalIgnoreCase)) return "Akademi";
+        if (name.Contains("Dam", StringComparison.OrdinalIgnoreCase)) return "Senior";
+        if (name.Contains("Herr", StringComparison.OrdinalIgnoreCase)) return "Senior";
+        return null;
+    }
+}
+
+

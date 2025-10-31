@@ -1,0 +1,70 @@
+﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@implements IDisposable
+
+@{
+    var isLoginPage = _isLoginPage;
+}
+
+@if (isLoginPage)
+{
+    @* Login page - render ONLY Body, NO TopBar, NO app-root wrapper *@
+    <div style="min-height: 100vh; background-color: #f7f7f7;">
+        @Body
+    </div>
+}
+else
+{
+    @* Normal page - require auth; otherwise redirect to login *@
+    <AuthorizeView>
+        <Authorized>
+            <div class="app-root">
+                <TopBar />
+                @Body
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <RedirectToLogin />
+        </NotAuthorized>
+    </AuthorizeView>
+}
+
+@code {
+    private bool _isLoginPage = false;
+
+    protected override void OnInitialized()
+    {
+        UpdateLoginStatus();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void UpdateLoginStatus()
+    {
+        try
+        {
+            var uri = Navigation.Uri.ToLower();
+            var path = new Uri(uri).AbsolutePath.ToLower();
+            _isLoginPage = path == "/login" || path.EndsWith("/login");
+        }
+        catch
+        {
+            _isLoginPage = false;
+        }
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        UpdateLoginStatus();
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}
+
+

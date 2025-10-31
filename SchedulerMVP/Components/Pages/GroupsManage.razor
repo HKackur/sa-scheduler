@@ -1,0 +1,200 @@
+@page "/grupper"
+@using Microsoft.AspNetCore.Components
+@using Microsoft.EntityFrameworkCore
+@inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Services.IGroupTypeService GroupTypes
+@inject SchedulerMVP.Data.AppDbContext Db
+@inject SchedulerMVP.Services.UserContextService UserContext
+
+<div class="sa-panel" style="padding:16px;">
+    <h3 style="margin:0 0 8px 0; font-size:24px; font-weight:600; color:#374151;">Hantera grupper</h3>
+    <p style="margin:0 0 20px 0; color:#6b7280; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Här kan du skapa grupptyper och grupper. SportAdmin‑synk läggs till senare.</p>
+
+    <!-- Create group type -->
+    <div style="margin-bottom:20px; max-width:520px;">
+        <div style="display:flex; gap:8px; align-items:center;">
+            <input placeholder="Ange grupptyp" @bind="newTypeName" style="flex:1; padding:8px 10px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px;" />
+            <button @onclick="CreateType" style="padding:8px 12px; border:none; background:#eee; border-radius:6px; cursor:pointer; font-size:13px;">Skapa</button>
+        </div>
+        @if (types.Count > 0)
+        {
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+                @foreach (var t in types)
+                {
+                    <div style="display:inline-flex; align-items:center; gap:6px; background:#f3f4f6; border-radius:999px; padding:4px 10px; font-size:12px;">
+                        @if (editingTypeId == t.Id)
+                        {
+                            <input @bind="editTypeName" style="border:1px solid #e5e7eb; border-radius:6px; padding:4px 6px; font-size:12px; width:140px;" />
+                            <button @onclick="SaveType" style="border:none; background:#e5e7eb; border-radius:6px; padding:4px 8px; cursor:pointer; font-size:12px;">Spara</button>
+                            <button @onclick="CancelTypeEdit" style="border:none; background:transparent; padding:4px 6px; cursor:pointer; font-size:12px;">Avbryt</button>
+                        }
+                        else
+                        {
+                            <span>@t.Name</span>
+                            <button @onclick="() => EditType(t)" title="Ändra" style="border:none; background:transparent; cursor:pointer; font-size:12px;">✎</button>
+                            <button @onclick="() => DeleteType(t.Id)" title="Radera" style="border:none; background:transparent; cursor:pointer; font-size:12px; color:#dc2626;">✕</button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (types.Count > 0)
+    {
+        <!-- Create group -->
+        <div style="margin-top:20px; max-width:520px;">
+            <div style="display:flex; gap:8px; align-items:center;">
+                <input placeholder="Gruppnamn" @bind="newGroupName" style="flex:1; padding:8px 10px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px;" />
+                <select @bind="selectedTypeId" style="padding:8px 10px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px;">
+                    <option value="">Välj grupptyp</option>
+                    @foreach (var t in types)
+                    {
+                        <option value="@t.Id">@t.Name</option>
+                    }
+                </select>
+                <button @onclick="CreateGroup" style="padding:8px 12px; border:none; background:#eee; border-radius:6px; cursor:pointer; font-size:13px;">Skapa</button>
+            </div>
+
+            <ul style="list-style:none; padding:0; margin-top:12px;">
+                @foreach (var g in groups)
+                {
+                    <li style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6;">
+                        @if (editingGroupId == g.Id)
+                        {
+                            <input @bind="editGroupName" style="flex:1; padding:6px 8px; border:1px solid #e5e7eb; border-radius:6px; font-size:13px;" />
+                            <select @bind="editGroupTypeId" style="padding:6px 8px; border:1px solid #e5e7eb; border-radius:6px; font-size:13px;">
+                                @foreach (var t in types)
+                                {
+                                    <option value="@t.Id">@t.Name</option>
+                                }
+                            </select>
+                            <button @onclick="SaveGroup" style="border:none; background:#e5e7eb; border-radius:6px; padding:6px 8px; cursor:pointer; font-size:12px;">Spara</button>
+                            <button @onclick="CancelGroupEdit" style="border:none; background:transparent; padding:6px 6px; cursor:pointer; font-size:12px;">Avbryt</button>
+                        }
+                        else
+                        {
+                            <span style="flex:1;">@g.Name</span>
+                            <span style="color:#6b7280; font-size:12px;">@g.GroupType</span>
+                            <button @onclick="() => EditGroup(g)" title="Ändra" style="border:none; background:transparent; cursor:pointer; font-size:12px;">✎</button>
+                            <button @onclick="() => DeleteGroup(g.Id)" title="Radera" style="border:none; background:transparent; cursor:pointer; font-size:12px; color:#dc2626;">✕</button>
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        UI.PageTitle = "Hantera grupper";
+    }
+
+    private string newTypeName = string.Empty;
+    private List<SchedulerMVP.Data.Entities.GroupType> types = new();
+    private Guid? editingTypeId;
+    private string editTypeName = string.Empty;
+
+    private string newGroupName = string.Empty;
+    private string? selectedTypeId;
+    private List<SchedulerMVP.Data.Entities.Group> groups = new();
+    private Guid? editingGroupId;
+    private string editGroupName = string.Empty;
+    private string? editGroupTypeId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        types = await GroupTypes.GetTypesAsync();
+        var userId = UserContext.GetCurrentUserId();
+        var isAdmin = await UserContext.IsAdminAsync();
+        var gq = Db.Groups.AsQueryable();
+        if (!isAdmin && !string.IsNullOrEmpty(userId)) gq = gq.Where(x => x.UserId == userId);
+        groups = await gq.OrderBy(x => x.Name).ToListAsync();
+    }
+
+    private async Task CreateType()
+    {
+        var name = (newTypeName ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(name)) return;
+        await GroupTypes.CreateAsync(name);
+        newTypeName = string.Empty;
+        await LoadData();
+        StateHasChanged();
+    }
+
+    private void EditType(SchedulerMVP.Data.Entities.GroupType t)
+    {
+        editingTypeId = t.Id;
+        editTypeName = t.Name;
+    }
+    private async Task SaveType()
+    {
+        if (editingTypeId is Guid id)
+        {
+            await GroupTypes.UpdateAsync(id, editTypeName);
+            editingTypeId = null;
+            editTypeName = string.Empty;
+            await LoadData();
+        }
+    }
+    private void CancelTypeEdit() { editingTypeId = null; editTypeName = string.Empty; }
+    private async Task DeleteType(Guid id)
+    {
+        await GroupTypes.DeleteAsync(id);
+        await LoadData();
+    }
+
+    private async Task CreateGroup()
+    {
+        var name = (newGroupName ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(selectedTypeId)) return;
+        var type = types.FirstOrDefault(x => x.Id.ToString() == selectedTypeId);
+        if (type == null) return;
+        var userId = UserContext.GetCurrentUserId();
+        var g = new SchedulerMVP.Data.Entities.Group { Id = Guid.NewGuid(), Name = name, GroupType = type.Name, UserId = userId };
+        Db.Groups.Add(g);
+        await Db.SaveChangesAsync();
+        newGroupName = string.Empty; selectedTypeId = null;
+        await LoadData();
+    }
+
+    private void EditGroup(SchedulerMVP.Data.Entities.Group g)
+    {
+        editingGroupId = g.Id;
+        editGroupName = g.Name;
+        editGroupTypeId = types.FirstOrDefault(x => x.Name == g.GroupType)?.Id.ToString();
+    }
+    private async Task SaveGroup()
+    {
+        if (editingGroupId is Guid id)
+        {
+            var g = await Db.Groups.FindAsync(id);
+            if (g != null)
+            {
+                g.Name = editGroupName;
+                g.GroupType = types.FirstOrDefault(x => x.Id.ToString() == editGroupTypeId)?.Name;
+                await Db.SaveChangesAsync();
+            }
+            editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null;
+            await LoadData();
+        }
+    }
+    private void CancelGroupEdit(){ editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null; }
+    private async Task DeleteGroup(Guid id)
+    {
+        var g = await Db.Groups.FindAsync(id);
+        if (g == null) return;
+        Db.Groups.Remove(g);
+        await Db.SaveChangesAsync();
+        await LoadData();
+    }
+}
+
+

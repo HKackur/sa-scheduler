@@ -1,0 +1,164 @@
+@page "/admin"
+@using Microsoft.AspNetCore.Identity
+@using SchedulerMVP.Data.Entities
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject NavigationManager Nav
+@inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
+@inject SchedulerMVP.Services.UIState UI
+
+<PageTitle>Admin</PageTitle>
+
+<div class="sa-panel" style="margin:16px;">
+    <div class="sa-panel-header" style="display:flex;align-items:center;gap:12px;">
+        <h6 class="sa-panel-title">Användare</h6>
+    </div>
+
+    <div class="sa-panel-content" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="flex:1 1 320px;max-width:520px;">
+            <div style="margin-bottom:12px;font-weight:600;">Skapa testkonto</div>
+            <form @onsubmit="CreateUser" @onsubmit:preventDefault>
+                <div class="sa-input-group">
+                    <label class="sa-input-label">E-post</label>
+                    <input type="email" placeholder="E-post" @bind="newEmail" class="sa-input-field" required />
+                </div>
+                <div class="sa-input-group">
+                    <label class="sa-input-label">Lösenord</label>
+                    <input type="password" placeholder="Lösenord" @bind="newPassword" class="sa-input-field" minlength="8" required />
+                    <div style="color:#6b7280;font-size:12px;margin-top:4px;">Minst 8 tecken.</div>
+                </div>
+                <button class="tb-action-btn" type="submit" disabled="@(!CanSubmit)"><span class="action-text">Skapa</span></button>
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div style="margin-top:8px;color:#b91c1c;font-size:13px;">@errorMessage</div>
+                }
+            </form>
+        </div>
+
+        <div style="flex:2 1 520px;min-width:420px;">
+            <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                    <tr style="text-align:left;border-bottom:1px solid #e5e7eb;">
+                        <th style="padding:8px;">E-post</th>
+                        <th style="padding:8px;">Senast inloggad</th>
+                        <th style="padding:8px;">Admin</th>
+                        <th style="padding:8px;text-align:right;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in users)
+                    {
+                        var isAdmin = adminIds.Contains(u.Id);
+                        <tr style="border-bottom:1px solid #f1f5f9;">
+                            <td style="padding:8px;">@u.Email</td>
+                            <td style="padding:8px;color:#6b7280;">@FormatLastLogin(u.LastLoginAt)</td>
+                            <td style="padding:8px;">@(isAdmin ? "Ja" : "Nej")</td>
+                            <td style="padding:8px;display:flex;gap:8px;justify-content:flex-end;">
+                                <button class="tb-action-btn" @onclick="() => Impersonate(u.Id)"><span class="action-text">Logga in som</span></button>
+                                <button class="tb-action-btn" @onclick="() => ToggleAdmin(u.Id)"><span class="action-text">@(isAdmin?"Ta bort admin":"Gör admin")</span></button>
+                                <button class="tb-action-btn" @onclick="() => ResetPassword(u.Id)"><span class="action-text">Nytt lösen</span></button>
+                                <button class="tb-action-btn" @onclick="() => DeleteUser(u.Id)" style="background:#fee2e2;"><span class="action-text">Radera</span></button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ApplicationUser> users = new();
+    private HashSet<string> adminIds = new();
+    private string newEmail = string.Empty;
+    private string newPassword = string.Empty;
+    private string? errorMessage;
+    private bool CanSubmit => !string.IsNullOrWhiteSpace(newEmail) && !string.IsNullOrWhiteSpace(newPassword) && newPassword.Length >= 8;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UI.IsAdminPage = true;
+        UI.PageTitle = "Admin";
+        await LoadAsync();
+    }
+
+    public void Dispose()
+    {
+        UI.IsAdminPage = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        users = UserManager.Users.OrderBy(u => u.Email).ToList();
+        var adminRole = await RoleManager.FindByNameAsync("Admin");
+        if (adminRole != null)
+        {
+            // naive approach: check each user
+            adminIds = new HashSet<string>(
+                await Task.WhenAll(users.Select(async u => (await UserManager.IsInRoleAsync(u, "Admin")) ? u.Id : null!))
+                    .ContinueWith(t => t.Result.Where(x => x != null)!)
+            );
+        }
+        StateHasChanged();
+    }
+
+    private static string FormatLastLogin(DateTimeOffset? ts) => ts.HasValue ? ts.Value.LocalDateTime.ToString("yyyy-MM-dd HH:mm") : "—";
+
+    private async Task CreateUser()
+    {
+        errorMessage = null;
+        if (string.IsNullOrWhiteSpace(newEmail) || string.IsNullOrWhiteSpace(newPassword)) { errorMessage = "Fyll i e‑post och lösenord."; return; }
+        if (newPassword.Length < 8) { errorMessage = "Lösenordet måste vara minst 8 tecken."; return; }
+        var user = new ApplicationUser { UserName = newEmail, Email = newEmail, EmailConfirmed = true };
+        var res = await UserManager.CreateAsync(user, newPassword);
+        if (res.Succeeded)
+        {
+            newEmail = string.Empty; newPassword = string.Empty;
+            try { await TemplateService.CreateForUserAsync(user.Id, "Veckomall"); } catch {}
+            await LoadAsync();
+        }
+        else
+        {
+            errorMessage = string.Join("; ", res.Errors.Select(e => e.Description));
+        }
+    }
+
+    private async Task ToggleAdmin(string userId)
+    {
+        var u = await UserManager.FindByIdAsync(userId);
+        if (u == null) return;
+        if (await UserManager.IsInRoleAsync(u, "Admin"))
+            await UserManager.RemoveFromRoleAsync(u, "Admin");
+        else
+            await UserManager.AddToRoleAsync(u, "Admin");
+        await LoadAsync();
+    }
+
+    private async Task ResetPassword(string userId)
+    {
+        var u = await UserManager.FindByIdAsync(userId);
+        if (u == null) return;
+        var token = await UserManager.GeneratePasswordResetTokenAsync(u);
+        await UserManager.ResetPasswordAsync(u, token, "Test1234!");
+        await LoadAsync();
+    }
+
+    private async Task DeleteUser(string userId)
+    {
+        var u = await UserManager.FindByIdAsync(userId);
+        if (u == null) return;
+        await UserManager.DeleteAsync(u);
+        await LoadAsync();
+    }
+
+    private void GoHome() => Nav.NavigateTo("/");
+
+    private async Task Impersonate(string userId)
+    {
+        // POST to our endpoint
+        await new HttpClient().PostAsync(Nav.ToAbsoluteUri($"/auth/impersonate/{userId}"), null);
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+}
+
+

@@ -1,0 +1,66 @@
+@inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
+@inject SchedulerMVP.Services.UIState UI
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="OnBackdrop"></div>
+    <div class="bm-modal">
+        <div class="bm-header">
+            <h2 class="bm-title">Ny veckomall</h2>
+        </div>
+        <div class="bm-field">
+            <label class="bm-label">Mallnamn</label>
+            <input class="bm-input" value="@name" @oninput="OnNameInput" placeholder="Ange namn" />
+        </div>
+        <div class="bm-actions">
+            <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+            <button type="button" @onclick="OnCreate" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Skapa mall</button>
+        </div>
+    </div>
+    <style>
+        /* Match booking modal exact structure and styling */
+        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:12px}
+        .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;padding-top:12px;padding-bottom:28px;z-index:10}
+        .btn-outline{padding:10px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720}
+        .btn-primary{padding:10px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnCreated { get; set; }
+
+    private string name = string.Empty;
+
+    private void OnNameInput(ChangeEventArgs e) => name = e.Value?.ToString() ?? string.Empty;
+
+    private async Task OnCreate()
+    {
+        SchedulerMVP.Data.Entities.ScheduleTemplate t;
+        if (UI.SelectedPlaceId is Guid pid)
+        {
+            t = await TemplateService.CreateAsync(pid, name);
+        }
+        else
+        {
+            // Fallback: create template without explicit place when no place is selected
+            t = await TemplateService.CreateGlobalAsync(name);
+        }
+        UI.SelectedTemplateId = t.Id;
+        await OnCreated.InvokeAsync();
+        await CloseAsync();
+    }
+
+    private async Task OnCancel() => await CloseAsync();
+    private async Task OnBackdrop(MouseEventArgs _) => await CloseAsync();
+
+    private async Task CloseAsync()
+    {
+        IsOpen = false;
+        await OnClose.InvokeAsync();
+    }
+}

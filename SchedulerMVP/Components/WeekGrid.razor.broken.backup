@@ -1,0 +1,1248 @@
+@using SchedulerMVP.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@using System.Globalization
+@inject SchedulerMVP.Services.UIState UI
+@inject IJSRuntime JS
+@inject SchedulerMVP.Data.AppDbContext Db
+@inject SchedulerMVP.Services.ICalendarBookingService CalendarBookingService
+@inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
+
+@if (UI.IsCalendarViewMode)
+{
+    <div class="calendar-navigation">
+        <div class="calendar-nav-left">
+            <button class="nav-btn" @onclick="NavigateToPreviousWeek">‹ Föregående vecka</button>
+            <div class="week-info">
+                @GetWeekNumberText()
+            </div>
+            <button class="nav-btn" @onclick="NavigateToNextWeek">Nästa vecka ›</button>
+        </div>
+        <div class="calendar-nav-right">
+            <button class="nav-btn primary" @onclick="OpenCopyTemplateModal">Lägg till från mall</button>
+        </div>
+    </div>
+}
+
+<div class="week-grid">
+    <div class="time-gutter">
+        <div class="day-header" style="color: transparent;">
+            <div class="day-name">Tid</div>
+            <div class="day-date" style="color: transparent;">&nbsp;</div>
+        </div>
+        @for (var hour = 0; hour < 24; hour++)
+        {
+            <div class="time-slot hour">
+                <span class="time-label">@($"{hour:00}:00")</span>
+            </div>
+        }
+    </div>
+    
+    @for (var dayIndex = 1; dayIndex <= 7; dayIndex++)
+    {
+        <div class="day-content week-col">
+            <div class="day-header">
+                <div class="day-name">@DayName(dayIndex)</div>
+                @if (UI.IsCalendarViewMode)
+                {
+                    <div class="day-date">@GetDateForDay(dayIndex).ToString("dd/MM")</div>
+                }
+                @else
+                {
+                    <div class="day-date" style="color: transparent;">&nbsp;</div>
+                }
+            </div>
+            <div class="day-body" style="position: relative;">
+                @for (var hour = 0; hour < 24; hour++)
+                {
+                    var currentHour = hour; // Capture the hour value
+                    var currentDay = dayIndex; // Capture the day value
+                    <div class="time-slot" @onclick="(e) => OnTimeSlotClick(e, currentDay, currentHour)" @onmousemove="(e) => OnTimeSlotMouseMove(e, currentDay, currentHour)" @onmouseleave="OnTimeSlotMouseLeave" @onclick:stopPropagation="true" style="cursor: pointer;" title="@GetCreateTooltip(currentDay, currentHour)"></div>
+                }
+
+                @* Render each booking as a single block spanning its full duration *@
+                @if (allTemplates != null)
+                {
+                    foreach (var booking in allTemplates.Where(bt => bt.DayOfWeek == dayIndex))
+                    {
+                        @{ 
+                            var isGhost = booking.IsGhost;
+                            var showGhostText = true;
+                            if (isGhost)
+                            {
+                                var selArea = this.selectedArea ?? allTemplates?.FirstOrDefault(t => t.Area?.Id == UI.SelectedAreaId)?.Area;
+                                var srcArea = booking.Area;
+                                if (selArea != null && srcArea != null)
+                                {
+                                    var wp = CalculateHierarchicalWidth(selArea, srcArea);
+                                    showGhostText = wp >= 30.0;
+                                }
+                            }
+                            var bg = isGhost ? "#f1f3f5" : "#e3f2fd";
+                            var border = isGhost ? "1px dashed #6c757d" : "1px solid #2196f3";
+                            var color = isGhost ? "#495057" : "#1976d2";
+                            var z = isGhost ? 1 : 2;
+                        }
+                        <div class="booking-item" @onclick="(e => OnBookingBlockClick(booking, e))" style="position: absolute; @(isGhost ? GetGhostBookingStyle(booking) : "left: 2px; right: 2px;") top: @(booking.StartMin)px; height: @(Math.Max(booking.EndMin - booking.StartMin, 1))px; background: @bg; border: @border; border-radius: 4px; padding: 2px 4px; font-size: 11px; color: @color; overflow: hidden; z-index: @z; opacity: @(isGhost ? 0.65 : 1); cursor: pointer;" title="@(isGhost ? GetGhostTooltipContentSync(booking) : "")" data-ghost-width="@((isGhost && selectedArea!=null && booking.Area!=null) ? CalculateHierarchicalWidth(selectedArea, booking.Area).ToString("F4", CultureInfo.InvariantCulture) : null)">
+                            @if (!isGhost || showGhostText)
+                            {
+                                <div style="display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@(booking.Group?.Name ?? "Okänd grupp")</div>
+                                <div style="font-size:10px; opacity:0.85; margin-top:2px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@FormatTime(booking.StartMin) - @FormatTime(booking.EndMin)</div>
+                                @if (UI.IsGroupViewMode)
+                                {
+                                    <div style="font-size:10px; opacity:0.8; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@booking.SourceAreaName</div>
+                                }
+                                else if (isGhost)
+                                {
+                                    <div style="font-size:10px; opacity:0.8; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@booking.SourceAreaName</div>
+                                }
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+<BookingTemplateEditModal IsOpen="@editOpen" TemplateId="@editTemplateId" OnClose="CloseEdit" OnChanged="RefreshAfterEdit" />
+<BookingModal IsOpen="@bookingModalOpen" SelectedArea="@selectedArea" SelectedPlace="@selectedPlace" PrefilledStartTime="@prefilledStartTime" PrefilledEndTime="@prefilledEndTime" PrefilledGroupId="@prefilledGroupId" PrefilledDay="@prefilledDay" OnClose="CloseBookingModal" OnSave="RefreshAfterBookingSave" />
+@if (popoverOpen && popoverBooking != null)
+{
+    <div @onclick:stopPropagation="true" style="position:fixed; left:@(popoverX)px; top:@(popoverY)px; transform: translate(8px, 8px); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 10px 24px rgba(16,24,40,.18); width:320px; z-index:5000;">
+        <div style="display:flex; align-items:center; padding:12px 14px; border-bottom:1px solid #eef2f7;">
+            <div style="font-size:16px; font-weight:600; color:#0b1e34; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@popoverBooking.SourceAreaName</div>
+            <div style="display:flex; gap:4px;">
+                @if (!(popoverBooking?.IsGhost ?? false))
+                {
+                    <button @onclick="EditFromPopover" title="Redigera" style="border:none;background:transparent;font-size:20px;cursor:pointer;color:#0b1e34;">
+                        <span class="material-symbols-outlined" style="font-size:20px;line-height:1;">edit</span>
+                    </button>
+                    <button @onclick="DuplicateFromPopover" title="Duplicera" style="border:none;background:transparent;font-size:20px;cursor:pointer;color:#0b1e34;">
+                        <span class="material-symbols-outlined" style="font-size:20px;line-height:1;">content_copy</span>
+                    </button>
+                    <button @onclick="DeleteFromPopover" title="Radera" style="border:none;background:transparent;font-size:20px;cursor:pointer;color:#dc2626;">
+                        <span class="material-symbols-outlined" style="font-size:20px;line-height:1;">delete</span>
+                    </button>
+                }
+                else { }
+                <button @onclick="ClosePopover" title="Stäng" style="border:none;background:transparent;font-size:20px;cursor:pointer;color:#6b7280;">
+                    <span class="material-symbols-outlined" style="font-size:20px;line-height:1;">close</span>
+                </button>
+            </div>
+        </div>
+        <div style="padding:12px 14px; display:flex; flex-direction:column; gap:8px; color:#0b1e34;">
+            <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@((popoverBooking.Group?.Name) ?? "Okänd grupp")</div>
+            <div style="font-size:13px; color:#475569;">@FormatTime(popoverBooking.StartMin) – @FormatTime(popoverBooking.EndMin)</div>
+            @if (!string.IsNullOrWhiteSpace(popoverBooking?.Notes))
+            {
+                <div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@popoverBooking!.Notes</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(popoverBooking?.ContactName))
+            {
+                <div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@popoverBooking!.ContactName</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(popoverBooking?.ContactPhone) || !string.IsNullOrWhiteSpace(popoverBooking?.ContactEmail))
+            {
+                <div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    @popoverBooking?.ContactPhone@if(!string.IsNullOrWhiteSpace(popoverBooking?.ContactPhone) && !string.IsNullOrWhiteSpace(popoverBooking?.ContactEmail)){<text> • </text>}@popoverBooking?.ContactEmail
+                </div>
+            }
+        </div>
+    </div>
+    <div @onclick="ClosePopover" style="position:fixed; inset:0; z-index:4999; background:transparent;"></div>
+}
+
+@if (deleteConfirmOpen)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 6000;" @onclick="CancelDeleteConfirm"></div>
+    <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; color:#0f1720; padding:20px; z-index: 6001; border:1px solid #e6e7ea; border-radius:12px; min-width:360px; box-shadow:0 8px 28px rgba(16,24,40,.18);">
+        <div style="font-size:18px; font-weight:700; margin-bottom:8px;">Radera bokning</div>
+        <div style="margin-bottom:16px; color:#334155;">Är du säker på att du vill radera bokningen?</div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button @onclick="CancelDeleteConfirm" style="padding:8px 14px; border:1px solid #d1d5db; border-radius:10px; background:#fff; color:#0f1720;">Avbryt</button>
+            <button @onclick="ConfirmDeleteOk" style="padding:8px 14px; border:none; border-radius:10px; background:#dc2626; color:#fff;">Radera</button>
+        </div>
+    </div>
+}
+
+@if (clearWeekConfirmOpen)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 6000;" @onclick="CloseClearWeekConfirm"></div>
+    <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; color:#0f1720; padding:20px; z-index: 6001; border:1px solid #e6e7ea; border-radius:12px; min-width:360px; box-shadow:0 8px 28px rgba(16,24,40,.18);">
+        <div style="font-size:18px; font-weight:700; margin-bottom:8px;">Rensa vecka</div>
+        <div style="margin-bottom:16px; color:#334155;">@clearWeekConfirmText</div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button @onclick="CloseClearWeekConfirm" style="padding:8px 14px; border:1px solid #d1d5db; border-radius:10px; background:#fff; color:#0f1720;">Avbryt</button>
+            <button @onclick="ConfirmClearWeek" style="padding:8px 14px; border:none; border-radius:10px; background:#ef4444; color:#fff;">Rensa</button>
+        </div>
+    </div>
+}
+
+
+
+@if (UI.IsCalendarViewMode)
+{
+    <CalendarCopyTemplateModal IsOpen="@copyTemplateModalOpen" OnClose="CloseCopyTemplateModal" OnCopied="RefreshAfterTemplateCopy" />
+    <CalendarBookingEditModal IsOpen="@calendarEditOpen" Booking="@calendarEditBooking" OnClose="CloseCalendarEdit" OnSave="RefreshAfterCalendarEdit" />
+}
+
+@code {
+    [Parameter] public EventCallback OnOpenModal { get; set; }
+    
+    private sealed class TemplateView : BookingTemplate { public bool IsGhost { get; set; } public string SourceAreaName { get; set; } = string.Empty; }
+    
+    private enum AreaRelationship
+    {
+        Same,
+        Parent,
+        Child,
+        Sibling,
+        Cousin,
+        Unrelated
+    }
+    
+    private class AreaHierarchy
+    {
+        public Area RootArea { get; set; } = null!;
+        public List<Area> AllAreas { get; set; } = new();
+        public Dictionary<Guid, List<Area>> Children { get; set; } = new();
+        public Dictionary<Guid, Area?> Parents { get; set; } = new();
+    }
+    private List<TemplateView>? allTemplates;
+    private bool popoverOpen;
+    private TemplateView? popoverBooking;
+    private double popoverX;
+    private double popoverY;
+    private bool editOpen;
+    private Guid? editTemplateId;
+    private bool bookingModalOpen;
+    private Area? selectedArea;
+    private Place? selectedPlace;
+    private string? prefilledStartTime;
+    private string? prefilledEndTime;
+    private Guid? prefilledGroupId;
+    private int? prefilledDay;
+    
+    // Calendar copy template modal
+    private bool copyTemplateModalOpen;
+    
+    // Calendar booking edit modal
+    private bool calendarEditOpen;
+    private CalendarBooking? calendarEditBooking;
+    private int _refreshCounter = 0;
+    private bool copyHover;
+    private bool moreMenuOpen;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadModalDataAsync();
+        
+        // Subscribe to area changes
+        UI.OnChanged += async () => await LoadModalDataAsync();
+    }
+    
+    private static string DayName(int d) => new[] {"","Mån","Tis","Ons","Tors","Fre","Lör","Sön"}[d];
+    private static string FormatTime(int minutes)
+    {
+        var h = minutes / 60;
+        var m = minutes % 60;
+        return $"{h:00}:{m:00}";
+    }
+    
+    // Get the start of the current week (Monday)
+    private DateTime GetWeekStart()
+    {
+        var today = DateTime.Today;
+        var daysSinceMonday = (int)today.DayOfWeek - 1;
+        if (daysSinceMonday == -1) daysSinceMonday = 6; // Sunday
+        return today.AddDays(-daysSinceMonday);
+    }
+    
+    private async Task LoadModalDataAsync()
+    {
+        try
+        {
+            if (UI.IsCalendarViewMode)
+            {
+                // Calendar mode: Load calendar bookings for the current week and selected area
+                if (UI.SelectedAreaId.HasValue)
+                {
+                        var selectedArea = await Db.Areas
+                        .Include(a => a.Place)
+                        .FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+                    if (selectedArea != null)
+                    {
+                            // Persist selected area for rendering logic (ghost widths)
+                            this.selectedArea = selectedArea;
+                        // Resolve leaf coverage of the selected area (same logic as weekplanner mode)
+                        var selectedLeafIds = await Db.AreaLeafs
+                            .Where(al => al.AreaId == selectedArea.Id)
+                            .Select(al => al.LeafId)
+                            .ToListAsync();
+
+                        // Find all areas at this place that overlap by leaves (including self)
+                        var overlappingAreaIds = await Db.AreaLeafs
+                            .Where(al => al.Area!.PlaceId == selectedArea.PlaceId && selectedLeafIds.Contains(al.LeafId))
+                            .Select(al => al.AreaId)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // Load calendar bookings for the current week
+                        var calendarBookings = await CalendarBookingService.GetBookingsForWeekAsync(UI.CurrentWeekStart);
+                        
+                        // Debug: Log the raw calendar booking data
+                        foreach (var cb in calendarBookings)
+                        {
+                            // Console.WriteLine($"Raw CalendarBooking: {cb.Group?.Name} - {FormatTime(cb.StartMin)}-{FormatTime(cb.EndMin)}");
+                        }
+                        
+                        // Filter to only bookings from overlapping areas (same logic as weekplanner mode)
+                        var overlappingBookings = calendarBookings.Where(cb => overlappingAreaIds.Contains(cb.AreaId)).ToList();
+                        
+                        // Convert calendar bookings to TemplateView format
+                        allTemplates = overlappingBookings
+                            .Select(cb => new TemplateView
+                            {
+                                Id = cb.Id,
+                                ScheduleTemplateId = cb.SourceTemplateId ?? Guid.Empty,
+                                AreaId = cb.AreaId,
+                                GroupId = cb.GroupId,
+                                DayOfWeek = GetDayOfWeekFromDate(cb.Date),
+                                StartMin = cb.StartMin,
+                                EndMin = cb.EndMin,
+                                Notes = cb.Notes,
+                                Group = cb.Group,
+                                Area = cb.Area,
+                                IsGhost = cb.AreaId != selectedArea.Id, // Ghost if not in selected area
+                                SourceAreaName = $"{cb.Area?.Place?.Name ?? "Okänd plats"} - {cb.Area?.Name ?? "Okänd yta"}"
+                            })
+                            .ToList();
+
+                        // Console.WriteLine($"Loaded {allTemplates?.Count ?? 0} calendar bookings (incl. ghosts) for area {selectedArea.Name} and week {UI.CurrentWeekStart}");
+                    }
+                    else
+                    {
+                        allTemplates = new List<TemplateView>();
+                    }
+                }
+                else
+                {
+                    allTemplates = new List<TemplateView>();
+                    // Console.WriteLine("No area selected in calendar view mode");
+                }
+            }
+            else if (UI.IsGroupViewMode && UI.GroupViewGroupId.HasValue)
+            {
+                if (UI.IsCalendarViewMode)
+                {
+                    // Group view mode in calendar: Load all calendar bookings for the selected group across all places/areas
+                    var calendarBookings = await CalendarBookingService.GetBookingsForWeekAsync(UI.CurrentWeekStart);
+                    var groupBookings = calendarBookings.Where(cb => cb.GroupId == UI.GroupViewGroupId.Value).ToList();
+
+                    // Project to view model - no ghosts in group view mode
+                    allTemplates = groupBookings
+                        .Select(cb => new TemplateView
+                        {
+                            Id = cb.Id,
+                            ScheduleTemplateId = cb.SourceTemplateId ?? Guid.Empty,
+                            AreaId = cb.AreaId,
+                            GroupId = cb.GroupId,
+                            DayOfWeek = GetDayOfWeekFromDate(cb.Date),
+                            StartMin = cb.StartMin,
+                            EndMin = cb.EndMin,
+                            Notes = cb.Notes,
+                            Group = cb.Group,
+                            Area = cb.Area,
+                            IsGhost = false, // No ghosts in group view mode
+                            SourceAreaName = $"{cb.Area?.Place?.Name ?? "Okänd plats"} - {cb.Area?.Name ?? "Okänd yta"}"
+                        })
+                        .ToList();
+
+                    // Console.WriteLine($"Loaded {allTemplates?.Count ?? 0} calendar bookings for group view mode in calendar");
+                }
+                else
+                {
+                    // Group view mode in weekplanner: Load all template bookings for the selected group across all places/areas
+                    var templates = await Db.BookingTemplates
+                        .Where(bt => bt.GroupId == UI.GroupViewGroupId.Value &&
+                                     (UI.SelectedTemplateId.HasValue && bt.ScheduleTemplateId == UI.SelectedTemplateId.Value))
+                        .Include(bt => bt.Group)
+                        .Include(bt => bt.Area)
+                        .ThenInclude(a => a.Place)
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    // Project to view model - no ghosts in group view mode
+                    allTemplates = templates
+                        .Select(t => new TemplateView
+                        {
+                            Id = t.Id,
+                            ScheduleTemplateId = t.ScheduleTemplateId,
+                            AreaId = t.AreaId,
+                            GroupId = t.GroupId,
+                            DayOfWeek = t.DayOfWeek,
+                            StartMin = t.StartMin,
+                            EndMin = t.EndMin,
+                            Notes = t.Notes,
+                            Group = t.Group,
+                            Area = t.Area,
+                            IsGhost = false, // No ghosts in group view mode
+                            SourceAreaName = $"{t.Area?.Place?.Name ?? "Okänd plats"} - {t.Area?.Name ?? "Okänd yta"}"
+                        })
+                        .ToList();
+
+                    // Console.WriteLine($"Loaded {allTemplates?.Count ?? 0} templates for group view mode in weekplanner");
+                }
+            }
+            else
+            {
+                // Normal template mode: Load selected area and place
+                if (UI.SelectedAreaId.HasValue)
+                {
+                    var selectedArea = await Db.Areas.FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+                    if (selectedArea != null)
+                    {
+                        // Persist selected area for rendering logic (ghost widths)
+                        this.selectedArea = selectedArea;
+                        // Resolve leaf coverage of the selected area
+                        var selectedLeafIds = await Db.AreaLeafs
+                            .Where(al => al.AreaId == selectedArea.Id)
+                            .Select(al => al.LeafId)
+                            .ToListAsync();
+
+                        // Find all areas at this place that overlap by leaves (including self)
+                        var overlappingAreaIds = await Db.AreaLeafs
+                            .Where(al => al.Area!.PlaceId == selectedArea.PlaceId && selectedLeafIds.Contains(al.LeafId))
+                            .Select(al => al.AreaId)
+                            .Distinct()
+                            .ToListAsync();
+
+                        // Load templates for selected and overlapping areas within selected schedule template
+                        var templates = await Db.BookingTemplates
+                            .Where(bt => overlappingAreaIds.Contains(bt.AreaId) &&
+                                         (UI.SelectedTemplateId.HasValue && bt.ScheduleTemplateId == UI.SelectedTemplateId.Value))
+                            .Include(bt => bt.Group)
+                            .Include(bt => bt.Area)
+                            .AsNoTracking()
+                .ToListAsync();
+
+                        // Project to view model and flag ghosts
+                        allTemplates = templates
+                            .Select(t => new TemplateView
+                            {
+                                Id = t.Id,
+                                ScheduleTemplateId = t.ScheduleTemplateId,
+                                AreaId = t.AreaId,
+                                GroupId = t.GroupId,
+                                DayOfWeek = t.DayOfWeek,
+                                StartMin = t.StartMin,
+                                EndMin = t.EndMin,
+                                Notes = t.Notes,
+                                Group = t.Group,
+                                Area = t.Area,
+                                IsGhost = t.AreaId != selectedArea.Id,
+                                SourceAreaName = t.Area?.Name ?? string.Empty
+                            })
+                            .ToList();
+
+                        // Console.WriteLine($"Loaded {allTemplates?.Count ?? 0} templates (incl. ghosts) for area {selectedArea.Name}");
+                        await TryReopenPendingPopoverAsync();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Console.WriteLine($"Error loading modal data: {ex.Message}");
+        }
+    }
+    
+    private List<TemplateView> GetBookingsForDayAndHour(int day, int hour)
+    {
+        if (allTemplates == null) return new List<TemplateView>();
+
+        var hourStart = hour * 60;
+        var hourEnd = (hour + 1) * 60;
+
+        return allTemplates
+            .Where(bt => bt.DayOfWeek == day &&
+                         bt.StartMin < hourEnd && bt.EndMin > hourStart)
+            .ToList();
+    }
+
+    private void OnBookingBlockClick(TemplateView booking, MouseEventArgs e)
+    {
+        popoverBooking = booking;
+        popoverOpen = true;
+        popoverX = e.ClientX;
+        popoverY = e.ClientY;
+        StateHasChanged();
+    }
+
+    private async void OnBookingClick(TemplateView booking)
+    {
+        if (booking.IsGhost && !UI.IsGroupViewMode) return; // only edit real blocks in the current area (except in group view mode)
+        
+        if (UI.IsCalendarViewMode)
+        {
+            // Calendar mode: Edit calendar booking
+            var calendarBooking = await Db.CalendarBookings
+                .Include(cb => cb.Area)
+                .ThenInclude(a => a.Place)
+                .Include(cb => cb.Group)
+                .FirstOrDefaultAsync(cb => cb.Id == booking.Id);
+            
+            if (calendarBooking != null)
+            {
+                calendarEditBooking = calendarBooking;
+                calendarEditOpen = true;
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            // Weekplanner mode: Edit template booking
+            editTemplateId = booking.Id;
+            editOpen = true;
+            StateHasChanged();
+        }
+    }
+
+    private void ClosePopover()
+    {
+        popoverOpen = false;
+        popoverBooking = null;
+    }
+
+    private void EditFromPopover()
+    {
+        if (popoverBooking == null) return;
+        var b = popoverBooking;
+        ClosePopover();
+        OnBookingClick(b);
+    }
+
+    private bool deleteConfirmOpen;
+    private async Task DeleteFromPopover()
+    {
+        if (popoverBooking == null) return;
+        deleteConfirmOpen = true;
+        StateHasChanged();
+    }
+
+    private void CancelDeleteConfirm()
+    {
+        deleteConfirmOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmDeleteFromPopover()
+    {
+        await ConfirmDeleteOk();
+    }
+
+    private async Task ConfirmDeleteOk()
+    {
+        if (popoverBooking == null) return;
+        var id = popoverBooking.Id;
+        deleteConfirmOpen = false;
+        try
+        {
+            if (UI.IsCalendarViewMode)
+            {
+                await CalendarBookingService.DeleteBookingAsync(id);
+                await RefreshAfterCalendarEdit();
+            }
+            else
+            {
+                await TemplateService.DeleteBookingAsync(id);
+                await RefreshAfterEdit();
+            }
+        }
+        finally
+        {
+            ClosePopover();
+        }
+    }
+
+    private async Task DuplicateFromPopover()
+    {
+        if (popoverBooking == null) return;
+        // Open create modal prefilled with same values
+        ClosePopover();
+        var b = popoverBooking;
+        selectedArea = await Db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == b.AreaId);
+        selectedPlace = selectedArea?.Place;
+        prefilledStartTime = FormatTime(b.StartMin);
+        prefilledEndTime = FormatTime(b.EndMin);
+        prefilledGroupId = b.GroupId;
+        prefilledDay = b.DayOfWeek;
+        bookingModalOpen = true;
+        StateHasChanged();
+    }
+    
+    private Task CloseEdit()
+    {
+        editOpen = false;
+        editTemplateId = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshAfterEdit()
+    {
+        editOpen = false;
+        await LoadModalDataAsync();
+        StateHasChanged();
+        UI.RaiseChanged();
+    }
+    
+    private Task CloseCalendarEdit()
+    {
+        calendarEditOpen = false;
+        calendarEditBooking = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshAfterCalendarEdit()
+    {
+        calendarEditOpen = false;
+        calendarEditBooking = null;
+        
+        // Force complete reload by clearing the templates list and EF tracking
+        allTemplates = null;
+        Db.ChangeTracker.Clear();
+        
+        await LoadModalDataAsync();
+        
+        // Force UI to re-render by updating a dummy variable
+        _refreshCounter++;
+        
+        StateHasChanged();
+        UI.RaiseChanged();
+    }
+
+    private void ToggleMoreMenu()
+    {
+        moreMenuOpen = !moreMenuOpen;
+    }
+
+    private async Task OpenClearWeekConfirm()
+    {
+        moreMenuOpen = false;
+        var weekStart = UI.CurrentWeekStart;
+        // Count bookings this week
+        var bookings = await CalendarBookingService.GetBookingsForWeekAsync(weekStart);
+        var count = bookings.Count;
+        clearWeekConfirmText = $"Vill du ta bort {count} bokningar från veckan?";
+        clearWeekConfirmOpen = true;
+    }
+
+    private bool clearWeekConfirmOpen;
+    private string clearWeekConfirmText = string.Empty;
+
+    private void CloseClearWeekConfirm()
+    {
+        clearWeekConfirmOpen = false;
+    }
+
+    private async Task ConfirmClearWeek()
+    {
+        var weekStart = UI.CurrentWeekStart;
+        var weekEnd = weekStart.AddDays(6);
+        var list = await CalendarBookingService.GetBookingsForWeekAsync(weekStart);
+        foreach (var b in list)
+        {
+            await CalendarBookingService.DeleteBookingAsync(b.Id);
+        }
+        clearWeekConfirmOpen = false;
+        await RefreshAfterCalendarEdit();
+    }
+
+    private async Task CopyWeekToClipboard()
+    {
+        moreMenuOpen = false;
+        var weekStart = UI.CurrentWeekStart;
+        var list = await CalendarBookingService.GetBookingsForWeekAsync(weekStart);
+        UI.ClipboardWeek = list.ToList();
+        UI.ClipboardWeekStart = weekStart;
+    }
+
+    private bool CanPasteWeek => UI.ClipboardWeek != null && UI.ClipboardWeek.Count > 0 && UI.ClipboardWeekStart.HasValue;
+
+    private async Task PasteWeekFromClipboard()
+    {
+        if (!CanPasteWeek) return;
+        moreMenuOpen = false;
+        var targetWeekStart = UI.CurrentWeekStart;
+        var sourceWeekStart = UI.ClipboardWeekStart!.Value;
+        var deltaDays = (targetWeekStart.DayNumber - sourceWeekStart.DayNumber);
+        foreach (var src in UI.ClipboardWeek!)
+        {
+            var delta = deltaDays + (src.Date.DayNumber - sourceWeekStart.DayNumber);
+            var newDate = DateOnly.FromDayNumber(sourceWeekStart.DayNumber + (src.Date.DayNumber - sourceWeekStart.DayNumber) + deltaDays);
+            await CalendarBookingService.CreateBookingAsync(new CalendarBooking
+            {
+                AreaId = src.AreaId,
+                GroupId = src.GroupId,
+                Date = targetWeekStart.AddDays((int)((int)src.Date.DayOfWeek == 0 ? 6 : (int)src.Date.DayOfWeek - 1)),
+                StartMin = src.StartMin,
+                EndMin = src.EndMin,
+                Notes = src.Notes,
+                SourceTemplateId = src.SourceTemplateId,
+                ContactName = src.ContactName,
+                ContactEmail = src.ContactEmail,
+                ContactPhone = src.ContactPhone
+            });
+        }
+        await RefreshAfterCalendarEdit();
+    }
+
+    
+
+    private Guid? _pendingReopenBookingId;
+    private int? _pendingReopenScrollMin;
+    private async Task TryReopenPendingPopoverAsync()
+    {
+        if (_pendingReopenBookingId.HasValue && allTemplates != null)
+        {
+            var found = allTemplates.FirstOrDefault(t => t.Id == _pendingReopenBookingId.Value);
+            if (found != null)
+            {
+                if (_pendingReopenScrollMin.HasValue)
+                {
+                    await JS.InvokeVoidAsync("SchedulerMVP.scrollToPos", Math.Max(0, _pendingReopenScrollMin.Value - 60));
+                }
+                popoverBooking = found;
+                popoverOpen = true;
+                popoverX = 240;
+                popoverY = 140;
+                StateHasChanged();
+            }
+            _pendingReopenBookingId = null;
+            _pendingReopenScrollMin = null;
+        }
+    }
+
+    private void TestClick(int dayIndex, int hour)
+    {
+        if (hour >= 0 && hour < 24 && dayIndex >= 1 && dayIndex <= 7)
+        {
+            OnTimeSlotClick(new MouseEventArgs(), dayIndex, hour);
+        }
+    }
+
+    private double _lastMouseY;
+    private string? _hoverTooltip;
+    private int _hoverDay;
+    private int _hoverHour;
+
+    private string GetCreateTooltip(int dayIndex, int hour)
+    {
+        if (_hoverDay != dayIndex || _hoverHour != hour || string.IsNullOrEmpty(_hoverTooltip))
+        {
+            return $"Skapa bokning {hour:00}:00";
+        }
+        return _hoverTooltip!;
+    }
+
+    private void OnTimeSlotMouseLeave()
+    {
+        _hoverTooltip = null;
+    }
+
+    private void OnTimeSlotMouseMove(MouseEventArgs e, int dayIndex, int hour)
+    {
+        _hoverDay = dayIndex;
+        _hoverHour = hour;
+        _lastMouseY = e.OffsetY;
+        var minute = Math.Clamp((int)Math.Round(e.OffsetY / 60.0 * 60.0 / 15.0) * 15, 0, 59);
+        _hoverTooltip = $"Skapa bokning {hour:00}:{minute:00}";
+    }
+
+    private async Task OnTimeSlotClick(MouseEventArgs e, int dayIndex, int hour)
+    {
+        
+        // Prevent multiple clicks
+        if (bookingModalOpen)
+        {
+            return;
+        }
+
+        
+        // Only allow clicking in normal mode (not group view mode)
+        if (UI.IsGroupViewMode)
+        {
+            // Console.WriteLine("Blocked: Group view mode active");
+            return;
+        }
+
+        // Only allow clicking if we have a selected area
+        if (!UI.SelectedAreaId.HasValue)
+        {
+            // Console.WriteLine("Blocked: No selected area");
+            return;
+        }
+
+        // Validate hour range
+        if (hour < 0 || hour >= 24)
+        {
+            // Console.WriteLine($"Blocked: Invalid hour: {hour}");
+            return;
+        }
+
+
+        // Validate day range
+        if (dayIndex < 1 || dayIndex > 7)
+        {
+            // Console.WriteLine($"Blocked: Invalid dayIndex: {dayIndex}");
+            return;
+        }
+
+        // Check if there's already a booking at this time slot
+        var slotStart = hour * 60;
+        var slotEnd = slotStart + 60; // 1-hour slot
+        
+        if (allTemplates != null)
+        {
+            var conflictingBooking = allTemplates
+                .Where(bt => bt.DayOfWeek == dayIndex && 
+                            bt.StartMin < slotEnd && bt.EndMin > slotStart)
+                .FirstOrDefault();
+            
+            if (conflictingBooking != null)
+            {
+                // Console.WriteLine("Blocked: Conflicting booking exists");
+                return; // Don't open modal if there's a conflicting booking
+            }
+        }
+
+        // Console.WriteLine("Loading area and place...");
+        
+        // Load the selected area and place
+        selectedArea = await Db.Areas
+            .Include(a => a.Place)
+            .FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+        
+        if (selectedArea?.Place == null)
+        {
+            // Console.WriteLine("Blocked: Could not load area or place");
+            return;
+        }
+
+        selectedPlace = selectedArea.Place;
+
+        // Compute 15-min slot from mouse position
+        var minute = 0;
+        if (e is not null)
+        {
+            var y = e.OffsetY;
+            if (y > 0)
+            {
+                minute = Math.Clamp((int)Math.Round(y / 60.0 * 60.0 / 15.0) * 15, 0, 59);
+            }
+            else if (_lastMouseY > 0)
+            {
+                minute = Math.Clamp((int)Math.Round(_lastMouseY / 60.0 * 60.0 / 15.0) * 15, 0, 59);
+            }
+        }
+
+        prefilledStartTime = $"{hour:00}:{minute:00}";
+        prefilledDay = dayIndex;
+        
+        // Console.WriteLine($"=== TIMESLOT CLICK SUCCESS ===");
+        // Console.WriteLine($"Hour: {hour}");
+        // Console.WriteLine($"DayIndex: {dayIndex}");
+        // Console.WriteLine($"PrefilledStartTime: {prefilledStartTime}");
+        // Console.WriteLine($"PrefilledDay: {prefilledDay}");
+        // Console.WriteLine($"SelectedArea: {selectedArea.Name}");
+        // Console.WriteLine($"SelectedPlace: {selectedPlace.Name}");
+        
+        // Open the booking modal
+        bookingModalOpen = true;
+        StateHasChanged();
+        
+        // Console.WriteLine("Booking modal opened");
+    }
+
+    private Task CloseBookingModal()
+    {
+        bookingModalOpen = false;
+        selectedArea = null;
+        selectedPlace = null;
+        prefilledStartTime = null;
+        prefilledEndTime = null;
+        prefilledGroupId = null;
+        prefilledDay = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshAfterBookingSave()
+    {
+        bookingModalOpen = false;
+        selectedArea = null;
+        selectedPlace = null;
+        prefilledStartTime = null;
+        prefilledEndTime = null;
+        prefilledGroupId = null;
+        prefilledDay = null;
+        await LoadModalDataAsync();
+        StateHasChanged();
+        UI.RaiseChanged();
+    }
+
+    // Calendar navigation methods
+    private async Task NavigateToPreviousWeek()
+    {
+        UI.NavigateToPreviousWeek();
+        await LoadModalDataAsync();
+        StateHasChanged();
+    }
+
+    private async Task NavigateToNextWeek()
+    {
+        UI.NavigateToNextWeek();
+        await LoadModalDataAsync();
+        StateHasChanged();
+    }
+
+    private string GetWeekNumberText()
+    {
+        // Calculate week number using ISO 8601 standard (Monday as first day of week)
+        var weekNumber = GetIsoWeekNumber(UI.CurrentWeekStart);
+        return $"Vecka {weekNumber}";
+    }
+
+    private int GetIsoWeekNumber(DateOnly date)
+    {
+        // ISO 8601 week number calculation
+        var year = date.Year;
+        var jan4 = new DateOnly(year, 1, 4);
+        var dayOfYear = date.DayOfYear;
+        var jan4DayOfWeek = (int)jan4.DayOfWeek;
+        if (jan4DayOfWeek == 0) jan4DayOfWeek = 7; // Sunday = 7
+        
+        var weekNumber = (dayOfYear - jan4.DayOfYear + jan4DayOfWeek + 5) / 7;
+        
+        if (weekNumber < 1)
+        {
+            // Week belongs to previous year
+            var prevYear = year - 1;
+            var prevJan4 = new DateOnly(prevYear, 1, 4);
+            var prevJan4DayOfWeek = (int)prevJan4.DayOfWeek;
+            if (prevJan4DayOfWeek == 0) prevJan4DayOfWeek = 7;
+            weekNumber = (dayOfYear + (365 + (DateTime.IsLeapYear(prevYear) ? 1 : 0)) - prevJan4.DayOfYear + prevJan4DayOfWeek + 5) / 7;
+        }
+        else if (weekNumber > 52)
+        {
+            // Check if week belongs to next year
+            var nextJan4 = new DateOnly(year + 1, 1, 4);
+            var nextJan4DayOfWeek = (int)nextJan4.DayOfWeek;
+            if (nextJan4DayOfWeek == 0) nextJan4DayOfWeek = 7;
+            var daysInYear = DateTime.IsLeapYear(year) ? 366 : 365;
+            var nextYearWeekNumber = (dayOfYear - daysInYear - nextJan4.DayOfYear + nextJan4DayOfWeek + 5) / 7;
+            if (nextYearWeekNumber >= 1)
+            {
+                weekNumber = 1;
+            }
+        }
+        
+        return weekNumber;
+    }
+
+    // Helper methods for calendar mode
+    private DateOnly GetDateForDay(int dayIndex)
+    {
+        return UI.CurrentWeekStart.AddDays(dayIndex - 1);
+    }
+
+    private int GetDayOfWeekFromDate(DateOnly date)
+    {
+        // Convert DateOnly to day of week (1-7, Monday=1)
+        var dayOfWeek = (int)date.DayOfWeek;
+        return dayOfWeek == 0 ? 7 : dayOfWeek; // Convert Sunday=0 to Sunday=7
+    }
+
+    // Calendar copy template modal methods
+    private void OpenCopyTemplateModal()
+    {
+        copyTemplateModalOpen = true;
+        StateHasChanged();
+    }
+
+    private Task CloseCopyTemplateModal()
+    {
+        copyTemplateModalOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshAfterTemplateCopy()
+    {
+        copyTemplateModalOpen = false;
+        await LoadModalDataAsync();
+        StateHasChanged();
+        UI.RaiseChanged();
+    }
+
+    // Helpers kept for potential future per-hour rendering
+    
+    private string GetGhostBookingInfoSync(TemplateView booking)
+    {
+        if (!booking.IsGhost) return "";
+        
+        // For now, return a simple message since we can't use async in HTML
+        return "Ghost-bokning";
+    }
+    
+    private string GetGhostTooltipContentSync(TemplateView booking)
+    {
+        if (!booking.IsGhost) return "";
+        
+        // Show explicit source area name
+        var areaName = booking.Area?.Name ?? booking.SourceAreaName;
+        return $"Blockerande bokning från {areaName}";
+    }
+
+    private string GetGhostBookingStyle(TemplateView booking)
+    {
+        if (!booking.IsGhost) return "left: 2px; right: 2px;";
+        
+        // Get the selected area to determine width logic (persisted even if no own bookings)
+        var selectedArea = this.selectedArea ?? allTemplates?.FirstOrDefault(t => t.Area?.Id == UI.SelectedAreaId)?.Area;
+        if (selectedArea == null) return "left: 2px; right: 2px;";
+        
+        // Get the source area of the ghost booking
+        var sourceArea = booking.Area;
+        if (sourceArea == null) return "left: 2px; right: 2px;";
+        
+        // Calculate width based on leaf overlap within the selected area
+        var widthPercent = CalculateHierarchicalWidth(selectedArea, sourceArea);
+
+        var widthCss = widthPercent.ToString("0.####", CultureInfo.InvariantCulture);
+        return $"left: 2px; width: calc({widthCss}% - 2px);";
+    }
+
+    private string CalculateGhostWidth(Area selectedArea, Area sourceArea)
+    {
+        // Deprecated: kept for compatibility if used elsewhere
+        var widthPercent = CalculateHierarchicalWidth(selectedArea, sourceArea);
+        var leftPercent = CalculateGhostLeftPercent(selectedArea, sourceArea);
+        var widthCss = widthPercent.ToString("0.####", CultureInfo.InvariantCulture);
+        var leftCss = leftPercent.ToString("0.####", CultureInfo.InvariantCulture);
+        return $"left: calc({leftCss}% + 2px); width: calc({widthCss}% - 4px);";
+    }
+    
+    private double CalculateHierarchicalWidth(Area selectedArea, Area sourceArea)
+    {
+        // Leaf-based width: proportion of selected area's leafs that are affected by the source area
+        //  - View Helplan, source Halvplan A (2 of 4 leafs) => 50%
+        //  - View Halvplan A, source A1 (1 of 2 leafs) => 50%
+        //  - View Halvplan A, source Helplan (2 of 2 leafs) => 100%
+
+        var selectedLeafIds = Db.AreaLeafs
+            .Where(al => al.AreaId == selectedArea.Id)
+            .Select(al => al.LeafId)
+            .Distinct()
+            .ToList();
+
+        var totalSelectedLeafCount = selectedLeafIds.Count;
+        
+        // DEBUG: Show what leafs we found for selected area
+        var selectedLeafNames = Db.Leafs
+            .Where(l => selectedLeafIds.Contains(l.Id))
+            .OrderBy(l => l.Name)
+            .Select(l => l.Name)
+            .ToList();
+        Console.WriteLine($"DEBUG: Selected area '{selectedArea.Name}' has {totalSelectedLeafCount} leafs: [{string.Join(", ", selectedLeafNames)}]");
+        
+        if (totalSelectedLeafCount == 0)
+        {
+            // If no leaf mapping exists, fall back to full width to avoid hiding
+            Console.WriteLine($"WARNING: No leafs found for selected area '{selectedArea.Name}' - using 100% width");
+            return 100;
+        }
+
+        var sourceLeafIds = Db.AreaLeafs
+            .Where(al => al.AreaId == sourceArea.Id)
+            .Select(al => al.LeafId)
+            .Distinct()
+            .ToList();
+
+        // DEBUG: Show what leafs we found for source area
+        var sourceLeafNames = Db.Leafs
+            .Where(l => sourceLeafIds.Contains(l.Id))
+            .OrderBy(l => l.Name)
+            .Select(l => l.Name)
+            .ToList();
+        Console.WriteLine($"DEBUG: Source area '{sourceArea.Name}' has {sourceLeafIds.Count} leafs: [{string.Join(", ", sourceLeafNames)}]");
+
+        // Count intersection (affected leafs)
+        var affectedLeafCount = selectedLeafIds.Intersect(sourceLeafIds).Count();
+        var affectedLeafNames = Db.Leafs
+            .Where(l => selectedLeafIds.Intersect(sourceLeafIds).Contains(l.Id))
+            .OrderBy(l => l.Name)
+            .Select(l => l.Name)
+            .ToList();
+        Console.WriteLine($"DEBUG: Intersection has {affectedLeafCount} leafs: [{string.Join(", ", affectedLeafNames)}]");
+
+        if (affectedLeafCount <= 0)
+        {
+            // Should not render as ghost if there is no overlap, but guard anyway
+            Console.WriteLine($"WARNING: No intersection between selected and source areas");
+            return 0;
+        }
+
+        var pct = (double)affectedLeafCount / totalSelectedLeafCount * 100.0;
+        Console.WriteLine($"Ghost width debug: selected={selectedArea.Name} source={sourceArea.Name} affected={affectedLeafCount} total={totalSelectedLeafCount} => {pct:F2}%");
+        if (pct < 0) pct = 0; if (pct > 100) pct = 100;
+        return Math.Round(pct, 4);
+    }
+
+    private double CalculateGhostLeftPercent(Area selectedArea, Area sourceArea)
+    {
+        // No offset if same area or ancestor (full width on left)
+        if (selectedArea.Id == sourceArea.Id || IsAncestorOf(sourceArea, selectedArea))
+        {
+            return 0;
+        }
+
+        var selectedLeafIds = Db.AreaLeafs
+            .Where(al => al.AreaId == selectedArea.Id)
+            .Select(al => al.LeafId)
+            .Distinct()
+            .ToList();
+
+        var total = selectedLeafIds.Count;
+        if (total == 0)
+        {
+            return 0;
+        }
+
+        // Order selected leafs by name to get a consistent layout within the selected area
+        var orderedSelectedLeafIds = Db.Leafs
+            .Where(l => selectedLeafIds.Contains(l.Id))
+            .OrderBy(l => l.Name)
+            .Select(l => l.Id)
+            .ToList();
+
+        var sourceLeafIdSet = Db.AreaLeafs
+            .Where(al => al.AreaId == sourceArea.Id)
+            .Select(al => al.LeafId)
+            .Distinct()
+            .ToHashSet();
+
+        // Find the first index in the selected sequence that belongs to the source area
+        var firstIndex = -1;
+        for (var i = 0; i < orderedSelectedLeafIds.Count; i++)
+        {
+            if (sourceLeafIdSet.Contains(orderedSelectedLeafIds[i]))
+            {
+                firstIndex = i;
+                break;
+            }
+        }
+
+        if (firstIndex < 0)
+        {
+            return 0;
+        }
+
+        var offsetPct = 100.0 * firstIndex / total;
+        return Math.Round(offsetPct, 4);
+    }
+    
+    private bool IsAncestorOf(Area potentialAncestor, Area potentialDescendant)
+    {
+        // Check if potentialAncestor is an ancestor of potentialDescendant
+        var current = potentialDescendant;
+        while (current.ParentAreaId != null)
+        {
+            if (current.ParentAreaId == potentialAncestor.Id)
+                return true;
+            current = Db.Areas.FirstOrDefault(a => a.Id == current.ParentAreaId);
+            if (current == null) break;
+        }
+        return false;
+    }
+    
+    private int GetSiblingCountAtLevel(Area selectedArea, Area sourceArea)
+    {
+        // Get the level of sourceArea relative to selectedArea
+        var sourceLevel = GetHierarchicalLevel(selectedArea, sourceArea);
+        
+        // Count siblings at that level
+        if (sourceLevel == 1) // Direct children
+        {
+            return Db.Areas.Count(a => a.ParentAreaId == selectedArea.Id);
+        }
+        else if (sourceLevel == 2) // Grandchildren
+        {
+            var childAreas = Db.Areas.Where(a => a.ParentAreaId == selectedArea.Id).ToList();
+            var grandchildAreas = new List<Area>();
+            foreach (var child in childAreas)
+            {
+                grandchildAreas.AddRange(Db.Areas.Where(a => a.ParentAreaId == child.Id));
+            }
+            return grandchildAreas.Count;
+        }
+        
+        return 1; // Default
+    }
+    
+    private int GetHierarchicalLevel(Area selectedArea, Area sourceArea)
+    {
+        // Determine the hierarchical level of sourceArea relative to selectedArea
+        if (IsChildOf(selectedArea, sourceArea))
+            return 1; // Direct child
+        else if (IsGrandchildOf(selectedArea, sourceArea))
+            return 2; // Grandchild
+        else if (IsSiblingOf(sourceArea, selectedArea))
+            return 0; // Sibling
+        else
+            return -1; // No direct relationship
+    }
+    
+    private bool IsChildOf(Area parent, Area potentialChild)
+    {
+        return potentialChild.ParentAreaId == parent.Id;
+    }
+    
+    private bool IsGrandchildOf(Area potentialGrandparent, Area potentialGrandchild)
+    {
+        if (potentialGrandchild.ParentAreaId == null) return false;
+        var parent = Db.Areas.FirstOrDefault(a => a.Id == potentialGrandchild.ParentAreaId);
+        return parent != null && parent.ParentAreaId == potentialGrandparent.Id;
+    }
+    
+    private bool IsSiblingOf(Area area1, Area area2)
+    {
+        return area1.ParentAreaId != null && area1.ParentAreaId == area2.ParentAreaId;
+    }
+    
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Set initial scroll position to show 09:00 partially visible (like Google Calendar)
+            // This gives users a visual indication that they can scroll and shows relevant times
+            await JS.InvokeVoidAsync("SchedulerMVP.scrollToPos", 8 * 60); // 8 hours * 60px per hour = 480px (shows 09:00 partially visible)
+        }
+    }
+
+    private async Task GoToGhostBooking()
+    {
+        if (popoverBooking == null) return;
+        var b = popoverBooking;
+        ClosePopover();
+        UI.IsCalendarViewMode = true;
+        UI.SelectedAreaId = b.AreaId;
+        _pendingReopenBookingId = b.Id;
+        _pendingReopenScrollMin = b.StartMin;
+        await LoadModalDataAsync();
+        await TryReopenPendingPopoverAsync();
+    }
+}

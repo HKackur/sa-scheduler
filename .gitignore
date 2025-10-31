@@ -1,0 +1,51 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.pdb
+*.exe
+*.log
+
+## Database
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+## Environment variables
+.env
+.env.local
+appsettings.Production.json
+appsettings.Test.json
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Build results
+out/
+*.tar.gz
+
+## Rider
+.idea/
+
+## User-specific files
+*.rsuser
+*.userosscache
+*.sln.docstates
+
+## Backup folders (keep local but don't commit)
+*_Backup*/
+

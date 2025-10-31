@@ -1,0 +1,233 @@
+@page "/login"
+@layout Layout.LoginLayout
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.JSInterop
+@using SchedulerMVP.Data.Entities
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Logga in</PageTitle>
+
+<div class="login-container">
+    <div class="login-header">
+        <h1 class="login-title">SportAdmins Planeringsverktyg - Testversion</h1>
+    </div>
+    <div class="login-box">
+        <div class="login-heading" style="user-select: none; -webkit-user-select: none; outline: none; border: none;">Logga in</div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="error-message">@errorMessage</div>
+        }
+
+        <form method="post" action="/auth/login">
+            <div class="form-group">
+                <label for="email">E-post</label>
+                <input id="email" name="email" class="form-control" type="email" required />
+            </div>
+
+            <div class="form-group">
+                <label for="password">Lösenord</label>
+                <input id="password" name="password" class="form-control" type="password" required />
+            </div>
+
+            <button type="submit" class="btn-primary" style="background-color: #293C51 !important; background: #293C51 !important; border: none !important; color: white !important;">
+                Logga in
+            </button>
+        </form>
+    </div>
+</div>
+
+@code {
+    private LoginModel loginModel = new();
+    private string? errorMessage;
+    private bool isLoading = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Show error message based on query parameter (?error=...)
+            try
+            {
+                var uri = new Uri(Navigation.Uri);
+                var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+                if (query.TryGetValue("error", out var err))
+                {
+                    var code = err.ToString();
+                    errorMessage = code switch
+                    {
+                        "invalid" => "Felaktigt e-post eller lösenord.",
+                        "missing" => "Fyll i både e-post och lösenord.",
+                        _ => errorMessage
+                    };
+                    StateHasChanged();
+                }
+            }
+            catch { }
+
+            // Force hide TopBar with JavaScript after render
+            await JS.InvokeVoidAsync("eval", @"
+                (function() {
+                    const hideTopBar = () => {
+                        const topBar = document.querySelector('.sa-topbar');
+                        if (topBar) {
+                            topBar.style.cssText = 'display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;position:absolute!important;left:-99999px!important;opacity:0!important;';
+                        }
+                    };
+                    hideTopBar();
+                    // Also try after a short delay in case it renders later
+                    setTimeout(hideTopBar, 100);
+                    setTimeout(hideTopBar, 500);
+                })();
+            ");
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+
+    private class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "E-post krävs")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "Ogiltig e-postadress")]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Lösenord krävs")]
+        [System.ComponentModel.DataAnnotations.StringLength(100, MinimumLength = 8, ErrorMessage = "Lösenordet måste vara minst 8 tecken")]
+        public string? Password { get; set; }
+    }
+}
+
+<style>
+/* Override global.css btn-primary specifically for login page */
+.login-container button.btn-primary,
+.login-box button.btn-primary,
+.login-container .btn-primary {
+    background-color: #293C51 !important;
+    background: #293C51 !important;
+    border-color: #293C51 !important;
+}
+
+/* Login page - no TopBar needed, LoginLayout handles it */
+
+.login-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+    background-color: #f7f7f7;
+}
+
+.login-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.login-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: #111;
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+}
+
+.login-box {
+    background: white;
+    padding: 40px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-box .login-heading,
+.login-heading {
+    margin-bottom: 30px !important;
+    margin-top: 0 !important;
+    font-size: 24px !important;
+    font-weight: 600 !important;
+    color: #111 !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    outline: none !important;
+    border: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #111;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #111;
+}
+
+.login-box .btn-primary,
+button.btn-primary {
+    width: 100% !important;
+    padding: 12px !important;
+    background-color: #293C51 !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 4px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    font-family: 'Inter', sans-serif !important;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: #3d5469;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.error-message {
+    background-color: #fee;
+    color: #c00;
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.validation-message {
+    color: #c00;
+    font-size: 12px;
+    margin-top: 4px;
+}
+</style>
+
+<style>
+/* Remove focus border on login page title caused by FocusOnNavigate */
+.login-title:focus { outline: none !important; box-shadow: none !important; }
+</style>
+

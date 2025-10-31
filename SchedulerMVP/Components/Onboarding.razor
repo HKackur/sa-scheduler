@@ -1,0 +1,206 @@
+@inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Services.UserContextService UserContext
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+@code {
+    private bool isOpen;
+    private int stepIndex; // 0 = intro, 1..3 = steps
+    private string? userKey;
+    private int totalSteps = 3;
+    private bool isDisposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var userId = UserContext.GetCurrentUserId();
+            if (string.IsNullOrEmpty(userId)) return;
+            userKey = $"sa_onb_{userId}";
+            var saved = await JS.InvokeAsync<string>("localStorage.getItem", userKey);
+            if (string.IsNullOrWhiteSpace(saved))
+            {
+                // First time – show intro
+                isOpen = true;
+                stepIndex = 0;
+            }
+            else
+            {
+                // Saved as simple number: last completed step
+                if (int.TryParse(saved, out var lastDone))
+                {
+                    if (lastDone < totalSteps)
+                    {
+                        isOpen = true;
+                        stepIndex = lastDone + 1; // next step
+                    }
+                }
+            }
+            Nav.LocationChanged += OnLocationChanged;
+        }
+        catch { }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        if (!isDisposed) InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CompleteCurrentAsync()
+    {
+        if (string.IsNullOrEmpty(userKey)) { isOpen = false; StateHasChanged(); return; }
+        // Persist as last completed step index (0..3)
+        await JS.InvokeVoidAsync("localStorage.setItem", userKey!, stepIndex.ToString());
+        var next = stepIndex + 1;
+        if (next > totalSteps)
+        {
+            isOpen = false;
+        }
+        else
+        {
+            stepIndex = next;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SkipAndNext() => await CompleteCurrentAsync();
+
+    private async Task StartAsync() => await CompleteCurrentAsync();
+
+    private async Task CreatePlaceAsync()
+    {
+        UI.ShouldOpenPlaceCreateModal = true;
+        UI.RaiseChanged();
+        await CompleteCurrentAsync();
+    }
+
+    private async Task OpenGroupsManageAsync()
+    {
+        await CompleteCurrentAsync();
+        Nav.NavigateTo("/grupper");
+    }
+
+    private async Task BeginPlanningAsync()
+    {
+        UI.IsCalendarViewMode = false;
+        UI.RaiseChanged();
+        await CompleteCurrentAsync();
+    }
+}
+
+@if (!isOpen)
+{
+    <text></text>
+}
+else
+{
+    @if (stepIndex == 0)
+    {
+        <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;"></div>
+        <div class="bm-modal">
+            <div class="bm-header">
+                <h2 class="bm-title">Välkommen till testversionen av SportAdmins nya planeringsverktyg</h2>
+            </div>
+            <div class="bm-field">
+                <div style="font-size:13px;color:#374151;line-height:1.5;">
+                    <p style="margin:0 0 10px 0;">Du har nu fått tillgång till en testversion av en funktion som är under utveckling. Det betyder att inte alla funktioner är kompletta än, deisgn och layout är inte färdig och framför allt kommer det att regelbundet göras uppdateringar utan notiser. Detta kan i sin tur leda till att buggar kan uppstå.</p>
+                    <p style="margin:0 0 10px 0;">Men med det sagt så är detta en testverison full av funktioner du fritt kan testa och känna på. Just nu finns inga kopplingar till SportAdmins övriga system, utan du får skapa platser och grupper manuellt. Innom kort planerar vi att kunna lägga till synk till er förening i SportAdmin.</p>
+                    <p style="margin:0 0 10px 0;">Följ den korta guiden här efter för att enkelt komma igång. Sen är det fritt fram att börja skapa testplanering.</p>
+                    <p style="margin:0;"><b>Då detta är är en testverion erbjuder vi ingen support på tjänsten. SportAdmins support kan tyvärr inte hjälpa dig med eventuella frågor eller problem du stöter på. Om du får problem eller vill rapportera en bugg ber vi dig kontakta personen du fick ditt inlogg från eller ansvarig för denna produkten henrik.kackur@sportadmin.se</b></p>
+                </div>
+            </div>
+            <div class="bm-actions">
+                <button type="button" class="btn-primary" @onclick="StartAsync">Kom igång</button>
+            </div>
+        </div>
+    }
+    else if (stepIndex == 1)
+    {
+        <!-- Position to the left of the right sidebar (near Platser & ytor) -->
+        <div class="onb-card" style="top: 100px; right: 400px;">
+            <div class="onb-card-header">
+                <div class="onb-card-title">Börja med att skapa en plats</div>
+                <button class="onb-close" @onclick="SkipAndNext">✕</button>
+            </div>
+            <div class="onb-card-body">
+                Inom kort kommer du kunna importera föreningens platser från SportAdmin, men du kan också skapa egna. Vi börjar med det.
+            </div>
+            <div class="onb-card-footer">
+                <div class="onb-steps">Steg 1 av @totalSteps</div>
+                <button class="tb-btn" style="height:30px;" @onclick="CreatePlaceAsync">Skapa plats</button>
+            </div>
+        </div>
+    }
+    else if (stepIndex == 2)
+    {
+        <!-- Position lower, still beside right sidebar (near Grupper) -->
+        <div class="onb-card" style="top: 360px; right: 400px;">
+            <div class="onb-card-header">
+                <div class="onb-card-title">Lägg nu till några grupper</div>
+                <button class="onb-close" @onclick="SkipAndNext">✕</button>
+            </div>
+            <div class="onb-card-body">
+                Snart kan vi hämta alla era grupper direkt från SportAdmin. Börja med att testa skapa egna grupptyper och grupper. Grupptyper hjälper dig filtrera när du har många grupper.
+            </div>
+            <div class="onb-card-footer">
+                <div class="onb-steps">Steg 2 av @totalSteps</div>
+                <button class="tb-btn" style="height:30px;" @onclick="OpenGroupsManageAsync">Hantera grupper</button>
+            </div>
+        </div>
+    }
+    else if (stepIndex == 3 && !IsGroupsPage)
+    {
+        <div class="onb-card" style="top: 72px; left: 50%; transform: translateX(-50%);">
+            <div class="onb-card-header">
+                <div class="onb-card-title">Nu kan du börja bygga ditt första veckoschema</div>
+                <button class="onb-close" @onclick="SkipAndNext">✕</button>
+            </div>
+            <div class="onb-card-body">
+                Du kan skapa flera mallar och versioner. När du är nöjd kan du använda mallarna för att snabbt fylla kalendern med färdiga veckor (i kalendervyn).
+            </div>
+            <div class="onb-card-footer">
+                <div class="onb-steps">Steg 3 av @totalSteps</div>
+                <button class="tb-btn" style="height:30px;" @onclick="BeginPlanningAsync">Börja planera</button>
+            </div>
+        </div>
+    }
+}
+
+<style>
+    /* Keep onboarding pop-cards behind app modals */
+    .onb-card{position:fixed; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 10px 24px rgba(16,24,40,.18); padding:10px; width:320px; z-index:3000}
+    .onb-card-header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px}
+    .onb-card-title{font-size:14px; font-weight:600; color:#111827}
+    .onb-close{border:none; background:transparent; cursor:pointer; color:#6b7280; font-size:14px}
+    .onb-card-body{font-size:12px; color:#374151; line-height:1.5; margin-bottom:8px}
+    .onb-card-footer{display:flex; align-items:center; justify-content:space-between; gap:8px}
+    .onb-steps{font-size:11px; color:#6b7280}
+    /* Modal styles to match BookingModal */
+    .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+    .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:12px}
+    .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+    .bm-field{margin-bottom:12px}
+    .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;padding-bottom:4px}
+    .btn-primary{padding:10px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff;cursor:pointer}
+</style>
+
+@code {
+    private bool IsGroupsPage
+    {
+        get
+        {
+            try
+            {
+                var path = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+                return path == "/grupper";
+            }
+            catch { return false; }
+        }
+    }
+
+    public void Dispose()
+    {
+        isDisposed = true;
+        try { Nav.LocationChanged -= OnLocationChanged; } catch { }
+    }
+}

@@ -1,0 +1,612 @@
+@using System
+@inject SchedulerMVP.Services.IPlaceService PlaceService
+@inject SchedulerMVP.Services.UIState UI
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="OnBackdrop"></div>
+    <div class="bm-modal">
+        <div class="bm-header">
+            <h2 class="bm-title">Skapa ny plats</h2>
+        </div>
+        
+        <div class="bm-columns">
+            <div class="bm-column-left">
+                <div class="bm-field">
+                    <label class="bm-label">Platsnamn</label>
+                    <input class="tb-select" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
+                </div>
+                <div class="bm-field">
+                    <label class="bm-label">Standard längd på bokning</label>
+                    <div class="bm-inline">
+                        <input class="tb-select bm-w-full" value="@durationText" @oninput="OnDurationInput" />
+                        <span class="bm-suffix">min</span>
+                    </div>
+                </div>
+                <div class="bm-field">
+                    <label class="bm-label">Typ av plats</label>
+                    <select class="tb-select" value="@type" @onchange="OnTypeChange">
+                        <option value="Plan">Plan</option>
+                        <option value="Hall">Hall</option>
+                        <option value="Simhall">Simhall</option>
+                        <option value="Annat">Annat</option>
+                    </select>
+                </div>
+                @if (type == "Simhall")
+                {
+                    <div class="bm-field">
+                        <label class="bm-label">Dela bassäng i två halvor</label>
+                        <input type="checkbox" checked="@split" @onchange="OnSplitChange" />
+                    </div>
+                }
+            </div>
+            
+            <div class="bm-column-right">
+                @* Editable hierarchy preview/editor *@
+                <div class="bm-field">
+                    <label class="bm-label">Ytindelning</label>
+                    <div class="bm-description" style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">Definiera hur platsen delas upp och vilka bokningsbara ytor den har.</div>
+                    <div class="bm-hierarchy">
+                        @if (type == "Plan")
+                        {
+                            @* Helplan as a chip *@
+                            <div class="bm-level-1">
+                                <div class="bm-chip bm-chip-level-1">
+                                    <input class="bm-chip-input" value="@helplanName" @oninput="(e)=> helplanName = e.Value?.ToString() ?? helplanName" />
+                                </div>
+                            </div>
+                            
+                            @* Halvplan level with +/- controls *@
+                            <div class="bm-level-2">
+                                <div class="bm-level-header">
+                                    <span class="bm-level-title">Halvplaner</span>
+                                    <button type="button" class="bm-step" @onclick="AddHalvplan">+</button>
+                                </div>
+                                <div class="bm-chips">
+                                    @for (var i = 0; i < halvplanNames.Count; i++)
+                                    {
+                                        var idx = i;
+                                        <div class="bm-chip bm-chip-level-2">
+                                            <input class="bm-chip-input" value="@halvplanNames[i]" @oninput="(e)=> halvplanNames[idx] = e.Value?.ToString() ?? halvplanNames[idx]" />
+                                            <button type="button" class="bm-chip-remove" @onclick="() => RemoveHalvplan(idx)" disabled="@(halvplanNames.Count <= 1)">×</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            
+                            @* Kvartsplan level with +/- controls *@
+                            @for (var i = 0; i < halvplanNames.Count; i++)
+                            {
+                                var halvplanIdx = i;
+                                <div class="bm-level-3">
+                                    <div class="bm-level-header">
+                                        <span class="bm-level-title">Kvartsplaner för @halvplanNames[i]</span>
+                                        <button type="button" class="bm-step" @onclick="() => AddKvartsplan(halvplanIdx)">+</button>
+                                    </div>
+                                    <div class="bm-chips">
+                                        @for (var j = 0; j < kvartsplanNames[i].Count; j++)
+                                        {
+                                            var kvartsplanIdx = j;
+                                            <div class="bm-chip bm-chip-level-3">
+                                                <input class="bm-chip-input" value="@kvartsplanNames[i][j]" @oninput="(e)=> kvartsplanNames[halvplanIdx][kvartsplanIdx] = e.Value?.ToString() ?? kvartsplanNames[halvplanIdx][kvartsplanIdx]" />
+                                                <button type="button" class="bm-chip-remove" @onclick="() => RemoveKvartsplan(halvplanIdx, kvartsplanIdx)" disabled="@(kvartsplanNames[halvplanIdx].Count <= 1)">×</button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else if (type == "Simhall")
+                        {
+                            @* Hel bassäng as a chip *@
+                            <div class="bm-level-1">
+                                <div class="bm-chip bm-chip-level-1">
+                                    <input class="bm-chip-input" value="@poolName" @oninput="(e)=> poolName = e.Value?.ToString() ?? poolName" />
+                                </div>
+                            </div>
+                            
+                            @* Halvor level with +/- controls *@
+                            @if (split)
+                            {
+                                <div class="bm-level-2">
+                                    <div class="bm-level-header">
+                                        <span class="bm-level-title">Halvor</span>
+                                        <div class="bm-inline">
+                                            <button type="button" class="bm-step" @onclick="AddHalf" title="Lägg till ny yta">+</button>
+                                        </div>
+                                    </div>
+                                    <div class="bm-chips">
+                                        @for (var i = 0; i < halfNames.Count; i++)
+                                        {
+                                            var halfIdx = i;
+                                            <div class="bm-chip bm-chip-level-2">
+                                                <input class="bm-chip-input" value="@halfNames[i]" @oninput="(e)=> halfNames[halfIdx] = e.Value?.ToString() ?? halfNames[halfIdx]" />
+                                                <button type="button" class="bm-chip-remove" @onclick="() => RemoveHalf(halfIdx)" disabled="@(halfNames.Count <= 1)">×</button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            
+                            @* Banor level with +/- controls *@
+                            <div class="bm-level-3">
+                                <div class="bm-level-header">
+                                    <span class="bm-level-title">Banor</span>
+                                    <div class="bm-inline">
+                                        <button type="button" class="bm-step" @onclick="AddLane" title="Lägg till ny yta">+</button>
+                                    </div>
+                                </div>
+                                <div class="bm-chips">
+                                    @for (var i = 0; i < laneNames.Count; i++)
+                                    {
+                                        var laneIdx = i;
+                                        <div class="bm-chip bm-chip-level-3">
+                                            <input class="bm-chip-input" value="@laneNames[i]" @oninput="(e)=> laneNames[laneIdx] = e.Value?.ToString() ?? laneNames[laneIdx]" />
+                                            <button type="button" class="bm-chip-remove" @onclick="() => RemoveLane(laneIdx)" disabled="@(laneNames.Count <= 1)">×</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else if (type == "Hall")
+                        {
+                            @* Hela hallen as a chip *@
+                            <div class="bm-level-1">
+                                <div class="bm-chip bm-chip-level-1">
+                                    <input class="bm-chip-input" value="@hallName" @oninput="(e)=> hallName = e.Value?.ToString() ?? hallName" />
+                                </div>
+                            </div>
+                            
+                            @* Bokningsbara ytor level with +/- controls *@
+                            <div class="bm-level-2">
+                                <div class="bm-level-header">
+                                    <span class="bm-level-title">Bokningsbara ytor</span>
+                                    <button type="button" class="bm-step" @onclick="AddHallYta" title="Lägg till ny yta">+</button>
+                                </div>
+                                <div class="bm-chips">
+                                    @for (var i = 0; i < hallYtaNames.Count; i++)
+                                    {
+                                        var idx = i;
+                                        <div class="bm-chip bm-chip-level-2">
+                                            <input class="bm-chip-input" value="@hallYtaNames[i]" @oninput="(e)=> hallYtaNames[idx] = e.Value?.ToString() ?? hallYtaNames[idx]" />
+                                            <button type="button" class="bm-chip-remove" @onclick="() => RemoveHallYta(idx)" disabled="@(hallYtaNames.Count <= 1)">×</button>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else if (type == "Annat")
+                        {
+                            @* Hela platsen as a chip *@
+                            <div class="bm-level-1">
+                                <div class="bm-chip bm-chip-level-1">
+                                    <input class="bm-chip-input" value="@customTopName" @oninput="(e)=> customTopName = e.Value?.ToString() ?? customTopName" />
+                                </div>
+                            </div>
+                            
+                            @* Zoner level with toggle and +/- controls *@
+                            <div class="bm-level-2">
+                                <div class="bm-level-header">
+                                    <span class="bm-level-title">Zoner</span>
+                                    <div class="bm-inline">
+                                        <input type="checkbox" checked="@useZones" @onchange="OnZonesToggle" />
+                                        <button type="button" class="bm-step" @onclick="AddZone" disabled="@(!useZones)" title="Lägg till ny yta">+</button>
+                                    </div>
+                                </div>
+                                @if (useZones)
+                                {
+                                    <div class="bm-chips">
+                                        @for (var i = 0; i < zoneNames.Count; i++)
+                                        {
+                                            var idx = i;
+                                            <div class="bm-chip bm-chip-level-2">
+                                                <input class="bm-chip-input" value="@zoneNames[i]" @oninput="(e)=> zoneNames[idx] = e.Value?.ToString() ?? zoneNames[idx]" />
+                                                <button type="button" class="bm-chip-remove" @onclick="() => RemoveZone(idx)" disabled="@(zoneNames.Count <= 1)">×</button>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            
+                            @* Bokningsbara ytor level with +/- controls *@
+                            @if (useZones)
+                            {
+                                @for (var i = 0; i < zoneNames.Count; i++)
+                                {
+                                    var zoneIdx = i;
+                                    <div class="bm-level-3">
+                                        <div class="bm-level-header">
+                                            <span class="bm-level-title">Bokningsbara ytor till @zoneNames[i]</span>
+                                            <button type="button" class="bm-step" @onclick="() => AddYta(zoneIdx)" title="Lägg till ny yta">+</button>
+                                        </div>
+                                        <div class="bm-chips">
+                                            @for (var j = 0; j < ytaNames[i].Count; j++)
+                                            {
+                                                var ytaIdx = j;
+                                                <div class="bm-chip bm-chip-level-3">
+                                                    <input class="bm-chip-input" value="@ytaNames[i][j]" @oninput="(e)=> ytaNames[zoneIdx][ytaIdx] = e.Value?.ToString() ?? ytaNames[zoneIdx][ytaIdx]" />
+                                                    <button type="button" class="bm-chip-remove" @onclick="() => RemoveYta(zoneIdx, ytaIdx)" disabled="@(ytaNames[zoneIdx].Count <= 1)">×</button>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="bm-level-2">
+                                    <div class="bm-level-header">
+                                        <span class="bm-level-title">Bokningsbara ytor</span>
+                                        <button type="button" class="bm-step" @onclick="() => AddYta(-1)" title="Lägg till ny yta">+</button>
+                                    </div>
+                                    <div class="bm-chips">
+                                        @for (var i = 0; i < customLeafs.Count; i++)
+                                        {
+                                            var idx = i;
+                                            <div class="bm-chip bm-chip-level-2">
+                                                <input class="bm-chip-input" value="@customLeafs[i]" @oninput="(e)=> customLeafs[idx] = e.Value?.ToString() ?? customLeafs[idx]" />
+                                                <button type="button" class="bm-chip-remove" @onclick="() => RemoveCustomYta(idx)" disabled="@(customLeafs.Count <= 1)">×</button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bm-actions">
+            <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+            <button type="button" @onclick="OnCreate" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Skapa plats</button>
+        </div>
+    </div>
+    <style>
+        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;min-width:1000px;max-width:1200px;width:95vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:12px}
+        .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+        .bm-w-full{width:100%}
+        .bm-inline{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+        .bm-stepper{display:flex;align-items:center;gap:8px}
+        .bm-step{width:20px;height:20px;border:none;border-radius:50%;background:#000;color:#fff;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;position:relative}
+        .bm-step:hover::after{content:"Lägg till ny yta";position:absolute;top:-35px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;white-space:nowrap;z-index:1000;pointer-events:none}
+        .bm-step:hover::before{content:"";position:absolute;top:-5px;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#333;z-index:1000;pointer-events:none}
+        .bm-step-value{min-width:56px;text-align:center;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;background:#f8fafc}
+        .bm-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+        .bm-chip{display:flex;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:4px 8px;gap:6px}
+        .bm-chip-input{border:none;background:transparent;padding:4px 6px;font-size:14px;min-width:60px;outline:none}
+        .bm-chip-remove{width:20px;height:20px;border:none;background:#ef4444;color:#fff;border-radius:50%;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center}
+        .bm-columns{display:flex;gap:32px;margin-top:20px;position:relative}
+        .bm-column-left{flex:1;min-width:0;padding-right:24px;border-right:1px solid #e5e7eb}
+        .bm-column-right{flex:2;min-width:0;padding-left:24px}
+        .bm-chip-remove:disabled{background:#9ca3af;cursor:not-allowed}
+        .bm-suffix{font-size:14px;color:#6b7280}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
+        .bm-hierarchy{display:flex;flex-direction:column;gap:16px}
+        .bm-row{display:flex;gap:8px}
+        .bm-level-1{margin-left:0}
+        .bm-level-2{margin-left:20px;border-left:2px solid #e5e7eb;padding-left:12px}
+        .bm-level-3{margin-left:40px;border-left:2px solid #d1d5db;padding-left:12px}
+        .bm-level-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+        .bm-level-title{font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px}
+        .bm-chip-level-1{background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:6px 10px}
+        .bm-chip-level-2{background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:6px 10px}
+        .bm-chip-level-3{background:#f1f5f9;border:1px solid #94a3b8;border-radius:4px;padding:4px 8px}
+        .btn-outline{padding:10px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720}
+        .btn-primary{padding:10px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnCreated { get; set; }
+
+    private string name = string.Empty;
+    private string durationText = "90";
+    private string type = "Plan";
+    private bool split = false;
+    
+    // Original defaults per PromptSpec - always reset to these
+    private string helplanName = "Helplan";
+    private string hallName = "Hela hallen";
+    private List<string> hallYtaNames = new() { "Halvplan A", "Halvplan B" };
+    private string poolName = "Hel bassäng";
+    private List<string> halfNames = new() { "Halv A", "Halv B" };
+    private List<string> laneNames = Enumerable.Range(1,8).Select(i => $"Bana {i}").ToList();
+    private string customTopName = "Hela platsen";
+    private List<string> customLeafs = new() { "Yta 1", "Yta 2", "Yta 3", "Yta 4" };
+    
+    // Dynamic controls for Plan type
+    private List<string> halvplanNames = new() { "Halvplan A", "Halvplan B" };
+    private List<List<string>> kvartsplanNames = new() { new() { "A1", "A2" }, new() { "B1", "B2" } };
+    
+    // Dynamic controls for Annat type
+    private bool useZones = false;
+    private List<string> zoneNames = new() { "Zon A", "Zon B" };
+    private List<List<string>> ytaNames = new() { new() { "Yta 1", "Yta 2" }, new() { "Yta 3", "Yta 4" } };
+
+    private void OnNameInput(ChangeEventArgs e) => name = e.Value?.ToString() ?? string.Empty;
+    private void OnDurationInput(ChangeEventArgs e) => durationText = e.Value?.ToString() ?? "";
+    private void OnTypeChange(ChangeEventArgs e) 
+    { 
+        type = e.Value?.ToString() ?? "Plan";
+        ResetToDefaults();
+    }
+    private void OnSplitChange(ChangeEventArgs e) => split = e.Value is bool b ? b : !split;
+
+    private void ResetToDefaults()
+    {
+        // Always reset to original defaults per PromptSpec
+        helplanName = "Helplan";
+        hallName = "Hela hallen";
+        hallYtaNames = new() { "Halvplan A", "Halvplan B" };
+        poolName = "Hel bassäng";
+        halfNames = new() { "Halv A", "Halv B" };
+        laneNames = Enumerable.Range(1, 8).Select(i => $"Bana {i}").ToList();
+        customTopName = "Hela platsen";
+        customLeafs = new() { "Yta 1", "Yta 2", "Yta 3", "Yta 4" };
+        
+        // Reset dynamic controls for Plan type
+        halvplanNames = new() { "Halvplan A", "Halvplan B" };
+        kvartsplanNames = new() { new() { "A1", "A2" }, new() { "B1", "B2" } };
+        
+        // Reset dynamic controls for Annat type
+        useZones = false;
+        zoneNames = new() { "Zon A", "Zon B" };
+        ytaNames = new() { new() { "Yta 1", "Yta 2" }, new() { "Yta 3", "Yta 4" } };
+        
+        StateHasChanged();
+    }
+
+    // Dynamic controls for Hall type
+    private void AddHallYta()
+    {
+        var nextLetter = (char)('A' + hallYtaNames.Count);
+        hallYtaNames.Add($"Halvplan {nextLetter}");
+        StateHasChanged();
+    }
+
+    private void RemoveHallYta(int index)
+    {
+        if (hallYtaNames.Count > 1) // Keep at least one
+        {
+            hallYtaNames.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    // Dynamic controls for Simhall type
+    private void AddLane()
+    {
+        var nextNumber = laneNames.Count + 1;
+        laneNames.Add($"Bana {nextNumber}");
+        StateHasChanged();
+    }
+
+    private void RemoveLane(int index)
+    {
+        if (laneNames.Count > 1) // Keep at least one
+        {
+            laneNames.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    private void AddHalf()
+    {
+        var nextLetter = (char)('A' + halfNames.Count);
+        halfNames.Add($"Halv {nextLetter}");
+        StateHasChanged();
+    }
+
+    private void RemoveHalf(int index)
+    {
+        if (halfNames.Count > 1) // Keep at least one
+        {
+            halfNames.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    // Dynamic controls for Plan type
+    private void AddHalvplan()
+    {
+        var nextLetter = (char)('A' + halvplanNames.Count);
+        halvplanNames.Add($"Halvplan {nextLetter}");
+        kvartsplanNames.Add(new List<string> { $"{nextLetter}1", $"{nextLetter}2" });
+        StateHasChanged();
+    }
+
+    private void RemoveHalvplan(int index)
+    {
+        if (halvplanNames.Count > 1) // Keep at least one
+        {
+            halvplanNames.RemoveAt(index);
+            kvartsplanNames.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    private void AddKvartsplan(int halvplanIndex)
+    {
+        var halvplanName = halvplanNames[halvplanIndex];
+        var letter = halvplanName.Last(); // Get the letter (A, B, C, etc.)
+        var nextNumber = kvartsplanNames[halvplanIndex].Count + 1;
+        kvartsplanNames[halvplanIndex].Add($"{letter}{nextNumber}");
+        StateHasChanged();
+    }
+
+    private void RemoveKvartsplan(int halvplanIndex, int kvartsplanIndex)
+    {
+        if (kvartsplanNames[halvplanIndex].Count > 1) // Keep at least one
+        {
+            kvartsplanNames[halvplanIndex].RemoveAt(kvartsplanIndex);
+            StateHasChanged();
+        }
+    }
+
+    // Dynamic controls for Annat type
+    private void OnZonesToggle(ChangeEventArgs e)
+    {
+        useZones = e.Value is bool b ? b : !useZones;
+        if (useZones && zoneNames.Count == 0)
+        {
+            zoneNames = new() { "Zon A", "Zon B" };
+            // Keep existing names and distribute them between zones
+            if (customLeafs.Count > 0)
+            {
+                // Distribute existing names: first 2 to Zon A, rest to Zon B
+                var firstZoneYtas = new List<string>();
+                var secondZoneYtas = new List<string>();
+                
+                // Take first 2 existing names for Zon A
+                for (int i = 0; i < Math.Min(2, customLeafs.Count); i++)
+                {
+                    firstZoneYtas.Add(customLeafs[i]);
+                }
+                
+                // Take remaining names for Zon B
+                for (int i = 2; i < customLeafs.Count; i++)
+                {
+                    secondZoneYtas.Add(customLeafs[i]);
+                }
+                
+                // If we don't have enough names, add default ones using zone name format
+                if (firstZoneYtas.Count < 2)
+                {
+                    firstZoneYtas.Add("Zon A 1");
+                    firstZoneYtas.Add("Zon A 2");
+                }
+                if (secondZoneYtas.Count < 2)
+                {
+                    secondZoneYtas.Add("Zon B 1");
+                    secondZoneYtas.Add("Zon B 2");
+                }
+                
+                ytaNames = new() { firstZoneYtas, secondZoneYtas };
+            }
+            else
+            {
+                // Default names when no existing names - use zone name format
+                ytaNames = new() { new() { "Zon A 1", "Zon A 2" }, new() { "Zon B 1", "Zon B 2" } };
+            }
+        }
+        StateHasChanged();
+    }
+
+    private void AddZone()
+    {
+        var nextLetter = (char)('A' + zoneNames.Count);
+        var newZoneName = $"Zon {nextLetter}";
+        zoneNames.Add(newZoneName);
+        
+        // Create default ytas using zone name + number
+        ytaNames.Add(new List<string> { $"{newZoneName} 1", $"{newZoneName} 2" });
+        StateHasChanged();
+    }
+
+    private void RemoveZone(int index)
+    {
+        if (zoneNames.Count > 1) // Keep at least one
+        {
+            zoneNames.RemoveAt(index);
+            ytaNames.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    private void AddYta(int zoneIndex)
+    {
+        if (zoneIndex >= 0 && zoneIndex < ytaNames.Count)
+        {
+            // For zones, use format: ZoneName + number
+            var zoneName = zoneNames[zoneIndex];
+            var nextNumber = ytaNames[zoneIndex].Count + 1;
+            ytaNames[zoneIndex].Add($"{zoneName} {nextNumber}");
+        }
+        else
+        {
+            // Add to customLeafs when no zones
+            var nextNumber = customLeafs.Count + 1;
+            customLeafs.Add($"Yta {nextNumber}");
+        }
+        StateHasChanged();
+    }
+
+    private void RemoveYta(int zoneIndex, int ytaIndex)
+    {
+        if (zoneIndex >= 0 && zoneIndex < ytaNames.Count && ytaNames[zoneIndex].Count > 1)
+        {
+            ytaNames[zoneIndex].RemoveAt(ytaIndex);
+            StateHasChanged();
+        }
+    }
+
+    private void RemoveCustomYta(int index)
+    {
+        if (customLeafs.Count > 1) // Keep at least one
+        {
+            customLeafs.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnCreate()
+    {
+        if (!int.TryParse(durationText, out var duration)) duration = 90;
+        var place = new SchedulerMVP.Data.Entities.Place { Name = name, DefaultDurationMin = duration };
+        place = await PlaceService.CreatePlaceAsync(place);
+
+        // Generate areas/leafs by type per PromptSpec 8, using dynamic structure
+        if (type == "Plan")
+        {
+            // Flatten all kvartsplan names into a single list
+            var allLeafs = kvartsplanNames.SelectMany(x => x).ToList();
+            await PlaceService.GenerateFootballTemplateAsync(place.Id, helplanName, halvplanNames, kvartsplanNames);
+        }
+        else if (type == "Hall")
+        {
+            await PlaceService.GenerateCustomTemplateAsync(place.Id, hallName, hallYtaNames);
+        }
+        else if (type == "Simhall")
+        {
+            await PlaceService.GeneratePoolTemplateAsync(place.Id, laneNames, split, poolName, halfNames.Count > 0 ? halfNames[0] : null, halfNames.Count > 1 ? halfNames[1] : null);
+        }
+        else if (type == "Annat")
+        {
+            if (useZones)
+            {
+                // Flatten all yta names into a single list for each zone
+                var allYtas = ytaNames.SelectMany(x => x).ToList();
+                await PlaceService.GenerateCustomTemplateAsync(place.Id, customTopName, zoneNames, ytaNames);
+            }
+            else
+            {
+                await PlaceService.GenerateCustomTemplateAsync(place.Id, customTopName, customLeafs);
+            }
+        }
+
+        IsOpen = false;
+        await OnCreated.InvokeAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task OnCancel() => await CloseAsync();
+    private async Task OnBackdrop(MouseEventArgs _) => await CloseAsync();
+
+    private async Task CloseAsync()
+    {
+        IsOpen = false;
+        await OnClose.InvokeAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen)
+        {
+            ResetToDefaults();
+        }
+    }
+}

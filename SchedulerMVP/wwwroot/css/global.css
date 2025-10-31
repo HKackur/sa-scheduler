@@ -1,0 +1,1185 @@
+/* Global styles */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --day-header-height: 64px;
+}
+html, body {
+    height: 100%;
+    overflow: hidden; /* prevent page scroll; inner panels will scroll */
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #fafafa;
+}
+
+/* Layout */
+.main-layout {
+    display: flex;
+    height: 100vh;
+}
+
+.left-sidebar {
+    width: 280px;
+    background: white;
+    overflow-y: auto;
+}
+
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.right-sidebar {
+    width: 280px;
+    background: white;
+    overflow-y: auto;
+}
+
+/* Three-column layout for the scheduler app */
+.sa-app {
+    height: 100vh;
+    padding: 0 24px 32px 24px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.sa-shell {
+    display: flex;
+    flex: 1;
+    height: calc(100vh - 60px - 24px - 32px); /* account for .sa-app padding */
+}
+
+/* New layout for SportAdmin integration */
+.sa-shell-new {
+    display: flex;
+    flex: 1;
+    height: calc(100vh - 60px - 24px - 32px); /* account for .sa-app padding */
+}
+
+.sa-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sa-left {
+    width: 280px;
+    background: transparent;
+    position: relative;
+}
+
+.sa-center {
+    flex: 1;
+    background: transparent;
+    min-width: 0;
+    overflow: visible;
+}
+
+.sa-right {
+    width: 280px;
+    background: transparent;
+}
+
+/* New layout classes */
+.sa-center-new {
+    flex: 0 0 80%;
+    background: transparent;
+    min-width: 0;
+    overflow: hidden; /* prevent outer scroll; inner grid will scroll */
+}
+
+.sa-right-new {
+    flex: 0 0 20%;
+    background: transparent;
+    min-width: 0;
+    height: 100%; /* Ensure full height */
+    overflow: hidden; /* Parent container hides overflow, child .sa-groups scrolls */
+}
+
+.sa-tree, .sa-groups {
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* Top bar */
+.sa-topbar { 
+    position: sticky; 
+    top: 0; 
+    z-index: 100; 
+    padding: 24px 24px 16px 24px; 
+    box-sizing: border-box; 
+    background: #fafafa; 
+    border-bottom: none; 
+}
+
+/* Hide TopBar on login page (force hide) */
+body .app-root .sa-topbar,
+.app-root .sa-topbar,
+.sa-topbar {
+    /* Will be overridden by login-specific CSS if on login page */
+}
+
+.top-bar h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+}
+
+.top-bar-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+/* Navigation tabs */
+.nav-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0;
+}
+
+.nav-tab {
+    padding: 12px 24px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.2s ease;
+}
+
+.nav-tab:hover {
+    color: #333;
+    background: #fafafa;
+}
+
+.nav-tab.active {
+    color: #1976d2;
+    border-bottom-color: #1976d2;
+    background: white;
+}
+
+/* Calendar navigation */
+.calendar-navigation { 
+    display:flex; 
+    justify-content:space-between; 
+    align-items:center; 
+    padding: 12px 0; 
+    background: white; 
+    border: 1px solid #e4e4e4;
+    border-radius: 4px;
+    border-bottom: none;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.calendar-nav-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.calendar-nav-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.nav-text {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+    min-width: 120px;
+    text-align: center;
+}
+
+/* View toggle */
+.view-toggle {
+    display: flex;
+    background: #fafafa;
+    border-radius: 6px;
+    padding: 2px;
+}
+
+.view-toggle button {
+    padding: 8px 16px;
+    border: none;
+    background: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.2s ease;
+}
+
+.view-toggle button.active {
+    background: white;
+    color: #1976d2;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Week grid */
+.week-grid-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0; /* allow inner scroller to size */
+}
+
+.week-grid {
+    display: grid;
+    grid-template-columns: 80px repeat(7, 1fr);
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    background: white;
+    border: 1px solid #e4e4e4;
+    border-top: none;
+    border-radius: 4px;
+    padding-bottom: 0; /* no extra spacer; bottom line provided by ::after rules */
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+.week-grid.day-view {
+    grid-template-columns: 80px 1fr;
+}
+
+
+.time-gutter {
+    background: white;
+    border-right: 1px solid #e4e4e4;
+    display: grid;
+    grid-template-rows: auto 1fr; /* match day-header height */
+    position: relative;
+    height: 1440px; /* 24 hours * 60 minutes = 1440px (1px per minute) */
+}
+
+.time-header {
+    background: white;
+    border-top: 1px solid #e4e4e4;
+    border-bottom: 1px solid #e4e4e4;
+    border-top-left-radius: 4px;
+    padding: 8px 12px;
+    text-align: center;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column; /* two stacked lines like day-header */
+    align-items: center;
+    position: sticky; /* sticky time header */
+    top: 0;
+    z-index: 6; /* above day headers so border aligns */
+    height: var(--day-header-height);
+}
+
+.time-body {
+    position: relative;
+    height: 1440px; /* 24 hours * 60 minutes = 1440px (1px per minute) */
+    /* hour grid lines only */
+    background-image:
+        linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, rgba(0,0,0,0) 1px);
+    background-size: 60px 60px;
+    background-position: 0 0;
+    background-repeat: repeat;
+}
+/* Ensure a crisp bottom border at 24:00 in the time gutter */
+.time-body::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: #e4e4e4;
+}
+
+.time-name { font-weight: 600; margin-bottom: 2px; visibility: hidden; }
+.time-date { font-size: 12px; color: transparent; }
+
+.day-content {
+    border-right: 1px solid #e4e4e4;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    position: relative;
+    height: 1440px; /* 24 hours * 60 minutes = 1440px (1px per minute) */
+    /* hour and half-hour grid lines */
+    background-image:
+        linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, rgba(0,0,0,0) 1px),
+        linear-gradient(to bottom, rgba(0,0,0,0.035) 1px, rgba(0,0,0,0) 1px);
+    background-size: 60px 60px, 30px 30px;
+    background-position: 0 0, 0 0;
+    background-repeat: repeat;
+}
+/* Ensure a crisp bottom border at 24:00 for each day column */
+.day-content::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: #e4e4e4;
+}
+
+.day-column:first-child .day-content {
+    border-left: none;
+}
+
+.day-column:last-child .day-content {
+    border-right: none;
+}
+
+.booking-block {
+    position: absolute;
+    left: 2px;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    color: #0b0b0b;
+    overflow: hidden;
+    z-index: 2;
+    cursor: pointer;
+}
+
+/* primary booking on selected area/place */
+.booking--primary {
+    background-color: #E3F4FD; /* light blue background */
+    border: 1px solid #2597F3; /* blue border */
+    color: #1B76D3; /* blue text */
+}
+
+/* ghost booking (from other areas) */
+.booking--ghost {
+    /* Slightly darker neutrals for better contrast, still secondary to blue primaries */
+    background-color: #e2e8f0; /* slate-200 */
+    border: 1px dashed #9ca3af; /* slate-400 */
+    color: #334155; /* slate-700 text */
+}
+
+.booking-content {
+    padding: 2px 4px;
+    font-weight: 400;
+    line-height: 1.2;
+    pointer-events: none;
+}
+
+.ghost-content {
+    padding: 2px 4px;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.2;
+}
+
+.ghost-source {
+    font-size: 11px;
+    font-weight: 300;
+    opacity: 0.9;
+    margin-top: 2px;
+}
+
+.booking-group { 
+    font-size: 11px; 
+    letter-spacing: -0.2px; 
+    font-weight: 400;
+    pointer-events: none;
+}
+.booking-time { 
+    font-size: 11px; 
+    opacity: 0.9; 
+    font-weight: 300;
+    pointer-events: none;
+}
+
+.ghost-block {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    background-color: #f3f4f6; /* light gray background */
+    border: 1px dashed #d1d5db; /* dashed gray border */
+    border-radius: 6px;
+    color: #374151; /* dark gray text */
+    z-index: 1;
+    overflow: hidden;
+    padding: 2px 4px;
+}
+
+.day-header {
+    background: white;
+    border-top: 1px solid #e4e4e4;
+    border-bottom: 1px solid #e4e4e4;
+    padding: 8px 12px;
+    text-align: center;
+    font-weight: 500;
+    color: #333;
+    position: sticky; /* sticky day header */
+    top: 0;
+    z-index: 5;
+    box-sizing: border-box;
+    height: var(--day-header-height);
+}
+
+.day-column:last-child .day-header {
+    border-top-right-radius: 4px;
+}
+
+.day-name {
+    font-weight: 500;
+    margin-bottom: 2px;
+    font-size: 16px;
+    padding-top: 4px;
+}
+
+.day-date {
+    font-size: 12px;
+    color: #666;
+}
+
+.today-highlight {
+    background: #ffffff !important; /* white to hide underlying grid lines */
+    /* Ensure no special borders/radius differ from default headers */
+    border-left: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.today-highlight .day-name {
+    color: #1761A5 !important; /* match fler alternativ btn */
+    font-weight: 600;
+}
+
+.today-highlight .day-date {
+    color: #1761A5 !important; /* match fler alternativ btn */
+}
+
+.day-body {
+    flex: 1;
+    position: relative;
+    overflow-y: auto;
+}
+
+.time-slot {
+    height: 60px;
+    border-bottom: 1px solid #f0f0f0;
+    position: relative;
+    transition: background-color 0.2s ease;
+}
+
+.time-slot:hover {
+    background-color: #fafafa;
+}
+
+.time-slot.hour {
+    border-bottom: 1px solid #e4e4e4;
+}
+
+.time-label {
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+}
+
+/* Booking items */
+.booking-item {
+    position: absolute;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.booking-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Popover */
+.booking-popover {
+    position: fixed;
+    background: white;
+    border: 1px solid #e4e4e4;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    max-width: 300px;
+    padding: 12px;
+}
+
+.booking-popover h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+.booking-popover p {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    color: #666;
+}
+
+.booking-popover .btn {
+    margin-right: 8px;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid #e4e4e4;
+    border-radius: 4px;
+    background: white;
+    color: #333;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    justify-content: center;
+}
+
+.btn:hover {
+    background: #fafafa;
+    border-color: #d0d0d0;
+}
+
+.btn:active {
+    transform: translateY(1px);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.btn-primary {
+    background: #1976d2;
+    border-color: #1976d2;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #1565c0;
+    border-color: #1565c0;
+}
+
+.btn-outline-secondary {
+    background: transparent;
+    border-color: #e4e4e4;
+    color: #666;
+}
+
+.btn-outline-secondary:hover {
+    background: #fafafa;
+    border-color: #d0d0d0;
+    color: #333;
+}
+
+.btn-danger {
+    background: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+    border-color: #c82333;
+}
+
+/* Dropdown */
+.dropdown {
+    position: relative;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: white;
+    border: 1px solid #e4e4e4;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    min-width: 200px;
+    padding: 4px 0;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    transition: background-color 0.2s ease;
+}
+
+.dropdown-item:hover {
+    background: #fafafa;
+}
+
+.dropdown-item:active {
+    background: #e9ecef;
+}
+
+.dropdown-item i {
+    font-size: 16px;
+    color: #666;
+}
+
+/* Sidebar */
+.sidebar-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e4e4e4;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sa-panel-title { color: #000; font-feature-settings: 'liga' off, 'clig' off; font-family: Inter; font-size: 15px; font-style: normal; font-weight: 500; line-height: 22px; letter-spacing: 0.1px; margin: 0 0 10px 0; }
+
+.sidebar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+}
+
+.sidebar-content {
+    padding: 16px 20px;
+}
+
+/* Left sidebar specific */
+.left-sidebar .sidebar-title {
+    color: #1976d2;
+}
+
+/* Right sidebar specific */
+.right-sidebar .sidebar-title {
+    color: #1976d2;
+}
+
+/* Tree view */
+.sa-tree, .sa-groups { padding-top: 0; }
+.sa-tree-list, .sa-tree-list li { list-style: none; margin: 0; padding-left: 0; }
+.tree-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.tree-item:hover {
+    background: #fafafa;
+}
+
+.tree-item.selected {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.tree-item.selected .tree-icon {
+    color: #1976d2;
+}
+
+.tree-icon {
+    margin-right: 8px;
+    font-size: 16px;
+    color: #666;
+    transition: color 0.2s ease;
+}
+
+.tree-text {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.sa-tree-row { display:flex; align-items:center; gap:8px; padding:4px 0; }
+.sa-tree-row.is-active { background: #E3F4FD; border-radius: 4px; }
+.sa-tree-label { font-size:14px; line-height:20px; cursor:pointer; }
+
+.tree-children {
+    margin-left: 24px;
+    border-left: 1px solid #e4e4e4;
+    padding-left: 12px;
+}
+
+.tree-toggle {
+    margin-right: 8px;
+    cursor: pointer;
+    color: #666;
+    font-size: 12px;
+    transition: transform 0.2s ease;
+}
+
+.tree-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+/* Groups sidebar */
+.groups-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e4e4e4;
+}
+
+.groups-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1976d2;
+    margin: 0 0 16px 0;
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e4e4e4;
+    border-radius: 4px;
+    font-size: 14px;
+    background: #fafafa;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #1976d2;
+    background: white;
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 4px 8px;
+    border: 1px solid #e4e4e4;
+    border-radius: 12px;
+    background: white;
+    color: #666;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+    background: #fafafa;
+    border-color: #d0d0d0;
+}
+
+.filter-btn.active {
+    background: #1976d2;
+    border-color: #1976d2;
+    color: white;
+}
+
+.groups-list {
+    padding: 16px 20px;
+}
+
+.group-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.group-item:hover {
+    background: #fafafa;
+}
+
+.group-item.selected {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.group-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 12px;
+    background: #666;
+}
+
+.group-item.selected .group-dot {
+    background: #1976d2;
+}
+
+.group-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.group-count {
+    font-size: 12px;
+    color: #666;
+    margin-left: 8px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .main-layout {
+        flex-direction: column;
+    }
+    
+    .left-sidebar,
+    .right-sidebar {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-left: none;
+        border-bottom: 1px solid #e4e4e4;
+    }
+    
+    .sa-shell {
+        flex-direction: column;
+    }
+    
+    .sa-left,
+    .sa-right {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-left: none;
+        border-bottom: 1px solid #e4e4e4;
+    }
+    
+    .week-grid {
+        grid-template-columns: 60px repeat(7, 1fr);
+    }
+    
+    .time-label {
+        font-size: 10px;
+    }
+    
+    .booking-item {
+        font-size: 10px;
+        padding: 2px 4px;
+    }
+}
+
+/* Utility classes */
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.mb-0 {
+    margin-bottom: 0;
+}
+
+.mb-1 {
+    margin-bottom: 8px;
+}
+
+.mb-2 {
+    margin-bottom: 16px;
+}
+
+.mt-0 {
+    margin-top: 0;
+}
+
+.mt-1 {
+    margin-top: 8px;
+}
+
+.mt-2 {
+    margin-top: 16px;
+}
+
+.p-0 {
+    padding: 0;
+}
+
+.p-1 {
+    padding: 8px;
+}
+
+.p-2 {
+    padding: 16px;
+}
+
+.d-flex {
+    display: flex;
+}
+
+.align-items-center {
+    align-items: center;
+}
+
+.justify-content-between {
+    justify-content: space-between;
+}
+
+.gap-1 {
+    gap: 8px;
+}
+
+.gap-2 {
+    gap: 16px;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+.h-100 {
+    height: 100%;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Focus styles */
+.btn:focus,
+.tree-item:focus,
+.group-item:focus {
+    outline: 2px solid #1976d2;
+    outline-offset: 2px;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #1976d2;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Group cards - compact styling */
+.sa-group-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    background: white;
+    border: 1px solid #e4e4e4;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.sa-group-card:hover {
+    background: #fafafa;
+    border-color: #d0d0d0;
+}
+
+.sa-group-card.selected {
+    background: #e3f2fd;
+    border-color: #90caf9;
+}
+
+.sa-group-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.sa-group-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sa-group-type {
+    font-size: 11px;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sa-group-count-chip {
+    background: #e4e4e4;
+    color: #333;
+    padding: 3px 6px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    margin-left: 10px;
+}
+
+.sa-group-card.selected .sa-group-count-chip {
+    background: #90caf9;
+    color: #1976d2;
+}
+
+/* ============================================
+   BOOKING MODAL - INPUT STYLING
+   ============================================ */
+/* All inputs in booking modal use .bm-input for consistency */
+.bm-field{margin-bottom:12px;display:flex;flex-direction:column}
+.bm-label{display:block;margin-bottom:4px;font-weight:400;font-size:11px;color:#0f1720;line-height:1.2}
+
+/* Template selector - deprecated, use .bm-input instead */
+.tb-select{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;-webkit-appearance:none;-moz-appearance:none;appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 24 24' width='20'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:20px 20px;box-sizing:border-box;height:34px}
+.tb-select:hover{border-color:#cbd5e1}
+.tb-select:focus{outline:none;border-color:#007bff}
+.sa-input-group{margin-bottom:12px;display:flex;flex-direction:column}
+.sa-input-label{display:block;margin:0 0 4px 0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;font-weight:400;font-size:11px;color:#212121;line-height:1.2}
+.sa-input-field{width:100%!important;padding:10px 12px!important;border-radius:4px!important;border:1px solid #dcdee2!important;background-color:#f3f5f7!important;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02)!important;font-size:12px!important;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif!important;margin:0!important;outline:none!important;color:#000!important;box-sizing:border-box!important}
+.tb-icon{border:none;background:transparent;color:#0b1e34;font-size:22px;line-height:1;padding:0 6px;cursor:pointer}
+.tb-menu{position:absolute;right:0;top:44px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 24px rgba(16,24,40,.18);padding:8px;display:flex;flex-direction:column;width:max-content;max-width:280px;min-width:fit-content;box-sizing:border-box;overflow-x:hidden;z-index:3000}
+.tb-item{background:#fff;border:none;text-align:right;padding:10px 12px;border-radius:8px;font-size:14px;color:#111827;cursor:pointer;white-space:normal;overflow-wrap:anywhere;word-break:break-word;width:fit-content}
+.tb-item:hover{background:#f3f4f6}
+.tb-item.danger{color:#dc3545}
+.tb-btn{padding:8px 12px;border:none;border-radius:8px;background:#1761A5;font-size:13px;color:#FFF;cursor:pointer;display:flex;align-items:center;gap:8px}
+.tb-btn:hover{background:#0f4a7a}
+
+/* Force sa- classes to work independently - highest priority */
+input.sa-input-field,
+.sa-input-field {
+    width: 100% !important;
+    padding: 10px 12px !important;
+    border-radius: 4px !important;
+    border: 1px solid #dcdee2 !important;
+    background-color: #f3f5f7 !important;
+    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.02) !important;
+    font-size: 12px !important;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    margin: 0 !important;
+    outline: none !important;
+    color: #000 !important;
+}
+
+.sa-input-label {
+    display: block !important;
+    margin: 0 0 4px 0 !important;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    font-weight: 400 !important;
+    font-size: 11px !important;
+    color: #212121 !important;
+    line-height: 1.2 !important;
+}
+
+.sa-input-group {
+    margin-bottom: 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+/* Override inherited color from .bm-modal for input groups and fields */
+.bm-modal .sa-input-group,
+.bm-modal .bm-field {
+    color: inherit !important;
+}
+
+.bm-modal .sa-input-group .sa-input-label,
+.bm-modal .sa-input-group label {
+    color: #212121 !important;
+}
+
+.bm-modal .bm-field .bm-label,
+.bm-modal .bm-field label {
+    color: #0f1720 !important;
+}
+
+.bm-modal .sa-input-group input,
+.bm-modal .sa-input-group select,
+.bm-modal .sa-input-group textarea,
+.bm-modal .sa-input-field {
+    color: #000 !important;
+}
+
+/* Ensure all inputs have consistent height and styling */
+.bm-modal .bm-field input,
+.bm-modal .bm-field select,
+.bm-modal .bm-field textarea,
+.bm-modal .bm-input {
+    color: #000 !important;
+    box-sizing: border-box !important;
+    max-width: 100% !important;
+}
+
+/* Textarea has different height */
+.bm-modal .bm-field textarea.bm-input {
+    min-height: 80px !important;
+}
