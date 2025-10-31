@@ -33,6 +33,7 @@ jobs:
           flyctl auth whoami || true
 
       - name: Set application secrets (connection string)
+        if: ${{ secrets.FLY_API_TOKEN != '' && secrets.APP_DB_CONNECTION_STRING != '' }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_DEPLOY_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
@@ -57,8 +58,6 @@ jobs:
           export FLY_API_TOKEN="$NORMALIZED_FLY_TOKEN"
           export FLYCTL_ACCESS_TOKEN="$NORMALIZED_FLY_TOKEN"
           flyctl auth token "$FLY_API_TOKEN" >/dev/null 2>&1 || true
-          # Ensure app exists (idempotent)
-          flyctl apps create sa-scheduler --verbose || true
           # Use the fly.toml in SchedulerMVP/ and its Dockerfile
           flyctl deploy -a sa-scheduler -c fly.toml --detach --verbose
 
