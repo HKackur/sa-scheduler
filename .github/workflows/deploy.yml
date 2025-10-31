@@ -33,12 +33,16 @@ jobs:
           flyctl auth whoami || true
 
       - name: Set application secrets (connection string)
-        if: ${{ secrets.FLY_API_TOKEN != '' && secrets.APP_DB_CONNECTION_STRING != '' }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_DEPLOY_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
           APP_DB_CONNECTION_STRING: ${{ secrets.APP_DB_CONNECTION_STRING }}
         run: |
+          # Skip if required values are missing (e.g., when only a deploy token is provided)
+          if [ -z "$FLY_API_TOKEN" ] || [ -z "$APP_DB_CONNECTION_STRING" ]; then
+            echo "Skipping secrets set (missing FLY_API_TOKEN or APP_DB_CONNECTION_STRING)";
+            exit 0;
+          fi
           # Normalize Fly token: prefer deploy token, fallback to API token
           TOKEN_RAW="${FLY_DEPLOY_TOKEN:-$FLY_API_TOKEN}"
           NORMALIZED_FLY_TOKEN="$(printf '%s' "$TOKEN_RAW" | awk -F, '{print $1}')"
