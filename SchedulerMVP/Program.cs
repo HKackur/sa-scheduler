@@ -26,9 +26,15 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     if (!string.IsNullOrEmpty(connectionString))
-        options.UseNpgsql(connectionString);
+    {
+        options.UseNpgsql(connectionString, npgsql =>
+            npgsql.MigrationsAssembly("SchedulerMVP"));
+    }
     else
-        options.UseSqlite("Data Source=app.db");
+    {
+        options.UseSqlite("Data Source=app.db", sqlite =>
+            sqlite.MigrationsAssembly("SchedulerMVP"));
+    }
 }, ServiceLifetime.Transient);
 
 // Add Identity
@@ -57,9 +63,15 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     if (!string.IsNullOrEmpty(connectionString))
-        options.UseNpgsql(connectionString);
+    {
+        options.UseNpgsql(connectionString, npgsql =>
+            npgsql.MigrationsAssembly("SchedulerMVP"));
+    }
     else
-        options.UseSqlite("Data Source=app.db");
+    {
+        options.UseSqlite("Data Source=app.db", sqlite =>
+            sqlite.MigrationsAssembly("SchedulerMVP"));
+    }
 }, ServiceLifetime.Transient);
 
 builder.Services.AddHttpContextAccessor();
@@ -157,28 +169,41 @@ using (var scope = app.Services.CreateScope())
     var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    
     try
     {
         // Migrate Identity database
+        logger.LogInformation("Starting Identity database migration...");
         await identityContext.Database.MigrateAsync();
+        logger.LogInformation("Identity database migration completed");
     }
     catch (Exception ex)
     {
         // Log but don't crash - app should start even if migrations fail
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Failed to migrate Identity database");
+        logger.LogError(ex, "Failed to migrate Identity database: {Message}", ex.Message);
     }
     
     // Ensure application database is up-to-date
     try
     {
         var provider = context.Database.ProviderName ?? string.Empty;
+        logger.LogInformation("Starting AppDbContext migration (provider: {Provider})...", provider);
         if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
             await context.Database.MigrateAsync();
+            logger.LogInformation("AppDbContext migration completed");
+        }
         else
+        {
             await context.Database.EnsureCreatedAsync();
+            logger.LogInformation("AppDbContext EnsureCreated completed");
+        }
     }
-    catch { }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to migrate AppDbContext: {Message}", ex.Message);
+    }
     
     try
     {
