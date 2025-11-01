@@ -44,12 +44,12 @@
             {
                 <div class="sa-header-content">
                     <h2 class="sa-page-title">@UI.PageTitle</h2>
-                    @if (UI.SelectedAreaId.HasValue && SelectedArea != null)
+                    @if (UI.SelectedAreaId.HasValue && selectedAreaCache != null && selectedAreaCache.Id == UI.SelectedAreaId.Value)
                     {
                         <div class="sa-breadcrumb">
-                            <span class="sa-breadcrumb-item">@SelectedArea.Place?.Name</span>
+                            <span class="sa-breadcrumb-item">@selectedAreaCache.Place?.Name</span>
                             <span class="sa-breadcrumb-separator">/</span>
-                            <span class="sa-breadcrumb-item sa-breadcrumb-current">@SelectedArea.Name</span>
+                            <span class="sa-breadcrumb-item sa-breadcrumb-current">@selectedAreaCache.Name</span>
                         </div>
                     }
                 </div>

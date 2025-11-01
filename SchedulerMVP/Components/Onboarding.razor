@@ -48,43 +48,99 @@
 
     private async Task CompleteCurrentAsync()
     {
-        if (string.IsNullOrEmpty(userKey)) { isOpen = false; StateHasChanged(); return; }
-        // Persist as last completed step index (0..3)
-        await JS.InvokeVoidAsync("localStorage.setItem", userKey!, stepIndex.ToString());
-        var next = stepIndex + 1;
-        if (next > totalSteps)
+        try
         {
-            isOpen = false;
+            if (string.IsNullOrEmpty(userKey)) { isOpen = false; StateHasChanged(); return; }
+            // Persist as last completed step index (0..3)
+            await JS.InvokeVoidAsync("localStorage.setItem", userKey!, stepIndex.ToString());
+            var next = stepIndex + 1;
+            if (next > totalSteps)
+            {
+                isOpen = false;
+            }
+            else
+            {
+                stepIndex = next;
+                StateHasChanged();
+            }
         }
-        else
+        catch (Exception ex)
         {
-            stepIndex = next;
+            // If something fails, just close onboarding
+            isOpen = false;
             StateHasChanged();
         }
     }
 
-    private async Task SkipAndNext() => await CompleteCurrentAsync();
+    private async Task SkipAndNext()
+    {
+        try
+        {
+            await CompleteCurrentAsync();
+        }
+        catch (Exception ex)
+        {
+            isOpen = false;
+            StateHasChanged();
+        }
+    }
 
-    private async Task StartAsync() => await CompleteCurrentAsync();
+    private async Task StartAsync()
+    {
+        try
+        {
+            await CompleteCurrentAsync();
+        }
+        catch (Exception ex)
+        {
+            // Log but don't crash - just close onboarding
+            isOpen = false;
+            StateHasChanged();
+        }
+    }
 
     private async Task CreatePlaceAsync()
     {
-        UI.ShouldOpenPlaceCreateModal = true;
-        UI.RaiseChanged();
-        await CompleteCurrentAsync();
+        try
+        {
+            UI.ShouldOpenPlaceCreateModal = true;
+            UI.RaiseChanged();
+            await CompleteCurrentAsync();
+        }
+        catch (Exception ex)
+        {
+            isOpen = false;
+            StateHasChanged();
+        }
     }
 
     private async Task OpenGroupsManageAsync()
     {
-        await CompleteCurrentAsync();
-        Nav.NavigateTo("/grupper");
+        try
+        {
+            await CompleteCurrentAsync();
+            Nav.NavigateTo("/grupper");
+        }
+        catch (Exception ex)
+        {
+            isOpen = false;
+            StateHasChanged();
+        }
     }
 
     private async Task BeginPlanningAsync()
     {
-        UI.IsCalendarViewMode = false;
-        UI.RaiseChanged();
-        await CompleteCurrentAsync();
+        try
+        {
+            UI.IsCalendarViewMode = false;
+            UI.RaiseChanged();
+            await CompleteCurrentAsync();
+        }
+        catch (Exception ex)
+        {
+            isOpen = false;
+            StateHasChanged();
+        }
     }
 }
 
