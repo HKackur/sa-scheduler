@@ -1,27 +1,25 @@
-# syntax=docker/dockerfile:1
-
-# Build stage
+# -------- BUILD STAGE --------
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy entire repo (respects .dockerignore)
+# Kopiera csproj och återställ
+COPY ["SchedulerMVP/SchedulerMVP.csproj", "SchedulerMVP/"]
+RUN dotnet restore "SchedulerMVP/SchedulerMVP.csproj"
+
+# Kopiera resten av projektet och bygg
 COPY . .
+WORKDIR "/src/SchedulerMVP"
+RUN dotnet publish "SchedulerMVP.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# Restore and publish
-RUN dotnet restore SchedulerMVP/SchedulerMVP.csproj \
-    && dotnet publish SchedulerMVP/SchedulerMVP.csproj -c Release -o /app/publish --no-restore
-
-# Runtime stage
+# -------- RUNTIME STAGE --------
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
-
-# App ports
-ENV ASPNETCORE_URLS=http://0.0.0.0:8080
-EXPOSE 8080
-
-# Copy published output
 COPY --from=build /app/publish .
 
-# Default connection string comes from environment
-# ConnectionStrings__DefaultConnection is read by Program.cs
+# Exponera port 8080
+EXPOSE 8080
+
+# Fly.io kommer förvänta sig att appen lyssnar på 0.0.0.0:8080
+ENV ASPNETCORE_URLS=http://0.0.0.0:8080
+
 ENTRYPOINT ["dotnet", "SchedulerMVP.dll"]
