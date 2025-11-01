@@ -30,3 +30,14 @@ primary_region = "ams"
     method = "get"
     path = "/"
     timeout = "2s"
+
+    [checks]
+  [checks.http]
+    interval = "30s"
+    timeout = "10s"
+    grace_period = "60s"
+    method = "get"
+    path = "/"
+    protocol = "http"
+    tls_skip_verify = true
+    restart_limit = 0
