@@ -1,68 +1,44 @@
 name: Deploy to Fly.io
 
 on:
-  workflow_dispatch: {}
   push:
     branches:
       - main
 
-concurrency:
-  group: fly-deploy-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@v1
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
 
-      - name: Debug auth
+      - name: Publish app
+        working-directory: SchedulerMVP
+        run: dotnet publish -c Release -o ./publish
+
+      - name: Install Fly CLI
+        run: |
+          curl -L https://fly.io/install.sh | sh
+          echo "$HOME/.fly/bin" >> $GITHUB_PATH
+
+      - name: Authenticate with Fly
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_DEPLOY_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
         run: |
-          TOKEN_RAW="${FLY_DEPLOY_TOKEN:-$FLY_API_TOKEN}"
-          NORMALIZED_FLY_TOKEN="$(printf '%s' "$TOKEN_RAW" | awk -F, '{print $1}')"
-          export FLY_API_TOKEN="$NORMALIZED_FLY_TOKEN"
-          export FLYCTL_ACCESS_TOKEN="$NORMALIZED_FLY_TOKEN"
-          flyctl version
-          flyctl auth whoami || true
-
-      - name: Set application secrets (connection string)
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_DEPLOY_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
-          APP_DB_CONNECTION_STRING: ${{ secrets.APP_DB_CONNECTION_STRING }}
-        run: |
-          # Skip if required values are missing (e.g., when only a deploy token is provided)
-          if [ -z "$FLY_API_TOKEN" ] || [ -z "$APP_DB_CONNECTION_STRING" ]; then
-            echo "Skipping secrets set (missing FLY_API_TOKEN or APP_DB_CONNECTION_STRING)";
-            exit 0;
-          fi
-          # Normalize Fly token: prefer deploy token, fallback to API token
-          TOKEN_RAW="${FLY_DEPLOY_TOKEN:-$FLY_API_TOKEN}"
-          NORMALIZED_FLY_TOKEN="$(printf '%s' "$TOKEN_RAW" | awk -F, '{print $1}')"
-          export FLY_API_TOKEN="$NORMALIZED_FLY_TOKEN"
-          export FLYCTL_ACCESS_TOKEN="$NORMALIZED_FLY_TOKEN"
-          flyctl secrets set ConnectionStrings__DefaultConnection="$APP_DB_CONNECTION_STRING" -a sa-scheduler --stage --verbose || true
-          flyctl secrets set ConnectionStrings__DefaultConnection="$APP_DB_CONNECTION_STRING" -a sa-scheduler --verbose || true
+          mkdir -p ~/.fly
+          echo "$FLY_DEPLOY_TOKEN" > ~/.fly/token
 
       - name: Deploy to Fly.io
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_DEPLOY_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
         working-directory: SchedulerMVP
+        env:
+          FLY_DEPLOY_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
         run: |
-          TOKEN_RAW="${FLY_DEPLOY_TOKEN:-$FLY_API_TOKEN}"
-          NORMALIZED_FLY_TOKEN="$(printf '%s' "$TOKEN_RAW" | awk -F, '{print $1}')"
-          export FLY_API_TOKEN="$NORMALIZED_FLY_TOKEN"
-          export FLYCTL_ACCESS_TOKEN="$NORMALIZED_FLY_TOKEN"
-          flyctl auth token "$FLY_API_TOKEN" >/dev/null 2>&1 || true
-          # Use the fly.toml in SchedulerMVP/ and its Dockerfile
-          flyctl deploy -a sa-scheduler -c fly.toml --detach --verbose
+          flyctl deploy --config fly.toml --remote-only --verbose
 
 
