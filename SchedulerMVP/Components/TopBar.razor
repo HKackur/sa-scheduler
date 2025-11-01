@@ -759,12 +759,27 @@
     {
         UI.OnChanged += async () => 
         { 
+            try
+            {
+                await ReloadTemplatesForPlace();
+                await LoadSelectedAreaAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                // Silently handle errors during state changes to prevent crashes
+                // The component will refresh on next successful state change
+            }
+        };
+        try
+        {
             await ReloadTemplatesForPlace();
             await LoadSelectedAreaAsync();
-            StateHasChanged();
-        };
-        await ReloadTemplatesForPlace();
-        await LoadSelectedAreaAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle initialization errors gracefully
+        }
 
         // Resolve email from Identity if not present as a claim
         try
