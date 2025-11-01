@@ -92,6 +92,28 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddHttpContextAccessor();
 
+// Add DbContextFactory for thread-safe DbContext access in Blazor Server
+builder.Services.AddDbContextFactory<AppDbContext>(options =>
+{
+    if (!string.IsNullOrEmpty(connectionString))
+    {
+        options.UseNpgsql(connectionString, npgsql =>
+        {
+            npgsql.MigrationsAssembly("SchedulerMVP");
+            npgsql.CommandTimeout(30);
+            npgsql.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+        });
+    }
+    else
+    {
+        options.UseSqlite("Data Source=app.db", sqlite =>
+            sqlite.MigrationsAssembly("SchedulerMVP"));
+    }
+});
+
 // Add services
 builder.Services.AddScoped<IConflictService, ConflictService>();
 builder.Services.AddScoped<IScheduleTemplateService, ScheduleTemplateService>();
