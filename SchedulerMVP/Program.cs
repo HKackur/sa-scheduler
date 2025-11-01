@@ -78,9 +78,6 @@ builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
 var app = builder.Build();
 
-<<<<<<< HEAD
-// Middleware
-=======
 // Respect proxy headers (Fly.io / reverse proxies) - MUST be before UseHttpsRedirection
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
@@ -156,11 +153,6 @@ app.MapGet("/auth/logout", async (SignInManager<ApplicationUser> signInManager) 
 // --- DB migration & seed ---
 using (var scope = app.Services.CreateScope())
 {
-<<<<<<< HEAD
-    var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await identityContext.Database.MigrateAsync();
-
-=======
     try
     {
         // Migrate Identity database
@@ -186,11 +178,6 @@ using (var scope = app.Services.CreateScope())
             await context.Database.EnsureCreatedAsync();
     }
     catch { }
-<<<<<<< HEAD
-
-    var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
-    await seeder.SeedAsync();
-=======
     
     try
     {
@@ -245,7 +232,6 @@ using (var scope = app.Services.CreateScope())
         );");
     }
     catch { }
->>>>>>> 88a3b9c (fix: critical deployment issues)
 }
 
 app.Run();
