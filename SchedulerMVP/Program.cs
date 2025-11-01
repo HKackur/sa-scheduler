@@ -35,7 +35,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlite("Data Source=app.db", sqlite =>
             sqlite.MigrationsAssembly("SchedulerMVP"));
     }
-}, ServiceLifetime.Transient);
+}, ServiceLifetime.Scoped);
 
 // Add Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -72,7 +72,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseSqlite("Data Source=app.db", sqlite =>
             sqlite.MigrationsAssembly("SchedulerMVP"));
     }
-}, ServiceLifetime.Transient);
+}, ServiceLifetime.Scoped);
 
 builder.Services.AddHttpContextAccessor();
 
