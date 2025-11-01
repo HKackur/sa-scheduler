@@ -12,6 +12,18 @@ primary_region = "ams"
   internal_port = 8080
   protocol = "tcp"
 
+  [services.concurrency]
+    hard_limit = 50
+    soft_limit = 25
+    type = "requests"
+
+  [[services.http_checks]]
+    grace_period = "20s"
+    interval = "15s"
+    method = "get"
+    path = "/"
+    timeout = "3s"
+
   [[services.ports]]
     handlers = ["http"]
     port = 80
@@ -19,15 +31,3 @@ primary_region = "ams"
   [[services.ports]]
     handlers = ["tls", "http"]
     port = 443
-
-  [services.concurrency]
-    hard_limit = 50
-    soft_limit = 25
-    type = "requests"
-
-  [[services.http_checks]]
-    interval = "15s"
-    timeout = "3s"
-    grace_period = "20s"
-    method = "get"
-    path = "/"
