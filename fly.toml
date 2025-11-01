@@ -6,38 +6,27 @@ primary_region = "ams"
 
 [env]
   ASPNETCORE_URLS = "http://0.0.0.0:8080"
-  # ConnectionStrings__DefaultConnection will be injected via Fly secrets
+  # ConnectionStrings__DefaultConnection sätts via Fly secrets
 
 [[services]]
   internal_port = 8080
   protocol = "tcp"
 
   [[services.ports]]
-    handlers = ["tls", "http"]
-    port = 443
-
-  [[services.ports]]
     handlers = ["http"]
     port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
 
   [services.concurrency]
     hard_limit = 50
     soft_limit = 25
     type = "requests"
 
-  [[services.http_checks]]
-    interval = "10s"
-    method = "get"
-    path = "/"
+  [[services.tcp_checks]]
+    interval = "15s"
     timeout = "2s"
-
-    [checks]
-  [checks.http]
-    interval = "30s"
-    timeout = "10s"
-    grace_period = "60s"
-    method = "get"
-    path = "/"
-    protocol = "http"
-    tls_skip_verify = true
+    grace_period = "10s"
     restart_limit = 0
