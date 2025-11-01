@@ -32,18 +32,14 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Add Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    // Password settings for test environment
     options.Password.RequireDigit = false;
     options.Password.RequireLowercase = false;
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequireUppercase = false;
     options.Password.RequiredLength = 8;
-    
-    // User settings
+
     options.User.RequireUniqueEmail = true;
-    
-    // Sign in settings
-    options.SignIn.RequireConfirmedEmail = false; // For test environment
+    options.SignIn.RequireConfirmedEmail = false;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
@@ -83,7 +79,6 @@ builder.Services.AddScoped<DbSeeder>();
 builder.Services.AddScoped<UserContextService>();
 builder.Services.AddScoped<IGroupTypeService, GroupTypeService>();
 
-// Add RoleManager for seeding
 builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
 var app = builder.Build();
@@ -99,6 +94,12 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 
+// Proxy headers (required for Fly.io / reverse proxy)
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
 // Authentication & Authorization
 app.UseAuthentication();
 app.UseAuthorization();
@@ -107,7 +108,7 @@ app.MapRazorPages();
 app.MapBlazorHub();
 app.MapFallbackToPage("/_Host");
 
-// Authentication endpoints for cookie sign-in from the login HTML form
+// --- Authentication endpoints ---
 app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager) =>
 {
     var form = await httpContext.Request.ReadFormAsync();
@@ -122,7 +123,6 @@ app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<Applica
     var result = await signInManager.PasswordSignInAsync(email, password, isPersistent: true, lockoutOnFailure: false);
     if (result.Succeeded)
     {
-        // Update last login timestamp
         var user = await userManager.FindByEmailAsync(email);
         if (user != null)
         {
@@ -135,7 +135,6 @@ app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<Applica
     return Results.Redirect("/login?error=invalid");
 });
 
-// Logout - allow both POST and GET for convenience in dev
 app.MapPost("/auth/logout", async (SignInManager<ApplicationUser> signInManager) =>
 {
     await signInManager.SignOutAsync();
@@ -150,12 +149,10 @@ app.MapGet("/auth/logout", async (SignInManager<ApplicationUser> signInManager) 
 // Impersonation (Admin only)
 app.MapPost("/auth/impersonate/{userId}", async (string userId, HttpContext http, UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager) =>
 {
-    // Only allow if current user is Admin
     if (!http.User.IsInRole("Admin")) return Results.Forbid();
     var target = await userManager.FindByIdAsync(userId);
     if (target == null) return Results.NotFound();
 
-    // Keep track of original admin to allow revert
     var impersonatorId = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
     var claims = new List<Claim> { new Claim("ImpersonatorId", impersonatorId ?? string.Empty) };
 
@@ -175,10 +172,9 @@ app.MapPost("/auth/revert", async (HttpContext http, UserManager<ApplicationUser
     return Results.Redirect("/");
 });
 
-// Dev bootstrap: grant/revoke admin by email
+// Admin grant/revoke
 app.MapPost("/auth/grant-admin", async (HttpContext http, string email, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager) =>
 {
-    // Allow only if current user is already admin OR environment is development
     if (!http.User.IsInRole("Admin") && !http.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment())
         return Results.Forbid();
 
@@ -213,7 +209,7 @@ app.MapPost("/auth/revoke-admin", async (HttpContext http, string email, UserMan
     return Results.Ok();
 });
 
-// Dev-only: reset admin password to a known value
+// Dev-only: reset admin password
 if (app.Environment.IsDevelopment())
 {
     app.MapPost("/auth/dev-reset-admin", async (UserManager<ApplicationUser> userManager) =>
@@ -221,58 +217,44 @@ if (app.Environment.IsDevelopment())
         const string adminEmail = "admin@sportadmin.se";
         const string newPassword = "Test1234!";
         var user = await userManager.FindByEmailAsync(adminEmail);
-        if (user is null)
-        {
-            return Results.NotFound("Admin user not found");
-        }
+        if (user is null) return Results.NotFound("Admin user not found");
 
         var hasPassword = await userManager.HasPasswordAsync(user);
         if (hasPassword)
         {
             var remove = await userManager.RemovePasswordAsync(user);
             if (!remove.Succeeded)
-            {
                 return Results.BadRequest(string.Join(", ", remove.Errors.Select(e => e.Description)));
-            }
         }
 
         var add = await userManager.AddPasswordAsync(user, newPassword);
         if (!add.Succeeded)
-        {
             return Results.BadRequest(string.Join(", ", add.Errors.Select(e => e.Description)));
-        }
+
         return Results.Ok("Admin password reset");
     });
 }
 
-// Migrate and seed databases
+// --- Migrate and seed databases ---
 using (var scope = app.Services.CreateScope())
 {
-    // Migrate Identity database
     var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await identityContext.Database.MigrateAsync();
-    
-    // Ensure application database is up-to-date
+
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     try
     {
-        // On Postgres, apply EF migrations; on SQLite dev, create if missing
         var provider = context.Database.ProviderName ?? string.Empty;
         if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
-        {
             await context.Database.MigrateAsync();
-        }
         else
-        {
             await context.Database.EnsureCreatedAsync();
-        }
     }
     catch { }
-    
+
     var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
     await seeder.SeedAsync();
 
-    // One-time data ownership fix: attach legacy data without UserId to admin account
     try
     {
         const string adminEmail = "admin@sportadmin.se";
@@ -287,7 +269,6 @@ using (var scope = app.Services.CreateScope())
     }
     catch { }
 
-    // One-time data fix: rename legacy group "Herr U" -> "P19" and set type to "Akademi"
     try
     {
         await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET Name = 'P19' WHERE LOWER(Name) = 'herr u';");
@@ -295,7 +276,6 @@ using (var scope = app.Services.CreateScope())
     }
     catch { }
 
-    // One-time data fix: remove invalid DayOfWeek entries (e.g., 8) in template "Veckoschema HT2025"
     try
     {
         await context.Database.ExecuteSqlRawAsync(@"DELETE FROM BookingTemplates 
@@ -304,7 +284,6 @@ using (var scope = app.Services.CreateScope())
     }
     catch { }
 
-    // Ensure GroupTypes table exists (lightweight bootstrap without full migration)
     try
     {
         await context.Database.ExecuteSqlRawAsync(@"CREATE TABLE IF NOT EXISTS GroupTypes (
@@ -316,10 +295,7 @@ using (var scope = app.Services.CreateScope())
     catch { }
 }
 
-// Respect proxy headers (Fly.io / reverse proxies)
-app.UseForwardedHeaders(new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+// --- FIX: Fly.io requires explicit port binding ---
+app.Urls.Add("http://0.0.0.0:8080");
 
 app.Run();
