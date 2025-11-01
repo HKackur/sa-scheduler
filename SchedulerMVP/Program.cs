@@ -167,7 +167,6 @@ using (var scope = app.Services.CreateScope())
     }
     
     // Ensure application database is up-to-date
->>>>>>> 88a3b9c (fix: critical deployment issues)
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     try
     {
