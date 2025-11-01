@@ -352,14 +352,28 @@
             await LoadCountsAsync();
             UI.OnChanged += async () =>
             {
-                await LoadCountsAsync();
-                // Open create place modal when requested globally (from onboarding)
-                if (UI.ShouldOpenPlaceCreateModal)
+                try
                 {
-                    UI.ShouldOpenPlaceCreateModal = false;
-                    placeOpen = true;
+                    await LoadCountsAsync();
+                    // Open create place modal when requested globally (from onboarding)
+                    if (UI.ShouldOpenPlaceCreateModal)
+                    {
+                        UI.ShouldOpenPlaceCreateModal = false;
+                        placeOpen = true;
+                    }
+                    StateHasChanged();
                 }
-                StateHasChanged();
+                catch (Exception ex)
+                {
+                    // Silently handle errors to prevent circuit crashes
+                    // Modal opening can still work even if counts fail
+                    if (UI.ShouldOpenPlaceCreateModal)
+                    {
+                        UI.ShouldOpenPlaceCreateModal = false;
+                        placeOpen = true;
+                        StateHasChanged();
+                    }
+                }
             };
         }
         catch (Exception ex)

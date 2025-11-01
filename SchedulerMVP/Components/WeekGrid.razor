@@ -319,10 +319,28 @@
 
     protected override async Task OnInitializedAsync()
     {
-        UI.OnChanged += () => { _ = LoadDataAsync(); };
+        UI.OnChanged += async () => 
+        { 
+            try
+            {
+                await LoadDataAsync();
+            }
+            catch (Exception ex)
+            {
+                // Silently handle errors to prevent circuit crashes
+                // Data will reload on next successful state change
+            }
+        };
         // Ensure templates (and SelectedTemplateId) are available before the first data load
-        await LoadTemplates();
-        await LoadDataAsync();
+        try
+        {
+            await LoadTemplates();
+            await LoadDataAsync();
+        }
+        catch (Exception ex)
+        {
+            // Handle initialization errors gracefully
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
