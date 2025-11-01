@@ -171,54 +171,69 @@ using (var scope = app.Services.CreateScope())
     
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     
+    Console.WriteLine("[MIGRATION] Starting Identity database migration...");
+    logger.LogInformation("=== Starting Identity database migration ===");
+    
     try
     {
         // Migrate Identity database
-        logger.LogInformation("=== Starting Identity database migration ===");
         var pendingMigrations = await identityContext.Database.GetPendingMigrationsAsync();
+        Console.WriteLine($"[MIGRATION] Pending Identity migrations: {pendingMigrations.Count()}");
         logger.LogInformation("Pending Identity migrations: {Count}", pendingMigrations.Count());
         foreach (var migration in pendingMigrations)
         {
+            Console.WriteLine($"[MIGRATION]   - {migration}");
             logger.LogInformation("  - {Migration}", migration);
         }
         
         await identityContext.Database.MigrateAsync();
+        Console.WriteLine("[MIGRATION] Identity database migration completed");
         logger.LogInformation("=== Identity database migration completed ===");
     }
     catch (Exception ex)
     {
         // Log but don't crash - app should start even if migrations fail
+        Console.WriteLine($"[MIGRATION] ERROR: Failed to migrate Identity database: {ex.Message}");
+        Console.WriteLine($"[MIGRATION] Stack: {ex.StackTrace}");
         logger.LogError(ex, "=== FAILED to migrate Identity database: {Message} ===", ex.Message);
         logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
     }
     
     // Ensure application database is up-to-date
+    var provider = context.Database.ProviderName ?? string.Empty;
+    Console.WriteLine($"[MIGRATION] Starting AppDbContext migration (provider: {provider})...");
+    logger.LogInformation("=== Starting AppDbContext migration (provider: {Provider}) ===", provider);
+    
     try
     {
-        var provider = context.Database.ProviderName ?? string.Empty;
-        logger.LogInformation("=== Starting AppDbContext migration (provider: {Provider}) ===", provider);
-        
         if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
         {
             var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+            Console.WriteLine($"[MIGRATION] Pending AppDbContext migrations: {pendingMigrations.Count()}");
             logger.LogInformation("Pending AppDbContext migrations: {Count}", pendingMigrations.Count());
             foreach (var migration in pendingMigrations)
             {
+                Console.WriteLine($"[MIGRATION]   - {migration}");
                 logger.LogInformation("  - {Migration}", migration);
             }
             
             await context.Database.MigrateAsync();
+            Console.WriteLine("[MIGRATION] AppDbContext migration completed");
             logger.LogInformation("=== AppDbContext migration completed ===");
         }
         else
         {
+            Console.WriteLine("[MIGRATION] Using EnsureCreated (not Npgsql provider)");
             logger.LogInformation("Using EnsureCreated (not Npgsql provider)");
             await context.Database.EnsureCreatedAsync();
+            Console.WriteLine("[MIGRATION] AppDbContext EnsureCreated completed");
             logger.LogInformation("=== AppDbContext EnsureCreated completed ===");
         }
     }
     catch (Exception ex)
     {
+        Console.WriteLine($"[MIGRATION] ERROR: Failed to migrate AppDbContext: {ex.Message}");
+        Console.WriteLine($"[MIGRATION] Stack: {ex.StackTrace}");
         logger.LogError(ex, "=== FAILED to migrate AppDbContext: {Message} ===", ex.Message);
         logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
     }
