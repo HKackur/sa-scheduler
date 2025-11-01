@@ -37,7 +37,12 @@ public class ScheduleTemplateService : IScheduleTemplateService
     public async Task<List<ScheduleTemplate>> GetTemplatesAsync()
     {
         var userId = _userContext.GetCurrentUserId();
-        var isAdmin = await _userContext.IsAdminAsync();
+        bool isAdmin = false;
+        try
+        {
+            isAdmin = await _userContext.IsAdminAsync();
+        }
+        catch { /* If admin check fails, treat as non-admin */ }
 
         var query = _db.ScheduleTemplates.AsQueryable();
 

@@ -23,19 +23,27 @@ public class UserContextService
 
     public async Task<bool> IsAdminAsync()
     {
-        var user = _httpContextAccessor.HttpContext?.User;
-        if (user == null || user.Identity?.IsAuthenticated != true)
-            return false;
+        try
+        {
+            var user = _httpContextAccessor.HttpContext?.User;
+            if (user == null || user.Identity?.IsAuthenticated != true)
+                return false;
 
-        var userId = GetCurrentUserId();
-        if (string.IsNullOrEmpty(userId))
-            return false;
+            var userId = GetCurrentUserId();
+            if (string.IsNullOrEmpty(userId))
+                return false;
 
-        var appUser = await _userManager.FindByIdAsync(userId);
-        if (appUser == null)
-            return false;
+            var appUser = await _userManager.FindByIdAsync(userId);
+            if (appUser == null)
+                return false;
 
-        return await _userManager.IsInRoleAsync(appUser, "Admin");
+            return await _userManager.IsInRoleAsync(appUser, "Admin");
+        }
+        catch
+        {
+            // If there's any error (e.g., database issue), assume not admin
+            return false;
+        }
     }
 
     public async Task<bool> CanAccessUserDataAsync(string targetUserId)

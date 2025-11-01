@@ -741,7 +741,12 @@
                 {
                     var appUser = await UserManager.FindByIdAsync(userId);
                     currentUserEmail = appUser?.Email;
-                    isCurrentUserAdmin = await UserManager.IsInRoleAsync(appUser!, "Admin");
+                    try
+                    {
+                        if (appUser != null)
+                            isCurrentUserAdmin = await UserManager.IsInRoleAsync(appUser, "Admin");
+                    }
+                    catch { isCurrentUserAdmin = false; }
                 }
                 else
                 {
@@ -752,7 +757,12 @@
                     {
                         var appUser2 = await UserManager.FindByIdAsync(userId);
                         currentUserEmail = appUser2?.Email;
-                        isCurrentUserAdmin = await UserManager.IsInRoleAsync(appUser2!, "Admin");
+                        try
+                        {
+                            if (appUser2 != null)
+                                isCurrentUserAdmin = await UserManager.IsInRoleAsync(appUser2, "Admin");
+                        }
+                        catch { isCurrentUserAdmin = false; }
                     }
                 }
             }
