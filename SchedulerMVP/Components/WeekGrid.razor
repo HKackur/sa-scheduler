@@ -289,6 +289,8 @@
     private double _tooltipMouseY;
     private string _tooltipText = "";
     
+    // Cache for all areas to avoid syncing DbContext calls
+    private Dictionary<Guid, Area> areaCache = new();
     // Cache for leaf counts per area
     private Dictionary<Guid, int> areaLeafCountCache = new();
     // Cache for sorting order per area based on linked leaf SortOrder (min)
