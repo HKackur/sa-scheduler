@@ -6,11 +6,10 @@ primary_region = "ams"
 
 [env]
   ASPNETCORE_URLS = "http://0.0.0.0:8080"
-  # ConnectionStrings__DefaultConnection sätts via Fly secrets
+  ConnectionStrings__DefaultConnection = "Host=db.anebyqfrzsuqwrbncwxt.supabase.co;Port=5432;Database=postgres;Username=postgres;Password=bunch-hiccups-misery-extreme;SSL Mode=Require;Trust Server Certificate=true"
 
 [[services]]
   internal_port = 8080
-  processes = ["app"]
   protocol = "tcp"
 
   [[services.ports]]
@@ -26,8 +25,9 @@ primary_region = "ams"
     soft_limit = 25
     type = "requests"
 
-  [[services.tcp_checks]]
+  [[services.http_checks]]
     interval = "15s"
-    timeout = "2s"
-    grace_period = "30s"
-    restart_limit = 3
+    timeout = "3s"
+    grace_period = "20s"
+    method = "get"
+    path = "/"
