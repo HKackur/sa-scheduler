@@ -28,7 +28,15 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     if (!string.IsNullOrEmpty(connectionString))
     {
         options.UseNpgsql(connectionString, npgsql =>
-            npgsql.MigrationsAssembly("SchedulerMVP"));
+        {
+            npgsql.MigrationsAssembly("SchedulerMVP");
+            // Configure for better reliability in production
+            npgsql.CommandTimeout(30); // 30 second timeout
+            npgsql.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+        });
     }
     else
     {
@@ -65,7 +73,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     if (!string.IsNullOrEmpty(connectionString))
     {
         options.UseNpgsql(connectionString, npgsql =>
-            npgsql.MigrationsAssembly("SchedulerMVP"));
+        {
+            npgsql.MigrationsAssembly("SchedulerMVP");
+            // Configure for better reliability in production
+            npgsql.CommandTimeout(30); // 30 second timeout
+            npgsql.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+        });
     }
     else
     {
