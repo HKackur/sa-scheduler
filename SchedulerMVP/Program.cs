@@ -78,12 +78,21 @@ builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
 var app = builder.Build();
 
+<<<<<<< HEAD
 // Middleware
+=======
+// Respect proxy headers (Fly.io / reverse proxies) - MUST be before UseHttpsRedirection
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
+
+// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
     app.UseHsts();
-
+    
     // Fly.io hanterar redan HTTPS – undvik redirect-loop
     app.Use((ctx, next) =>
     {
@@ -147,9 +156,26 @@ app.MapGet("/auth/logout", async (SignInManager<ApplicationUser> signInManager) 
 // --- DB migration & seed ---
 using (var scope = app.Services.CreateScope())
 {
+<<<<<<< HEAD
     var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await identityContext.Database.MigrateAsync();
 
+=======
+    try
+    {
+        // Migrate Identity database
+        var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await identityContext.Database.MigrateAsync();
+    }
+    catch (Exception ex)
+    {
+        // Log but don't crash - app should start even if migrations fail
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Failed to migrate Identity database");
+    }
+    
+    // Ensure application database is up-to-date
+>>>>>>> 88a3b9c (fix: critical deployment issues)
     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     try
     {
@@ -160,9 +186,66 @@ using (var scope = app.Services.CreateScope())
             await context.Database.EnsureCreatedAsync();
     }
     catch { }
+<<<<<<< HEAD
 
     var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
     await seeder.SeedAsync();
+=======
+    
+    try
+    {
+        var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
+        await seeder.SeedAsync();
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Failed to seed database");
+    }
+
+    // One-time data ownership fix: attach legacy data without UserId to admin account
+    try
+    {
+        const string adminEmail = "admin@sportadmin.se";
+        var adminUser = await identityContext.Users.FirstOrDefaultAsync(u => u.Email == adminEmail);
+        if (adminUser != null)
+        {
+            var adminId = adminUser.Id;
+            await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+            await context.Database.ExecuteSqlRawAsync("UPDATE ScheduleTemplates SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+            await context.Database.ExecuteSqlRawAsync("UPDATE Places SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+        }
+    }
+    catch { }
+
+    // One-time data fix: rename legacy group "Herr U" -> "P19" and set type to "Akademi"
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET Name = 'P19' WHERE LOWER(Name) = 'herr u';");
+        await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET GroupType = 'Akademi' WHERE LOWER(Name) = 'p19';");
+    }
+    catch { }
+
+    // One-time data fix: remove invalid DayOfWeek entries (e.g., 8) in template "Veckoschema HT2025"
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"DELETE FROM BookingTemplates 
+            WHERE ScheduleTemplateId = '25EB47F8-AC32-4656-B253-355F6806B4EB' 
+              AND (DayOfWeek < 1 OR DayOfWeek > 7);");
+    }
+    catch { }
+
+    // Ensure GroupTypes table exists (lightweight bootstrap without full migration)
+    try
+    {
+        await context.Database.ExecuteSqlRawAsync(@"CREATE TABLE IF NOT EXISTS GroupTypes (
+            Id TEXT NOT NULL PRIMARY KEY,
+            Name TEXT NOT NULL,
+            UserId TEXT NULL
+        );");
+    }
+    catch { }
+>>>>>>> 88a3b9c (fix: critical deployment issues)
 }
 
 app.Run();

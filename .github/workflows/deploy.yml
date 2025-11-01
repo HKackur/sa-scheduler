@@ -14,15 +14,6 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Publish app
-        working-directory: SchedulerMVP
-        run: dotnet publish -c Release -o ./publish
-
       - name: Install Fly CLI
         run: |
           curl -L https://fly.io/install.sh | sh
