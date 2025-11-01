@@ -1,3 +1,6 @@
+# test redeploy
+name: Deploy to Fly.io
+
 name: Deploy to Fly.io
 
 on:
