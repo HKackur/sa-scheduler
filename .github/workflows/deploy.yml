@@ -32,8 +32,12 @@ jobs:
         env:
           FLY_DEPLOY_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
         run: |
-          # Authenticate non-interactively using the deploy token
-          ~/.fly/bin/flyctl auth token "$FLY_DEPLOY_TOKEN"
+          # Provide token to flyctl via env and config file (non-interactive)
+          mkdir -p ~/.fly
+          printf 'access_token: %s\n' "$FLY_DEPLOY_TOKEN" > ~/.fly/config.yml
+          export FLYCTL_ACCESS_TOKEN="$FLY_DEPLOY_TOKEN"
+          export FLY_API_TOKEN="$FLY_DEPLOY_TOKEN"
+          ~/.fly/bin/flyctl version
 
       - name: Deploy to Fly.io
         env:
