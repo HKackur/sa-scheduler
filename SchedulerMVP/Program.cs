@@ -153,10 +153,13 @@ app.MapGet("/auth/logout", async (SignInManager<ApplicationUser> signInManager) 
 // --- DB migration & seed ---
 using (var scope = app.Services.CreateScope())
 {
+    // Get contexts outside try-catch so they're available for later use
+    var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    
     try
     {
         // Migrate Identity database
-        var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await identityContext.Database.MigrateAsync();
     }
     catch (Exception ex)
@@ -167,7 +170,6 @@ using (var scope = app.Services.CreateScope())
     }
     
     // Ensure application database is up-to-date
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     try
     {
         var provider = context.Database.ProviderName ?? string.Empty;
