@@ -163,7 +163,8 @@ app.MapGet("/auth/logout", async (SignInManager<ApplicationUser> signInManager) 
 });
 
 // --- DB migration & seed ---
-using (var scope = app.Services.CreateScope())
+var scope = app.Services.CreateScope();
+try
 {
     // Get contexts outside try-catch so they're available for later use
     var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -290,6 +291,10 @@ using (var scope = app.Services.CreateScope())
         );");
     }
     catch { }
+}
+finally
+{
+    scope?.Dispose();
 }
 
 app.Run();
