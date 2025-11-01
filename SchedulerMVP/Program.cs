@@ -90,7 +90,18 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// 🧩 FIX: remove UseHttpsRedirection() to prevent crash on Fly.io
+if (!app.Environment.IsDevelopment())
+{
+    // Fly.io already terminates HTTPS; avoid redirect-loop crash
+    app.Use((ctx, next) =>
+    {
+        if (ctx.Request.Headers.TryGetValue("Fly-Forwarded-Proto", out var proto) && proto == "https")
+            ctx.Request.Scheme = "https";
+        return next();
+    });
+}
+
 app.UseStaticFiles();
 app.UseRouting();
 
