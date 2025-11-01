@@ -671,10 +671,42 @@
     private string? currentUserEmail;
     private bool isCurrentUserAdmin;
     
-    // SelectedArea property for breadcrumb
-    private Area? SelectedArea => UI.SelectedAreaId.HasValue 
-        ? Db.Areas.Include(a => a.Place).FirstOrDefault(a => a.Id == UI.SelectedAreaId.Value) 
-        : null;
+    // SelectedArea for breadcrumb - cached and loaded async
+    private Area? selectedAreaCache;
+    
+    private Area? SelectedArea
+    {
+        get
+        {
+            // Return cached value if available and still valid
+            if (selectedAreaCache != null && selectedAreaCache.Id == UI.SelectedAreaId)
+                return selectedAreaCache;
+            
+            // Don't access DbContext in property getter - use async loading instead
+            return null;
+        }
+    }
+    
+    private async Task LoadSelectedAreaAsync()
+    {
+        if (UI.SelectedAreaId.HasValue)
+        {
+            try
+            {
+                selectedAreaCache = await Db.Areas
+                    .Include(a => a.Place)
+                    .FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+            }
+            catch
+            {
+                selectedAreaCache = null;
+            }
+        }
+        else
+        {
+            selectedAreaCache = null;
+        }
+    }
     
     protected override void OnInitialized()
     {
@@ -725,8 +757,14 @@
 
     protected override async Task OnInitializedAsync()
     {
-        UI.OnChanged += async () => await ReloadTemplatesForPlace();
+        UI.OnChanged += async () => 
+        { 
+            await ReloadTemplatesForPlace();
+            await LoadSelectedAreaAsync();
+            StateHasChanged();
+        };
         await ReloadTemplatesForPlace();
+        await LoadSelectedAreaAsync();
 
         // Resolve email from Identity if not present as a claim
         try

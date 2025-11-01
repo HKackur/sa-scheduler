@@ -341,11 +341,21 @@
     {
         try
         {
+            // Load all areas into cache to avoid syncing DbContext calls
+            var allAreas = await Db.Areas
+                .Include(a => a.Place)
+                .AsNoTracking()
+                .ToListAsync();
+            
+            areaCache.Clear();
+            foreach (var area in allAreas)
+            {
+                areaCache[area.Id] = area;
+            }
+            
             if (UI.SelectedAreaId.HasValue)
             {
-                selectedArea = await Db.Areas
-                    .Include(a => a.Place)
-                    .FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+                selectedArea = areaCache.TryGetValue(UI.SelectedAreaId.Value, out var sa) ? sa : null;
                 selectedPlace = selectedArea?.Place;
             }
             else
@@ -933,11 +943,13 @@
     {
         if (areaSortOrderCache.TryGetValue(areaId, out var sort)) return sort;
         // Fallback: try to infer from area name path to get a stable order
-        var area = Db.Areas.FirstOrDefault(a => a.Id == areaId);
-        if (area != null && !string.IsNullOrEmpty(area.Path))
+        if (areaCache.TryGetValue(areaId, out var area))
         {
-            // Use lexical order of Path as a stable fallback
-            return area.Path.GetHashCode(StringComparison.OrdinalIgnoreCase);
+            if (area != null && !string.IsNullOrEmpty(area.Path))
+            {
+                // Use lexical order of Path as a stable fallback
+                return area.Path.GetHashCode(StringComparison.OrdinalIgnoreCase);
+            }
         }
         return int.MaxValue;
     }
@@ -947,7 +959,7 @@
         // Prefer hierarchical width rules if relationship is ancestor/descendant; fallback to leaf ratio otherwise
         try
         {
-            var bookingArea = booking.Area ?? Db.Areas.FirstOrDefault(a => a.Id == booking.AreaId);
+            var bookingArea = booking.Area ?? (areaCache.TryGetValue(booking.AreaId, out var ba) ? ba : null);
             if (bookingArea == null || selectedArea == null)
             {
                 var total = Math.Max(1, GetCachedLeafCount(selectedArea?.Id ?? Guid.Empty));
@@ -994,7 +1006,7 @@
             {
                 return distance + 1;
             }
-            current = Db.Areas.FirstOrDefault(a => a.Id == current.ParentAreaId);
+            current = current.ParentAreaId.HasValue && areaCache.TryGetValue(current.ParentAreaId.Value, out var parent) ? parent : null;
             if (current == null) break;
             distance++;
         }
@@ -1009,7 +1021,7 @@
         {
             if (current.ParentAreaId == potentialAncestor.Id)
                 return true;
-            current = Db.Areas.FirstOrDefault(a => a.Id == current.ParentAreaId);
+            current = current.ParentAreaId.HasValue && areaCache.TryGetValue(current.ParentAreaId.Value, out var parent) ? parent : null;
             if (current == null) break;
         }
         return false;
@@ -1023,7 +1035,7 @@
     private bool IsGrandchildOf(Area potentialGrandparent, Area potentialGrandchild)
     {
         if (potentialGrandchild.ParentAreaId == null) return false;
-        var parent = Db.Areas.FirstOrDefault(a => a.Id == potentialGrandchild.ParentAreaId);
+        var parent = potentialGrandchild.ParentAreaId.HasValue && areaCache.TryGetValue(potentialGrandchild.ParentAreaId.Value, out var p) ? p : null;
         return parent != null && parent.ParentAreaId == potentialGrandparent.Id;
     }
     
