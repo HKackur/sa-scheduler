@@ -27,13 +27,15 @@ jobs:
           curl -L https://fly.io/install.sh | sh
           echo "$HOME/.fly/bin" >> $GITHUB_PATH
 
-      - name: Authenticate with Fly
+            - name: Authenticate with Fly
         env:
           FLY_DEPLOY_TOKEN: ${{ secrets.FLY_DEPLOY_TOKEN }}
         run: |
           mkdir -p ~/.fly
           echo "$FLY_DEPLOY_TOKEN" > ~/.fly/token
-
+          export FLY_API_TOKEN="$FLY_DEPLOY_TOKEN"
+          export FLYCTL_ACCESS_TOKEN="$FLY_DEPLOY_TOKEN"
+          
       - name: Deploy to Fly.io
         working-directory: SchedulerMVP
         env:
