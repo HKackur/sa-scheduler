@@ -39,7 +39,8 @@
                         // Ensure we're using the correct base path
                         builder.withUrl('/_blazor', {
                             skipNegotiation: false,
-                            transport: Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling
+                            // Prioritize Long Polling - WebSocket has issues on Fly.io proxy
+                            transport: Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling | Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets
                         });
                         console.log('[Blazor SignalR] SignalR configured');
                     };
