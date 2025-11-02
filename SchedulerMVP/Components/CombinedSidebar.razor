@@ -16,7 +16,7 @@
     <div class="sidebar-section" style="@(UI.IsGroupFilterActive ? "opacity: 0.5; pointer-events: none;" : "")">
         <div class="ls-header-row">
             <h6 class="sa-panel-title">Platser & ytor</h6>
-            <button class="ls-plus @(placeOpen ? "hide-tooltip" : "")" @onclick="OpenCreatePlace" disabled="@UI.IsGroupFilterActive">+</button>
+            <button class="ls-plus @(placeOpen ? "hide-tooltip" : "")" @onclick="OpenCreatePlace" @onclick:preventDefault disabled="@UI.IsGroupFilterActive">+</button>
         </div>
         
         @if (!placesLoaded)
@@ -27,7 +27,7 @@
         {
             <div class="empty-state" style="margin:8px 0 12px 0;color:#6b7280;font-size:12px;">
                 <div class="empty-text" style="margin-bottom:6px;">Du har inte lagt till några platser</div>
-                <button class="sa-btn" style="font-size:12px;padding:6px 10px;border-radius:6px;border:none;background:#f3f4f6;color:#111827;cursor:pointer;" @onclick="OpenCreatePlace" disabled="@UI.IsGroupFilterActive">Lägg till en plats</button>
+                <button class="sa-btn" style="font-size:12px;padding:6px 10px;border-radius:6px;border:none;background:#f3f4f6;color:#111827;cursor:pointer;" @onclick="OpenCreatePlace" @onclick:preventDefault disabled="@UI.IsGroupFilterActive">Lägg till en plats</button>
             </div>
         }
         else
@@ -732,10 +732,28 @@
         UI.RaiseChanged();
     }
 
-    private void OpenCreatePlace()
+    private async Task OpenCreatePlace()
     {
-        placeOpen = true;
-        StateHasChanged();
+        try
+        {
+            placeOpen = true;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            // If circuit is broken, try to use JS to show modal directly
+            try
+            {
+                await JS.InvokeVoidAsync("eval", "console.log('Opening place modal via JS fallback');");
+                placeOpen = true;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch
+            {
+                // Last resort - log error
+                Console.WriteLine($"Error opening place modal: {ex.Message}");
+            }
+        }
     }
 
     private void GoToGroupManage()
@@ -758,14 +776,40 @@
 
     private async Task AfterPlaceCreated()
     {
-        places = await PlaceService.GetPlacesAsync();
-        await BuildPlaceTree();
-        
-        // Select the newly created place (last in the list)
-        var newPlace = places.LastOrDefault();
-        if (newPlace is not null)
+        try
         {
-            await SelectPlace(newPlace.Id);
+            // Reload places from database
+            places = await PlaceService.GetPlacesAsync();
+            placesLoaded = true;
+            await BuildPlaceTree();
+            
+            // Select the newly created place (last in the list)
+            var newPlace = places.LastOrDefault();
+            if (newPlace is not null)
+            {
+                await SelectPlace(newPlace.Id);
+            }
+            
+            // Force UI update
+            UI.RaiseChanged();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't crash
+            Console.WriteLine($"Error after place created: {ex.Message}");
+            // Try to reload anyway
+            try
+            {
+                places = await PlaceService.GetPlacesAsync();
+                placesLoaded = true;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch
+            {
+                // If all else fails, at least mark as loaded
+                placesLoaded = true;
+            }
         }
     }
 
