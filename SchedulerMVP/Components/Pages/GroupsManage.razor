@@ -3,7 +3,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IGroupTypeService GroupTypes
-@inject SchedulerMVP.Data.AppDbContext Db
+@inject Microsoft.EntityFrameworkCore.Infrastructure.IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject SchedulerMVP.Services.UserContextService UserContext
 
 <div class="sa-panel" style="padding:16px;">
@@ -114,7 +114,8 @@
         types = await GroupTypes.GetTypesAsync();
         var userId = UserContext.GetCurrentUserId();
         var isAdmin = await UserContext.IsAdminAsync();
-        var gq = Db.Groups.AsQueryable();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var gq = db.Groups.AsQueryable();
         if (!isAdmin && !string.IsNullOrEmpty(userId)) gq = gq.Where(x => x.UserId == userId);
         groups = await gq.OrderBy(x => x.Name).ToListAsync();
     }
@@ -159,8 +160,9 @@
         if (type == null) return;
         var userId = UserContext.GetCurrentUserId();
         var g = new SchedulerMVP.Data.Entities.Group { Id = Guid.NewGuid(), Name = name, GroupType = type.Name, UserId = userId };
-        Db.Groups.Add(g);
-        await Db.SaveChangesAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        db.Groups.Add(g);
+        await db.SaveChangesAsync();
         newGroupName = string.Empty; selectedTypeId = null;
         await LoadData();
     }
@@ -175,12 +177,13 @@
     {
         if (editingGroupId is Guid id)
         {
-            var g = await Db.Groups.FindAsync(id);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var g = await db.Groups.FindAsync(id);
             if (g != null)
             {
                 g.Name = editGroupName;
                 g.GroupType = types.FirstOrDefault(x => x.Id.ToString() == editGroupTypeId)?.Name;
-                await Db.SaveChangesAsync();
+                await db.SaveChangesAsync();
             }
             editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null;
             await LoadData();
@@ -189,10 +192,11 @@
     private void CancelGroupEdit(){ editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null; }
     private async Task DeleteGroup(Guid id)
     {
-        var g = await Db.Groups.FindAsync(id);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var g = await db.Groups.FindAsync(id);
         if (g == null) return;
-        Db.Groups.Remove(g);
-        await Db.SaveChangesAsync();
+        db.Groups.Remove(g);
+        await db.SaveChangesAsync();
         await LoadData();
     }
 }
