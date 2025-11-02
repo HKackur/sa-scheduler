@@ -7,8 +7,6 @@ using SchedulerMVP.Data.Entities;
 using SchedulerMVP.Data.Seed;
 using SchedulerMVP.Services;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Components.Authorization;
-using Microsoft.AspNetCore.Components.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,7 +68,6 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-
 // Persist login for 30 days
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -78,19 +75,11 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
     options.LoginPath = "/login";
     // Required for HTTPS/proxy environments (Fly.io)
-    // Use Lax - works for most cases including SignalR Long Polling
-    options.Cookie.SameSite = SameSiteMode.Lax;
-    // Use SameAsRequest to work with both HTTP (dev) and HTTPS (production)
-    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
-        ? CookieSecurePolicy.SameAsRequest 
-        : CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax; // Use Lax for better compatibility
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Works with both HTTP and HTTPS
     options.Cookie.HttpOnly = true;
     options.Cookie.Name = ".AspNetCore.Identity.Application";
     options.Cookie.IsEssential = true; // Required for authentication
-    // Explicitly set max age to ensure cookie persists across app restarts
-    options.Cookie.MaxAge = TimeSpan.FromDays(30);
-    // Ensure cookie path is root so it's accessible everywhere
-    options.Cookie.Path = "/";
 });
 
 // Add AppDbContext
@@ -117,18 +106,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 }, ServiceLifetime.Scoped);
 
 builder.Services.AddHttpContextAccessor();
-
-// Add SignalR options for better reliability (MUST be before AddServerSideBlazor)
-builder.Services.AddSignalR(options =>
-{
-    options.EnableDetailedErrors = true;
-    options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
-    options.StreamBufferCapacity = 10;
-    // Use standard timeouts - aggressive keepalive can cause connection issues
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-    options.KeepAliveInterval = TimeSpan.FromSeconds(15); // Standard 15 seconds
-    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
-});
 
 // Add DbContextFactory for thread-safe DbContext access in Blazor Server
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
