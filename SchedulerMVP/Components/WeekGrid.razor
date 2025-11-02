@@ -2,7 +2,8 @@
 @using SchedulerMVP.Data.Entities
 @using SchedulerMVP.Services
 @using Microsoft.EntityFrameworkCore
-@inject AppDbContext Db
+@using Microsoft.EntityFrameworkCore.Infrastructure
+@inject IDbContextFactory<AppDbContext> DbFactory
 @inject UIState UI
 @inject IJSRuntime JSRuntime
 @inject IConflictService ConflictService
@@ -362,7 +363,8 @@
         try
         {
             // Load all areas into cache to avoid syncing DbContext calls
-            var allAreas = await Db.Areas
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var allAreas = await db.Areas
                 .Include(a => a.Place)
                 .AsNoTracking()
                 .ToListAsync();
@@ -414,7 +416,7 @@
                     else
                     {
                         var templateId = templateIdOpt.Value;
-                        var groupTemplates = await Db.BookingTemplates
+                        var groupTemplates = await db.BookingTemplates
                             .Where(bt => bt.GroupId == UI.FilteredGroupId.Value && bt.ScheduleTemplateId == templateId)
                             .Include(bt => bt.Group)
                             .Include(bt => bt.Area)
@@ -453,15 +455,15 @@
                     if (UI.SelectedAreaId.HasValue && selectedArea != null)
                     {
                         // Load all templates for the selected area's place for ghost detection
-                        var allPlaceAreaIds = Db.Areas
+                        var allPlaceAreaIds = await db.Areas
                             .Where(a => a.PlaceId == selectedArea.PlaceId)
                             .Select(a => a.Id)
-                            .ToList();
+                            .ToListAsync();
                         
                         // Pre-load leaf counts for all areas
                         await LoadLeafCountCacheAsync(allPlaceAreaIds);
 
-                        var overlappingTemplatesQuery = Db.BookingTemplates
+                        var overlappingTemplatesQuery = db.BookingTemplates
                             .Where(bt => bt.ScheduleTemplateId == templateId && allPlaceAreaIds.Contains(bt.AreaId))
                             .Include(bt => bt.Group)
                             .Include(bt => bt.Area)
@@ -507,13 +509,14 @@
                     else
                     {
                         // Load templates normally when no specific area is selected
-                        var query = Db.BookingTemplates.Where(bt => bt.ScheduleTemplateId == templateId);
+                        var query = db.BookingTemplates.Where(bt => bt.ScheduleTemplateId == templateId);
 
                         if (UI.SelectedPlaceId.HasValue)
                         {
-                            var placeAreaIds = Db.Areas
+                            var placeAreaIds = await db.Areas
                                 .Where(a => a.PlaceId == UI.SelectedPlaceId.Value)
-                                .Select(a => a.Id);
+                                .Select(a => a.Id)
+                                .ToListAsync();
                             query = query.Where(bt => placeAreaIds.Contains(bt.AreaId));
                         }
 
@@ -557,7 +560,7 @@
                 var weekStart = UI.CurrentWeekStart;
                 var weekEnd = UI.CurrentWeekEnd;
 
-                var groupBookingsQuery = Db.CalendarBookings
+                var groupBookingsQuery = db.CalendarBookings
                     .Where(c => c.Date >= weekStart && c.Date <= weekEnd && c.GroupId == UI.FilteredGroupId.Value)
                     .Include(c => c.Group)
                     .Include(c => c.Area)
@@ -608,15 +611,15 @@
                 if (UI.SelectedAreaId.HasValue && selectedArea != null)
                 {
                     // Load all bookings for the selected area's place for ghost detection
-                    var allPlaceAreaIds = Db.Areas
+                    var allPlaceAreaIds = await db.Areas
                         .Where(a => a.PlaceId == selectedArea.PlaceId)
                         .Select(a => a.Id)
-                        .ToList();
+                        .ToListAsync();
                     
                     // Pre-load leaf counts for all areas
                     await LoadLeafCountCacheAsync(allPlaceAreaIds);
 
-                    var overlappingBookingsQuery = Db.CalendarBookings
+                    var overlappingBookingsQuery = db.CalendarBookings
                         .Where(c => c.Date >= weekStart && c.Date <= weekEnd && allPlaceAreaIds.Contains(c.AreaId))
                         .Include(c => c.Group)
                         .Include(c => c.Area)
@@ -667,11 +670,11 @@
                 }
                 else if (UI.SelectedPlaceId.HasValue)
                 {
-                    var placeAreaIds = Db.Areas
+                    var placeAreaIds = db.Areas
                         .Where(a => a.PlaceId == UI.SelectedPlaceId.Value)
                         .Select(a => a.Id);
 
-                    var placeBookingsQuery = Db.CalendarBookings
+                    var placeBookingsQuery = db.CalendarBookings
                         .Where(c => c.Date >= weekStart && c.Date <= weekEnd && placeAreaIds.Contains(c.AreaId))
                         .Include(c => c.Group)
                         .Include(c => c.Area)
@@ -725,7 +728,7 @@
 
             var userId = UserContext.GetCurrentUserId();
             var isAdmin = await UserContext.IsAdminAsync();
-            var groupQuery = Db.Groups.AsQueryable();
+            var groupQuery = db.Groups.AsQueryable();
             if (!isAdmin && !string.IsNullOrEmpty(userId))
             {
                 groupQuery = groupQuery.Where(g => g.UserId == userId || g.UserId == null);
@@ -828,7 +831,7 @@
     private async Task LoadLeafCountCacheAsync(List<Guid> areaIds)
     {
         // Load leaf counts for all areas at once
-        var leafCounts = await Db.AreaLeafs
+        var leafCounts = await db.AreaLeafs
             .Where(al => areaIds.Contains(al.AreaId))
             .GroupBy(al => al.AreaId)
             .Select(g => new { AreaId = g.Key, Count = g.Count() })
@@ -841,9 +844,9 @@
         }
 
         // Load sort order for each area based on the earliest leaf (min SortOrder)
-        var areaOrders = await Db.AreaLeafs
+        var areaOrders = await db.AreaLeafs
             .Where(al => areaIds.Contains(al.AreaId))
-            .Join(Db.Leafs, al => al.LeafId, l => l.Id, (al, l) => new { al.AreaId, l.SortOrder })
+            .Join(db.Leafs, al => al.LeafId, l => l.Id, (al, l) => new { al.AreaId, l.SortOrder })
             .GroupBy(x => x.AreaId)
             .Select(g => new { AreaId = g.Key, SortOrder = g.Min(x => x.SortOrder) })
             .ToListAsync();
@@ -1358,11 +1361,11 @@
         {
             try
             {
-                var booking = await Db.CalendarBookings.FindAsync(popoverBooking.Id);
+                var booking = await db.CalendarBookings.FindAsync(popoverBooking.Id);
                 if (booking != null)
                 {
-                    Db.CalendarBookings.Remove(booking);
-                    await Db.SaveChangesAsync();
+                    db.CalendarBookings.Remove(booking);
+                    await db.SaveChangesAsync();
                     ClosePopover();
                     await LoadDataAsync();
                 }
@@ -1376,11 +1379,11 @@
         {
             try
             {
-                var template = await Db.BookingTemplates.FindAsync(popoverTemplate.Id);
+                var template = await db.BookingTemplates.FindAsync(popoverTemplate.Id);
                 if (template != null)
                 {
-                    Db.BookingTemplates.Remove(template);
-                    await Db.SaveChangesAsync();
+                    db.BookingTemplates.Remove(template);
+                    await db.SaveChangesAsync();
                     ClosePopover();
                     await LoadDataAsync();
                 }

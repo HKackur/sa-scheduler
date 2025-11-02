@@ -1,7 +1,8 @@
 @using SchedulerMVP.Data.Entities
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.EntityFrameworkCore.Infrastructure
 @inject SchedulerMVP.Services.UIState UI
-@inject SchedulerMVP.Data.AppDbContext Db
+@inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject SchedulerMVP.Services.IPlaceService PlaceService
 @inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
 @inject SchedulerMVP.Services.BookingDialogService BookingDialog
@@ -335,9 +336,10 @@
         // Load groups
         try
         {
+            await using var db = await DbFactory.CreateDbContextAsync();
             var userId = UserContext.GetCurrentUserId();
             var isAdmin = await UserContext.IsAdminAsync();
-            var gq = Db.Groups.AsQueryable();
+            var gq = db.Groups.AsQueryable();
             if (!isAdmin && !string.IsNullOrEmpty(userId))
             {
                 gq = gq.Where(g => g.UserId == userId);
@@ -873,7 +875,8 @@
             else if (UI.SelectedTemplateId is Guid templateId)
             {
                 // Weekplanner mode: Count template bookings
-                var grouped = await Db.BookingTemplates
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var grouped = await db.BookingTemplates
                     .Where(bt => bt.ScheduleTemplateId == templateId)
                     .GroupBy(bt => bt.GroupId)
                     .Select(g => new { GroupId = g.Key, Cnt = g.Count() })
