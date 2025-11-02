@@ -166,6 +166,7 @@ public class PlaceService : IPlaceService
 
     public async Task GenerateFootballTemplateAsync(Guid placeId)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync();
         // Leafs: A1, A2, B1, B2
         var names = new[] { "A1", "A2", "B1", "B2" };
         var leafs = new List<Leaf>();
@@ -271,6 +272,7 @@ public class PlaceService : IPlaceService
     // Editable football template generation
     public async Task GenerateFootballTemplateAsync(Guid placeId, string helplanName, string halvAName, string halvBName, List<string> leafsA, List<string> leafsB)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync();
         var leafs = new List<Leaf>();
         var sort = 1;
         foreach (var n in leafsA)
@@ -309,6 +311,7 @@ public class PlaceService : IPlaceService
     // Dynamic football template generation with variable halvplan and kvartsplan counts
     public async Task GenerateFootballTemplateAsync(Guid placeId, string helplanName, List<string> halvplanNames, List<List<string>> kvartsplanNames)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync();
         // Create all leafs first
         var leafs = new List<Leaf>();
         var sort = 1;

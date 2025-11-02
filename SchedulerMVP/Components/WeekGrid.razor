@@ -830,6 +830,7 @@
 
     private async Task LoadLeafCountCacheAsync(List<Guid> areaIds)
     {
+        await using var db = await DbFactory.CreateDbContextAsync();
         // Load leaf counts for all areas at once
         var leafCounts = await db.AreaLeafs
             .Where(al => areaIds.Contains(al.AreaId))
@@ -1361,6 +1362,7 @@
         {
             try
             {
+                await using var db = await DbFactory.CreateDbContextAsync();
                 var booking = await db.CalendarBookings.FindAsync(popoverBooking.Id);
                 if (booking != null)
                 {
@@ -1379,6 +1381,7 @@
         {
             try
             {
+                await using var db = await DbFactory.CreateDbContextAsync();
                 var template = await db.BookingTemplates.FindAsync(popoverTemplate.Id);
                 if (template != null)
                 {

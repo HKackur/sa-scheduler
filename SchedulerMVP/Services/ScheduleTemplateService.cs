@@ -78,6 +78,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
 
     public async Task<ScheduleTemplate> CreateAsync(Guid placeId, string name)
     {
+        await using var db = await _dbFactory.CreateDbContextAsync();
         var userId = _userContext.GetCurrentUserId();
         var t = new ScheduleTemplate { Id = Guid.NewGuid(), PlaceId = placeId, Name = name };
         
