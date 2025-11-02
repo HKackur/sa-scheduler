@@ -1,6 +1,6 @@
 @using SchedulerMVP.Data.Entities
 @using Microsoft.EntityFrameworkCore
-@inject SchedulerMVP.Data.AppDbContext Db
+@inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject SchedulerMVP.Services.UserContextService UserContext
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IConflictService ConflictService
@@ -9,7 +9,7 @@
 {
     <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="CloseModal"></div>
     
-    <div class="bm-modal" @onclick="CloseAreaDropdown">
+    <div class="bm-modal" @onclick="CloseAreaDropdown" @onclick:stopPropagation="true">
         <div class="bm-header">
             <h2 class="bm-title">Redigera bokning</h2>
         </div>
@@ -39,7 +39,7 @@
         <div class="bm-field">
             <label class="bm-label">Yta</label>
             <div class="bm-custom-select" @onclick:stopPropagation="true">
-                <div class="bm-custom-select-trigger" @onclick="ToggleAreaDropdown">
+                <div class="bm-custom-select-trigger" @onclick="ToggleAreaDropdown" @onclick:stopPropagation="true">
                     @if (SelectedAreaId.HasValue && AvailableAreas != null)
                     {
                         var selectedArea = AvailableAreas.FirstOrDefault(a => a.Id == SelectedAreaId.Value);
@@ -86,25 +86,25 @@
         </div>
         
         @* Time Selection *@
-        <div class="bm-field">
+        <div class="bm-field" @onclick:stopPropagation="true">
             <div class="bm-time-row">
                 <div>
                     <label class="bm-label">Starttid</label>
                     <div class="bm-select-wrap">
-                        <input type="time" value="@StartTime" @onchange="OnStartTimeChanged" class="bm-input" />
+                        <input type="time" value="@StartTime" @onchange="OnStartTimeChanged" @onclick:stopPropagation="true" class="bm-input" />
                     </div>
                 </div>
                 <div>
                     <label class="bm-label">Sluttid</label>
                     <div class="bm-select-wrap">
-                        <input type="time" value="@EndTime" @onchange="OnEndTimeChanged" class="bm-input" />
+                        <input type="time" value="@EndTime" @onchange="OnEndTimeChanged" @onclick:stopPropagation="true" class="bm-input" />
                     </div>
                 </div>
             </div>
         </div>
         @* Övrigt (toggle) *@
-        <div class="bm-field" style="margin-top:12px;">
-            <button type="button" @onclick="ToggleExtras" style="background:transparent;border:none;color:#0b1e34;cursor:pointer;padding:0;font-weight:600;text-align:left;">@(showExtras ? "Dölj alternativ" : "Fler alternativ")</button>
+        <div class="bm-field" style="margin-top:12px;" @onclick:stopPropagation="true">
+            <button type="button" @onclick="ToggleExtras" @onclick:stopPropagation="true" style="background:transparent;border:none;color:#0b1e34;cursor:pointer;padding:0;font-weight:600;text-align:left;">@(showExtras ? "Dölj alternativ" : "Fler alternativ")</button>
         </div>
         @if (showExtras)
         {
@@ -145,10 +145,10 @@
         }
         
         @* Action Buttons *@
-        <div class="bm-actions">
-            <button type="button" @onclick="DeleteBooking" class="btn-danger" style="margin-right: auto;">Ta bort</button>
-            <button type="button" @onclick="CloseModal" class="btn-outline">Avbryt</button>
-            <button type="button" @onclick="SaveBooking" class="btn-primary" disabled="@hasConflicts">Spara</button>
+        <div class="bm-actions" @onclick:stopPropagation="true">
+            <button type="button" @onclick="DeleteBooking" @onclick:stopPropagation="true" class="btn-danger" style="margin-right: auto;">Ta bort</button>
+            <button type="button" @onclick="CloseModal" @onclick:stopPropagation="true" class="btn-outline">Avbryt</button>
+            <button type="button" @onclick="SaveBooking" @onclick:stopPropagation="true" class="btn-primary" disabled="@hasConflicts">Spara</button>
         </div>
     </div>
     
@@ -283,18 +283,19 @@
     {
         try
         {
-            var userId = UserContext.GetCurrentUserId();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var userId = await UserContext.GetCurrentUserIdAsync();
             var isAdmin = await UserContext.IsAdminAsync();
-            var query = Db.Groups.AsQueryable();
+            var query = db.Groups.AsQueryable();
             if (!isAdmin && !string.IsNullOrEmpty(userId))
             {
-                query = query.Where(g => g.UserId == userId || g.UserId == null);
+                query = query.Where(g => g.UserId == userId);
             }
             Groups = await query.OrderBy(g => g.Name).ToListAsync();
         }
         catch (Exception ex)
         {
-            // Console.WriteLine($"Error loading groups: {ex.Message}");
+            Console.WriteLine($"[CalendarBookingEditModal] Error loading groups: {ex.Message}");
         }
     }
     
@@ -304,8 +305,9 @@
         
         try
         {
+            await using var db = await DbFactory.CreateDbContextAsync();
             // Load all areas for the current place, ordered by path for hierarchical display
-            AvailableAreas = await Db.Areas
+            AvailableAreas = await db.Areas
                 .Where(a => a.PlaceId == Booking.Area.Place.Id)
                 .OrderBy(a => a.Path)
                 .ToListAsync();
@@ -419,22 +421,25 @@
             // Get the selected area
             var targetAreaId = SelectedAreaId ?? Booking.AreaId;
             
-            // Update the booking
-            Booking.Date = DateOnly.FromDateTime(SelectedDate);
-            Booking.AreaId = targetAreaId;
-            Booking.GroupId = SelectedGroupId.Value;
-            Booking.StartMin = startMin;
-            Booking.EndMin = endMin;
-            Booking.Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes;
-            Booking.ContactName = ContactName;
-            Booking.ContactPhone = ContactPhone;
-            Booking.ContactEmail = ContactEmail;
-            Booking.UpdatedAt = DateTime.UtcNow;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            // Reload the entity in the new context to update it
+            var bookingToUpdate = await db.CalendarBookings.FindAsync(Booking.Id);
             
-            // Mark the entity as modified to ensure EF tracks the changes
-            Db.Entry(Booking).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+            if (bookingToUpdate == null) return;
             
-            var result = await Db.SaveChangesAsync();
+            // Update properties
+            bookingToUpdate.Date = DateOnly.FromDateTime(SelectedDate);
+            bookingToUpdate.AreaId = targetAreaId;
+            bookingToUpdate.GroupId = SelectedGroupId.Value;
+            bookingToUpdate.StartMin = startMin;
+            bookingToUpdate.EndMin = endMin;
+            bookingToUpdate.Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes;
+            bookingToUpdate.ContactName = ContactName;
+            bookingToUpdate.ContactPhone = ContactPhone;
+            bookingToUpdate.ContactEmail = ContactEmail;
+            bookingToUpdate.UpdatedAt = DateTime.UtcNow;
+            
+            var result = await db.SaveChangesAsync();
             // Console.WriteLine($"Database save result: {result} rows affected");
             
             // Navigate to the selected area if different from current
@@ -445,12 +450,16 @@
             }
             
             await OnSave.InvokeAsync();
+            await OnClose.InvokeAsync();
             // Console.WriteLine("=== SAVE CALENDAR BOOKING SUCCESS ===");
         }
         catch (Exception ex)
         {
-            // Console.WriteLine("=== SAVE CALENDAR BOOKING ERROR ===");
-            // Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine($"[CalendarBookingEditModal] Error saving booking: {ex.Message}");
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
     
@@ -462,24 +471,33 @@
         
         try
         {
-            Db.CalendarBookings.Remove(Booking);
-            var result = await Db.SaveChangesAsync();
-            // Console.WriteLine($"Database delete result: {result} rows affected");
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var bookingToDelete = await db.CalendarBookings.FindAsync(Booking.Id);
+            if (bookingToDelete != null)
+            {
+                db.CalendarBookings.Remove(bookingToDelete);
+                var result = await db.SaveChangesAsync();
+                // Console.WriteLine($"Database delete result: {result} rows affected");
+            }
             
             await OnSave.InvokeAsync();
             // Console.WriteLine("=== DELETE CALENDAR BOOKING SUCCESS ===");
         }
         catch (Exception ex)
         {
-            // Console.WriteLine("=== DELETE CALENDAR BOOKING ERROR ===");
-            // Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine($"[CalendarBookingEditModal] Error deleting booking: {ex.Message}");
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
     
-    private void CloseModal()
+    private async Task CloseModal()
     {
         showAreaDropdown = false; // Close area dropdown when modal closes
-        OnClose.InvokeAsync();
+        await OnClose.InvokeAsync();
+        StateHasChanged();
     }
     
     private static string FormatTime(int minutes)
@@ -510,9 +528,7 @@
         }
         return options;
     }
-}
-
-@code {
+    
     private async Task RecheckConflictsAsync()
     {
         conflictMessages.Clear(); hasConflicts = false;
@@ -534,7 +550,11 @@
         StateHasChanged();
     }
 
-    private void ToggleExtras() => showExtras = !showExtras;
+    private void ToggleExtras() 
+    {
+        showExtras = !showExtras;
+        StateHasChanged();
+    }
 
     private static string GetDayName(int day)
     {

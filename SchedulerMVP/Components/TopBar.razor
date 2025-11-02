@@ -8,7 +8,7 @@
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.ICalendarBookingService CalendarBookingService
 @inject SchedulerMVP.Services.IPlaceService PlaceService
-@inject SchedulerMVP.Data.AppDbContext Db
+@inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
@@ -698,7 +698,8 @@
         {
             try
             {
-                selectedAreaCache = await Db.Areas
+                await using var db = await DbFactory.CreateDbContextAsync();
+                selectedAreaCache = await db.Areas
                     .Include(a => a.Place)
                     .FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
             }
