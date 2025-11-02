@@ -72,9 +72,9 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// Use RevalidatingServerAuthenticationStateProvider for Blazor Server
-// This prevents users from being logged out when circuit reconnects
-builder.Services.AddScoped<AuthenticationStateProvider, RevalidatingIdentityAuthenticationStateProvider>();
+// TEMPORARILY REMOVED: RevalidatingIdentityAuthenticationStateProvider to diagnose connection issues
+// Using default ServerAuthenticationStateProvider to test if custom provider causes WebSocket disconnects
+// builder.Services.AddScoped<AuthenticationStateProvider, RevalidatingIdentityAuthenticationStateProvider>();
 
 // Persist login for 30 days
 builder.Services.ConfigureApplicationCookie(options =>
