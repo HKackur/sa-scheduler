@@ -119,12 +119,22 @@
         try
         {
             await CompleteCurrentAsync();
-            Nav.NavigateTo("/grupper");
+            // Use forceLoad to bypass Blazor Server circuit if it's broken
+            Nav.NavigateTo("/grupper", forceLoad: true);
         }
         catch (Exception ex)
         {
-            isOpen = false;
-            StateHasChanged();
+            // If Nav.NavigateTo fails, try JavaScript navigation as fallback
+            try
+            {
+                await JS.InvokeVoidAsync("eval", "window.location.href = '/grupper';");
+            }
+            catch
+            {
+                // Last resort - close modal and user can navigate manually
+                isOpen = false;
+                StateHasChanged();
+            }
         }
     }
 
