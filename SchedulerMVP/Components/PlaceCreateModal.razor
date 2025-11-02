@@ -14,7 +14,7 @@
             <div class="bm-column-left">
                 <div class="bm-field">
                     <label class="bm-label">Platsnamn</label>
-                    <input class="tb-select" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
+                    <input type="text" class="sa-input-field" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
                 </div>
                 <div class="bm-field">
                     <label class="bm-label">Standard längd på bokning</label>
@@ -555,42 +555,58 @@
 
     private async Task OnCreate()
     {
-        if (!int.TryParse(durationText, out var duration)) duration = 90;
-        var place = new SchedulerMVP.Data.Entities.Place { Name = name, DefaultDurationMin = duration };
-        place = await PlaceService.CreatePlaceAsync(place);
-
-        // Generate areas/leafs by type per PromptSpec 8, using dynamic structure
-        if (type == "Plan")
+        try
         {
-            // Flatten all kvartsplan names into a single list
-            var allLeafs = kvartsplanNames.SelectMany(x => x).ToList();
-            await PlaceService.GenerateFootballTemplateAsync(place.Id, helplanName, halvplanNames, kvartsplanNames);
-        }
-        else if (type == "Hall")
-        {
-            await PlaceService.GenerateCustomTemplateAsync(place.Id, hallName, hallYtaNames);
-        }
-        else if (type == "Simhall")
-        {
-            await PlaceService.GeneratePoolTemplateAsync(place.Id, laneNames, split, poolName, halfNames.Count > 0 ? halfNames[0] : null, halfNames.Count > 1 ? halfNames[1] : null);
-        }
-        else if (type == "Annat")
-        {
-            if (useZones)
+            if (string.IsNullOrWhiteSpace(name))
             {
-                // Flatten all yta names into a single list for each zone
-                var allYtas = ytaNames.SelectMany(x => x).ToList();
-                await PlaceService.GenerateCustomTemplateAsync(place.Id, customTopName, zoneNames, ytaNames);
+                // Don't create if name is empty
+                return;
             }
-            else
-            {
-                await PlaceService.GenerateCustomTemplateAsync(place.Id, customTopName, customLeafs);
-            }
-        }
 
-        IsOpen = false;
-        await OnCreated.InvokeAsync();
-        await OnClose.InvokeAsync();
+            if (!int.TryParse(durationText, out var duration)) duration = 90;
+            var place = new SchedulerMVP.Data.Entities.Place { Name = name, DefaultDurationMin = duration };
+            place = await PlaceService.CreatePlaceAsync(place);
+
+            // Generate areas/leafs by type per PromptSpec 8, using dynamic structure
+            if (type == "Plan")
+            {
+                // Flatten all kvartsplan names into a single list
+                var allLeafs = kvartsplanNames.SelectMany(x => x).ToList();
+                await PlaceService.GenerateFootballTemplateAsync(place.Id, helplanName, halvplanNames, kvartsplanNames);
+            }
+            else if (type == "Hall")
+            {
+                await PlaceService.GenerateCustomTemplateAsync(place.Id, hallName, hallYtaNames);
+            }
+            else if (type == "Simhall")
+            {
+                await PlaceService.GeneratePoolTemplateAsync(place.Id, laneNames, split, poolName, halfNames.Count > 0 ? halfNames[0] : null, halfNames.Count > 1 ? halfNames[1] : null);
+            }
+            else if (type == "Annat")
+            {
+                if (useZones)
+                {
+                    // Flatten all yta names into a single list for each zone
+                    var allYtas = ytaNames.SelectMany(x => x).ToList();
+                    await PlaceService.GenerateCustomTemplateAsync(place.Id, customTopName, zoneNames, ytaNames);
+                }
+                else
+                {
+                    await PlaceService.GenerateCustomTemplateAsync(place.Id, customTopName, customLeafs);
+                }
+            }
+
+            IsOpen = false;
+            await OnCreated.InvokeAsync();
+            UI.RaiseChanged(); // Trigger UI refresh
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error creating place: {ex.Message}");
+            Console.WriteLine($"Stack: {ex.StackTrace}");
+            // Don't close modal on error - let user try again
+        }
     }
 
     private async Task OnCancel() => await CloseAsync();
