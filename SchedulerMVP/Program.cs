@@ -25,8 +25,9 @@ builder.Services.AddServerSideBlazor(options =>
     // Enable detailed errors temporarily to diagnose production circuit crash
     options.DetailedErrors = true;
     options.DisconnectedCircuitMaxRetained = 100;
-    // Standard retention period (3 minutes) - longer retention can cause memory issues
-    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
+    // Increase retention period to 10 minutes - gives more time for reconnect without logout
+    // Authentication state is preserved during this period
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(10);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
     options.MaxBufferedUnacknowledgedRenderBatches = 20;
 });
