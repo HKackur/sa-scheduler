@@ -199,24 +199,9 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
-// Log SignalR requests BEFORE mapping routes
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/_blazor"))
-    {
-        Console.WriteLine($"[SignalR] Blazor hub request: {context.Request.Path} - Method: {context.Request.Method}");
-        Console.WriteLine($"[SignalR] Headers: Connection={context.Request.Headers["Connection"]}, Upgrade={context.Request.Headers["Upgrade"]}");
-    }
-    await next();
-});
-
-app.MapRazorPages();
-
-// Configure Blazor Server SignalR hub with proper transport options for Fly.io
-// CRITICAL: Map Blazor hub BEFORE fallback route
+// CRITICAL: Map Blazor hub BEFORE authentication middleware
+// SignalR connections must be allowed to establish without auth blocking
+// Authentication will still be enforced for the actual Blazor circuit operations
 var blazorHub = app.MapBlazorHub(options =>
 {
     // Prioritize Long Polling for Fly.io - WebSocket has connection issues on their proxy
@@ -226,7 +211,24 @@ var blazorHub = app.MapBlazorHub(options =>
     
     // Increase timeout for Long Polling to prevent frequent reconnects
     options.LongPolling.PollTimeout = TimeSpan.FromSeconds(90);
+}).AllowAnonymous(); // Allow SignalR connection establishment without auth requirement
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Log SignalR requests AFTER authentication (for logging auth status)
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/_blazor"))
+    {
+        Console.WriteLine($"[SignalR] Blazor hub request: {context.Request.Path} - Method: {context.Request.Method}");
+        Console.WriteLine($"[SignalR] Headers: Connection={context.Request.Headers["Connection"]}, Upgrade={context.Request.Headers["Upgrade"]}");
+        Console.WriteLine($"[SignalR] User authenticated: {context.User?.Identity?.IsAuthenticated ?? false}");
+    }
+    await next();
 });
+
+app.MapRazorPages();
 
 app.MapFallbackToPage("/_Host");
 
