@@ -7,6 +7,8 @@ using SchedulerMVP.Data.Entities;
 using SchedulerMVP.Data.Seed;
 using SchedulerMVP.Services;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -68,6 +70,10 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
+
+// Use RevalidatingServerAuthenticationStateProvider for Blazor Server
+// This prevents users from being logged out when circuit reconnects
+builder.Services.AddScoped<AuthenticationStateProvider, RevalidatingIdentityAuthenticationStateProvider>();
 
 // Persist login for 30 days
 builder.Services.ConfigureApplicationCookie(options =>
