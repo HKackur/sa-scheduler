@@ -70,7 +70,7 @@
         <div class="bm-field">
             <label class="bm-label">Yta</label>
             <div class="bm-custom-select" @onclick:stopPropagation="true">
-                <div class="bm-custom-select-trigger" @onclick="() => ToggleAreaDropdown()">
+                <div class="bm-custom-select-trigger" @onclick="() => ToggleAreaDropdown()" @onclick:stopPropagation="true">
                     @if (SelectedAreaId.HasValue && AvailableAreas != null)
                     {
                         var selectedArea = AvailableAreas.FirstOrDefault(a => a.Id == SelectedAreaId.Value);
@@ -145,18 +145,18 @@
         }
 
         @* Time Selection *@
-        <div class="bm-field">
+        <div class="bm-field" @onclick:stopPropagation="true">
             <div class="bm-time-row">
                 <div>
                     <label class="bm-label">Starttid</label>
                     <div class="bm-select-wrap">
-                        <input type="time" value="@StartTime" @onchange="OnStartTimeChanged" class="bm-input" />
+                        <input type="time" value="@StartTime" @onchange="OnStartTimeChanged" @onclick:stopPropagation="true" class="bm-input" />
                     </div>
                 </div>
                 <div>
                     <label class="bm-label">Sluttid</label>
                     <div class="bm-select-wrap">
-                        <input type="time" value="@EndTime" @onchange="OnEndTimeChanged" class="bm-input" />
+                        <input type="time" value="@EndTime" @onchange="OnEndTimeChanged" @onclick:stopPropagation="true" class="bm-input" />
                     </div>
                 </div>
             </div>
@@ -176,8 +176,8 @@
         }
         
         @* Övrigt (toggle) *@
-        <div class="bm-field" style="margin-top:12px;">
-            <button type="button" @onclick="ToggleExtras" style="background:transparent;border:none;color:#0b1e34;cursor:pointer;padding:0;font-weight:600;text-align:left;">@(showExtras ? "Dölj alternativ" : "Fler alternativ")</button>
+        <div class="bm-field" style="margin-top:12px;" @onclick:stopPropagation="true">
+            <button type="button" @onclick="ToggleExtras" @onclick:stopPropagation="true" style="background:transparent;border:none;color:#0b1e34;cursor:pointer;padding:0;font-weight:600;text-align:left;">@(showExtras ? "Dölj alternativ" : "Fler alternativ")</button>
         </div>
         @if (showExtras)
         {
@@ -206,9 +206,9 @@
         }
 
         @* Action Buttons *@
-        <div class="bm-actions">
-            <button type="button" @onclick="CloseModal" class="btn-outline">Avbryt</button>
-            <button type="button" @onclick="SaveBookingTemplate" class="btn-primary" disabled="@hasConflicts">Spara</button>
+        <div class="bm-actions" @onclick:stopPropagation="true">
+            <button type="button" @onclick="CloseModal" @onclick:stopPropagation="true" class="btn-outline">Avbryt</button>
+            <button type="button" @onclick="SaveBookingTemplate" @onclick:stopPropagation="true" class="btn-primary" disabled="@hasConflicts">Spara</button>
         </div>
     </div>
     
@@ -640,7 +640,7 @@
         StateHasChanged();
     }
     
-    private async void OnStartTimeChanged(ChangeEventArgs e)
+    private async Task OnStartTimeChanged(ChangeEventArgs e)
     {
         if (isUpdatingTime) return;
         
@@ -653,7 +653,7 @@
         await RecheckConflictsAsync();
     }
 
-    private async void OnEndTimeChanged(ChangeEventArgs e)
+    private async Task OnEndTimeChanged(ChangeEventArgs e)
     {
         if (isUpdatingTime) return;
         
@@ -721,7 +721,7 @@
         return options;
     }
 
-    private async void OnDayCheckboxChanged(int day, object? value)
+    private async Task OnDayCheckboxChanged(int day, object? value)
     {
         if (value is bool isChecked)
         {
@@ -885,12 +885,16 @@
             }
             
             await OnSave.InvokeAsync();
+            await OnClose.InvokeAsync();
             // Console.WriteLine("=== SAVE BOOKING SUCCESS ===");
         }
         catch (Exception ex)
         {
-            // Console.WriteLine("=== SAVE BOOKING ERROR ===");
-            // Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine($"[BookingModal] Error saving booking: {ex.Message}");
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
 
@@ -958,13 +962,18 @@
         StateHasChanged();
     }
 
-    private void ToggleExtras() => showExtras = !showExtras;
+    private void ToggleExtras()
+    {
+        showExtras = !showExtras;
+        StateHasChanged();
+    }
     
-    private void CloseModal()
+    private async Task CloseModal()
     {
         showAreaDropdown = false; // Close area dropdown when modal closes
         showPlaceDropdown = false; // Close place dropdown when modal closes
-        OnClose.InvokeAsync();
+        await OnClose.InvokeAsync();
+        StateHasChanged();
     }
     
     private string GetDayName(int day)
