@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
 using SchedulerMVP.Services.Models;
