@@ -80,21 +80,28 @@
                         e.preventDefault();
                         e.stopPropagation();
                         
-                        // Try to invoke Blazor method via JSInterop
-                        if (window.Blazor && window.DotNet) {
-                            console.log('[DEBUG] Attempting to call Blazor method via JSInterop');
-                            // This is a fallback - we'll show modal directly with JS
-                            const modal = document.getElementById('test-modal');
-                            const overlay = document.getElementById('test-modal-overlay');
-                            if (modal && overlay) {
-                                modal.style.display = 'block';
-                                overlay.style.display = 'block';
-                                console.log('[DEBUG] Modal shown via JavaScript');
-                            } else {
-                                alert('TEST BUTTON CLICKED - JavaScript handler works! Blazor handler may not be working.');
+                        // Show modal directly via JavaScript (Blazor handlers may not work)
+                        console.log('[DEBUG] Attempting to show modal via JavaScript');
+                        const modal = document.getElementById('test-modal');
+                        const overlay = document.getElementById('test-modal-overlay');
+                        if (modal && overlay) {
+                            modal.style.display = 'block';
+                            overlay.style.display = 'block';
+                            console.log('[DEBUG] Modal shown via JavaScript');
+                            
+                            // Attach close handler
+                            const closeBtn = modal.querySelector('button');
+                            const closeHandler = function() {
+                                modal.style.display = 'none';
+                                overlay.style.display = 'none';
+                                console.log('[DEBUG] Modal closed via JavaScript');
+                            };
+                            overlay.onclick = closeHandler;
+                            if (closeBtn) {
+                                closeBtn.onclick = closeHandler;
                             }
                         } else {
-                            alert('TEST BUTTON CLICKED - JavaScript handler works! But Blazor is not available.');
+                            alert('TEST BUTTON CLICKED - JavaScript handler works! But modal elements not found.');
                         }
                         return false;
                     });
