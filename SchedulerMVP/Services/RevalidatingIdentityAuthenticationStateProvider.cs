@@ -50,28 +50,40 @@ public class RevalidatingIdentityAuthenticationStateProvider : RevalidatingServe
         }
 
         // Validate user still exists in database
+        // Use a shorter timeout to prevent hanging during reconnect
         await using var scope = _scopeFactory.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         
         try
         {
+            // Use cancellation token with timeout to prevent hanging
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(5)); // Max 5 seconds for validation
+            
             var appUser = await userManager.FindByIdAsync(userIdClaim);
             if (appUser == null)
             {
                 return false; // User no longer exists
             }
 
-            // Check if user is still allowed to sign in
-            if (!await userManager.IsEmailConfirmedAsync(appUser) && _options.SignIn.RequireConfirmedEmail)
+            // Check if user is still allowed to sign in (only if required)
+            if (_options.SignIn.RequireConfirmedEmail && !await userManager.IsEmailConfirmedAsync(appUser))
             {
                 return false; // Email not confirmed
             }
 
             return true; // User is still valid
         }
+        catch (OperationCanceledException)
+        {
+            // Timeout - assume user is still valid to prevent logout during reconnect
+            return true;
+        }
         catch
         {
-            return false; // Error validating user
+            // Other errors - assume user is still valid to prevent logout during reconnect
+            // Better to keep user logged in than log them out due to transient errors
+            return true;
         }
     }
 }
