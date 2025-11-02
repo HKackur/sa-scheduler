@@ -107,6 +107,17 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddHttpContextAccessor();
 
+// Add SignalR options for better reliability (MUST be before AddServerSideBlazor)
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+    options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
+    options.StreamBufferCapacity = 10;
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+});
+
 // Add DbContextFactory for thread-safe DbContext access in Blazor Server
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
 {
@@ -183,6 +194,9 @@ app.MapBlazorHub(options =>
     // Enable WebSockets and Long Polling for better reliability behind proxies
     options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
                          Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+    
+    // Increase timeout for slow connections
+    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(30);
 });
 
 app.MapFallbackToPage("/_Host");

@@ -27,7 +27,50 @@
     
 
     <script src="js/dragdrop.js"></script>
+    <script src="js/blazor-connection.js"></script>
     <script src="_framework/blazor.server.js"></script>
+    <script>
+        // Ensure Blazor is loaded before initializing connection monitoring
+        window.addEventListener('load', function() {
+            console.log('[Blazor] Window loaded, checking Blazor...');
+            
+            // Wait for Blazor to be available
+            const checkBlazor = setInterval(function() {
+                if (window.Blazor) {
+                    clearInterval(checkBlazor);
+                    console.log('[Blazor] Blazor framework detected');
+                    
+                    // Monitor for connection issues
+                    const originalStart = Blazor.start;
+                    Blazor.start = function() {
+                        console.log('[Blazor] Starting Blazor Server...');
+                        const result = originalStart.apply(this, arguments);
+                        
+                        // Log connection status
+                        setTimeout(function() {
+                            console.log('[Blazor] Blazor Server started, connection should be active');
+                            if (window.blazorConnection) {
+                                window.blazorConnection.connectionState = 'Connected';
+                            }
+                        }, 500);
+                        
+                        return result;
+                    };
+                }
+            }, 100);
+            
+            // Timeout after 5 seconds
+            setTimeout(function() {
+                if (!window.Blazor) {
+                    clearInterval(checkBlazor);
+                    console.error('[Blazor] ERROR: Blazor not loaded after 5 seconds!');
+                    if (window.blazorConnection) {
+                        window.blazorConnection.showConnectionError('Blazor kunde inte laddas. Kontrollera konsolen för detaljer.');
+                    }
+                }
+            }, 5000);
+        });
+    </script>
 </body>
 </html>
 

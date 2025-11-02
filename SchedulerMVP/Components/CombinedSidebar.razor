@@ -679,13 +679,13 @@
         TogglePlace(placeId);
     }
 
-    private async void OnPlaceLabelClick(Guid placeId, MouseEventArgs e)
+    private async Task OnPlaceLabelClick(Guid placeId, MouseEventArgs e)
     {
         if (UI.IsGroupFilterActive) return;
         await SelectPlace(placeId);
     }
 
-    private async void OnPlaceRowClick(Guid placeId, MouseEventArgs e)
+    private async Task OnPlaceRowClick(Guid placeId, MouseEventArgs e)
     {
         if (UI.IsGroupFilterActive) return;
         // Toggle if already opened, else open this and close others
@@ -708,7 +708,7 @@
         StateHasChanged();
     }
 
-    private async void OnPlaceFavoriteClick(Guid placeId, MouseEventArgs e)
+    private async Task OnPlaceFavoriteClick(Guid placeId, MouseEventArgs e)
     {
         if (UI.IsGroupFilterActive) return;
         if (!favoritePlaceIds.Add(placeId)) favoritePlaceIds.Remove(placeId);
