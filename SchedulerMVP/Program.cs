@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.EntityFrameworkCore;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
@@ -17,7 +18,15 @@ builder.WebHost.ConfigureKestrel(options =>
 
 // Add services to the container.
 builder.Services.AddRazorPages();
-builder.Services.AddServerSideBlazor();
+builder.Services.AddServerSideBlazor(options =>
+{
+    // Disable circuit disconnect timeout for better reliability
+    options.DetailedErrors = false;
+    options.DisconnectedCircuitMaxRetained = 100;
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
+    options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
+    options.MaxBufferedUnacknowledgedRenderBatches = 20;
+});
 
 // Get connection string
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -65,6 +74,12 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromDays(30);
     options.SlidingExpiration = true;
     options.LoginPath = "/login";
+    // Required for HTTPS/proxy environments (Fly.io)
+    options.Cookie.SameSite = SameSiteMode.Lax; // Use Lax for better compatibility
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Works with both HTTP and HTTPS
+    options.Cookie.HttpOnly = true;
+    options.Cookie.Name = ".AspNetCore.Identity.Application";
+    options.Cookie.IsEssential = true; // Required for authentication
 });
 
 // Add AppDbContext
@@ -161,7 +176,15 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
-app.MapBlazorHub();
+
+// Configure Blazor Server SignalR hub with proper transport options for Fly.io
+app.MapBlazorHub(options =>
+{
+    // Enable WebSockets and Long Polling for better reliability behind proxies
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+});
+
 app.MapFallbackToPage("/_Host");
 
 // --- Auth endpoints ---
