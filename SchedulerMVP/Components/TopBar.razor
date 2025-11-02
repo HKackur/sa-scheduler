@@ -696,17 +696,14 @@
 <ScheduleTemplateDeleteModal IsOpen="@deleteOpen" OnClose="CloseDelete" OnDeleted="AfterTemplateSaved" />
 <Onboarding />
 
-@* Test Modal *@
-@if (testModalOpen)
-{
-    <div id="test-modal-overlay" class="test-modal-overlay" @onclick="CloseTestModal"></div>
-    <div id="test-modal" class="test-modal">
-        <div class="test-modal-content">
-            <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600;">Yes...det funkar</h3>
-            <button class="tb-btn" @onclick="CloseTestModal">Stäng</button>
-        </div>
+@* Test Modal - Always in DOM for JavaScript fallback *@
+<div id="test-modal-overlay" class="test-modal-overlay" @onclick="CloseTestModal" style="@(testModalOpen ? "display: block;" : "display: none;")"></div>
+<div id="test-modal" class="test-modal" style="@(testModalOpen ? "display: block;" : "display: none;")">
+    <div class="test-modal-content">
+        <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600;">Yes...det funkar</h3>
+        <button class="tb-btn" @onclick="CloseTestModal">Stäng</button>
     </div>
-}
+</div>
 
 @code {
     private List<SchedulerMVP.Data.Entities.ScheduleTemplate> templates = new();
