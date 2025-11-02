@@ -159,8 +159,13 @@
         
         @* Right column: 20% width - matches .sa-right-new - Only view toggle *@
         <div class="tb-topbar-right">
-            @* Test button *@
-            <button class="tb-btn" @onclick="OpenTestModal" style="margin-right: 12px;">Test</button>
+            @* Test button - VERY VISIBLE for debugging *@
+            <button id="test-button-debug" 
+                    class="tb-btn" 
+                    @onclick="OpenTestModal" 
+                    @onclick:preventDefault="false"
+                    @onclick:stopPropagation="false"
+                    style="background: #dc2626 !important; color: white !important; margin-right: 12px; font-weight: bold; z-index: 99999 !important; position: relative !important; min-width: 80px; height: 40px; font-size: 14px; border: 2px solid #991b1b;">TEST</button>
             
             @if (!isAdminPage && !isGroupsManagePage)
             {
@@ -694,11 +699,11 @@
 @* Test Modal *@
 @if (testModalOpen)
 {
-    <div class="test-modal-overlay" @onclick="CloseTestModal"></div>
-    <div class="test-modal">
+    <div id="test-modal-overlay" class="test-modal-overlay" @onclick="CloseTestModal" onclick="console.log('[DEBUG] Overlay clicked');"></div>
+    <div id="test-modal" class="test-modal">
         <div class="test-modal-content">
             <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600;">Yes...det funkar</h3>
-            <button class="tb-btn" @onclick="CloseTestModal">Stäng</button>
+            <button class="tb-btn" @onclick="CloseTestModal" onclick="console.log('[DEBUG] Close button clicked');">Stäng</button>
         </div>
     </div>
 }
@@ -962,8 +967,20 @@
     private void OpenCopy() { menuOpen = false; copyOpen = true; }
     private void OpenDelete() { menuOpen = false; deleteOpen = true; }
     
-    private void OpenTestModal() { testModalOpen = true; StateHasChanged(); }
-    private void CloseTestModal() { testModalOpen = false; StateHasChanged(); }
+    private void OpenTestModal() 
+    { 
+        Console.WriteLine("[TEST BUTTON] OpenTestModal called!");
+        testModalOpen = true; 
+        StateHasChanged();
+        Console.WriteLine("[TEST BUTTON] testModalOpen set to true, StateHasChanged called");
+    }
+    
+    private void CloseTestModal() 
+    { 
+        Console.WriteLine("[TEST BUTTON] CloseTestModal called!");
+        testModalOpen = false; 
+        StateHasChanged();
+    }
     private void Save() { menuOpen = false; }
 
     private Task CloseEdit() { editOpen = false; return Task.CompletedTask; }

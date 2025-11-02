@@ -69,6 +69,39 @@
                     }
                 }
             }, 5000);
+            
+            // Attach direct JavaScript click handler to test button as fallback
+            setTimeout(function() {
+                const testBtn = document.getElementById('test-button-debug');
+                if (testBtn) {
+                    console.log('[DEBUG] Test button found in DOM, attaching JavaScript handler');
+                    testBtn.addEventListener('click', function(e) {
+                        console.log('[DEBUG] Test button clicked - JavaScript event handler fired!');
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        // Try to invoke Blazor method via JSInterop
+                        if (window.Blazor && window.DotNet) {
+                            console.log('[DEBUG] Attempting to call Blazor method via JSInterop');
+                            // This is a fallback - we'll show modal directly with JS
+                            const modal = document.getElementById('test-modal');
+                            const overlay = document.getElementById('test-modal-overlay');
+                            if (modal && overlay) {
+                                modal.style.display = 'block';
+                                overlay.style.display = 'block';
+                                console.log('[DEBUG] Modal shown via JavaScript');
+                            } else {
+                                alert('TEST BUTTON CLICKED - JavaScript handler works! Blazor handler may not be working.');
+                            }
+                        } else {
+                            alert('TEST BUTTON CLICKED - JavaScript handler works! But Blazor is not available.');
+                        }
+                        return false;
+                    });
+                } else {
+                    console.error('[DEBUG] Test button NOT found in DOM after 2 seconds');
+                }
+            }, 2000);
         });
     </script>
 </body>
