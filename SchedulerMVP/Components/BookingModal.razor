@@ -1,7 +1,7 @@
 @using SchedulerMVP.Data.Entities
 @using Microsoft.EntityFrameworkCore
 @using System.Threading
-@inject SchedulerMVP.Data.AppDbContext Db
+@inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject SchedulerMVP.Services.UserContextService UserContext
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IConflictService ConflictService
@@ -434,18 +434,13 @@
     {
         try
         {
-            var userId = UserContext.GetCurrentUserId();
-            var isAdmin = await UserContext.IsAdminAsync();
-            var query = Db.Groups.AsQueryable();
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
-            {
-                query = query.Where(g => g.UserId == userId || g.UserId == null);
-            }
-            Groups = await query.OrderBy(g => g.Name).ToListAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            // Show ALL groups - no user filtering (users can create bookings for any group)
+            Groups = await db.Groups.OrderBy(g => g.Name).ToListAsync();
         }
         catch (Exception ex)
         {
-            // Console.WriteLine($"Error loading groups: {ex.Message}");
+            Console.WriteLine($"[BookingModal] Error loading groups: {ex.Message}");
         }
     }
     
@@ -453,11 +448,12 @@
     {
         try
         {
-            AvailablePlaces = await Db.Places.OrderBy(p => p.Name).ToListAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            AvailablePlaces = await db.Places.OrderBy(p => p.Name).ToListAsync();
         }
         catch (Exception ex)
         {
-            // Console.WriteLine($"Error loading places: {ex.Message}");
+            Console.WriteLine($"[BookingModal] Error loading places: {ex.Message}");
         }
     }
     
@@ -467,8 +463,9 @@
         
         try
         {
+            await using var db = await DbFactory.CreateDbContextAsync();
             // Load all areas for the current place, ordered by path for hierarchical display
-            AvailableAreas = await Db.Areas
+            AvailableAreas = await db.Areas
                 .Where(a => a.PlaceId == SelectedPlaceId.Value)
                 .OrderBy(a => a.Path)
                 .ToListAsync();
@@ -478,7 +475,7 @@
         }
         catch (Exception ex)
         {
-            // Console.WriteLine($"Error loading areas: {ex.Message}");
+            Console.WriteLine($"[BookingModal] Error loading areas: {ex.Message}");
         }
     }
     
@@ -805,6 +802,8 @@
 
         try
         {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            
             var startParts = StartTime.Split(':');
             var endParts = EndTime.Split(':');
             var startMin = int.Parse(startParts[0]) * 60 + int.Parse(startParts[1]);
@@ -829,7 +828,7 @@
                 };
                 calendarBooking.CreatedAt = DateTime.UtcNow;
 
-                Db.CalendarBookings.Add(calendarBooking);
+                db.CalendarBookings.Add(calendarBooking);
                 // Console.WriteLine($"Created calendar booking for date {SelectedDate:yyyy-MM-dd}");
             }
             else
@@ -858,12 +857,12 @@
                     };
                     template.CreatedAt = DateTime.UtcNow;
 
-                    Db.BookingTemplates.Add(template);
+                    db.BookingTemplates.Add(template);
                     // Console.WriteLine($"Created booking template for weekday {normalizedDay}");
                 }
             }
 
-            var result = await Db.SaveChangesAsync();
+            var result = await db.SaveChangesAsync();
             // Console.WriteLine($"Database save result: {result} rows affected");
 
             // Navigate to the selected place and area if different from current
