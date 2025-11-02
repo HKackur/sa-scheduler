@@ -22,12 +22,10 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor(options =>
 {
-    // Enable detailed errors temporarily to diagnose production circuit crash
-    options.DetailedErrors = true;
+    // Disable circuit disconnect timeout for better reliability
+    options.DetailedErrors = false;
     options.DisconnectedCircuitMaxRetained = 100;
-    // Increase retention period to 10 minutes - gives more time for reconnect without logout
-    // Authentication state is preserved during this period
-    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(10);
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
     options.MaxBufferedUnacknowledgedRenderBatches = 20;
 });
@@ -168,15 +166,11 @@ builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
 var app = builder.Build();
 
-// Respect proxy headers (Fly.io / reverse proxies) - MUST be first in pipeline
-var forwardedHeadersOptions = new ForwardedHeadersOptions
+// Respect proxy headers (Fly.io / reverse proxies) - MUST be before UseHttpsRedirection
+app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-};
-// Trust Fly.io proxy
-forwardedHeadersOptions.KnownNetworks.Clear();
-forwardedHeadersOptions.KnownProxies.Clear();
-app.UseForwardedHeaders(forwardedHeadersOptions);
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+});
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
