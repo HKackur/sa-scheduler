@@ -21,7 +21,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor(options =>
 {
     // Disable circuit disconnect timeout for better reliability
-    options.DetailedErrors = true; // Temporarily enabled to diagnose white screen issue
+    options.DetailedErrors = false;
     options.DisconnectedCircuitMaxRetained = 100;
     options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
@@ -76,7 +76,10 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/login";
     // Required for HTTPS/proxy environments (Fly.io)
     options.Cookie.SameSite = SameSiteMode.Lax; // Use Lax for better compatibility
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Works with both HTTP and HTTPS
+    // CRITICAL: Use Always in production (HTTPS) to ensure cookies work with SignalR
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
+        ? CookieSecurePolicy.SameAsRequest 
+        : CookieSecurePolicy.Always;
     options.Cookie.HttpOnly = true;
     options.Cookie.Name = ".AspNetCore.Identity.Application";
     options.Cookie.IsEssential = true; // Required for authentication
