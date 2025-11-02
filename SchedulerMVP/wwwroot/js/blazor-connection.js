@@ -13,42 +13,8 @@ window.blazorConnection = {
                 window.blazorConnection.showConnectionError('Ett fel uppstod: ' + event.detail);
             });
             
-            // Monitor connection state changes
-            const originalReconnect = Blazor.reconnect;
-            Blazor.reconnect = function(retryCount) {
-                console.log('[Blazor] Attempting reconnect, attempt:', retryCount);
-                window.blazorConnection.connectionState = 'Reconnecting';
-                window.blazorConnection.updateConnectionStatus('Återansluter...');
-                
-                // Add timeout to prevent infinite reconnecting - reduced to 5 attempts
-                const maxRetries = 5;
-                if (retryCount > maxRetries) {
-                    console.error('[Blazor] Max reconnect attempts reached, reloading page to preserve authentication');
-                    // Reload page instead of infinite reconnect - cookies will persist
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
-                    return;
-                }
-                
-                return originalReconnect.apply(this, arguments);
-            };
-            
-            // Listen for successful reconnection
-            Blazor.addEventListener('reconnected', function() {
-                console.log('[Blazor] Successfully reconnected!');
-                window.blazorConnection.connectionState = 'Connected';
-                window.blazorConnection.updateConnectionStatus('Ansluten');
-            });
-            
-            // Listen for failed reconnection
-            Blazor.addEventListener('reconnectionfailed', function() {
-                console.error('[Blazor] Reconnection failed - reloading page to preserve authentication');
-                // Reload to preserve auth cookies and retry connection - faster reload
-                setTimeout(() => {
-                    window.location.reload();
-                }, 500);
-            });
+            // Monitor connection state changes - let Blazor handle reconnection naturally
+            // Don't interfere with reconnection as it can cause logout issues
         }
         
         // Monitor page visibility (detect when tab is hidden/visible)
@@ -56,20 +22,8 @@ window.blazorConnection = {
             if (document.hidden) {
                 console.log('[Blazor] Page hidden');
             } else {
-                console.log('[Blazor] Page visible, checking connection...');
-                // Force reconnect check when page becomes visible again
-                if (window.Blazor) {
-                    // Check if connection is still alive
-                    if (typeof Blazor.reconnect === 'function') {
-                        // Try to manually trigger reconnect if needed
-                        try {
-                            Blazor.reconnect(0);
-                            console.log('[Blazor] Manual reconnect triggered');
-                        } catch (e) {
-                            console.log('[Blazor] Auto-reconnect will handle it');
-                        }
-                    }
-                }
+                console.log('[Blazor] Page visible - Blazor will auto-reconnect if needed');
+                // Don't manually trigger reconnect - let Blazor handle it naturally
             }
         });
         

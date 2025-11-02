@@ -39,11 +39,9 @@
                         // Ensure we're using the correct base path
                         builder.withUrl('/_blazor', {
                             skipNegotiation: false,
-                            // Ensure cookies are sent for authentication during reconnect
-                            withCredentials: true,
                             transport: Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling
                         });
-                        console.log('[Blazor SignalR] SignalR configured with credentials');
+                        console.log('[Blazor SignalR] SignalR configured');
                     };
                 }
                 // Call the real start function
@@ -90,11 +88,8 @@
                             options.configureSignalR = function(builder) {
                                 console.log('[Blazor SignalR] Configuring SignalR with builder:', builder);
                                 try {
-                                    builder.withUrl('/_blazor', {
-                                        // Ensure cookies are sent for authentication during reconnect
-                                        withCredentials: true
-                                    });
-                                    console.log('[Blazor SignalR] SignalR URL set to /_blazor with credentials');
+                                    builder.withUrl('/_blazor');
+                                    console.log('[Blazor SignalR] SignalR URL set to /_blazor');
                                 } catch (e) {
                                     console.error('[Blazor SignalR] Error configuring SignalR:', e);
                                 }
