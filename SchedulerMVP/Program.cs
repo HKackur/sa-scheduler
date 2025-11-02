@@ -115,9 +115,10 @@ builder.Services.AddSignalR(options =>
     options.EnableDetailedErrors = true;
     options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
     options.StreamBufferCapacity = 10;
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+    // Increased timeouts to prevent disconnections during inactivity
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60); // Increased from 30 to 60
+    options.KeepAliveInterval = TimeSpan.FromSeconds(5); // More frequent keepalive (reduced from 15 to 5)
+    options.HandshakeTimeout = TimeSpan.FromSeconds(30); // Increased from 15 to 30
 });
 
 // Add DbContextFactory for thread-safe DbContext access in Blazor Server
@@ -208,8 +209,8 @@ var blazorHub = app.MapBlazorHub(options =>
     options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
                          Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
     
-    // Increase timeout for slow connections
-    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(30);
+    // Increased timeout to prevent disconnections during inactivity
+    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(60); // Increased from 30 to 60
 });
 
 app.MapFallbackToPage("/_Host");

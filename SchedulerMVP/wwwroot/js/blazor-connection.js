@@ -29,13 +29,37 @@ window.blazorConnection = {
                 console.log('[Blazor] Page hidden');
             } else {
                 console.log('[Blazor] Page visible, checking connection...');
-                // Try to reconnect if connection is lost
-                if (window.Blazor && typeof Blazor.reconnect === 'function') {
-                    // Blazor will auto-reconnect, but we can log it
-                    console.log('[Blazor] Page visible, connection should auto-reconnect');
+                // Force reconnect check when page becomes visible again
+                if (window.Blazor) {
+                    // Check if connection is still alive
+                    if (typeof Blazor.reconnect === 'function') {
+                        // Try to manually trigger reconnect if needed
+                        try {
+                            Blazor.reconnect(0);
+                            console.log('[Blazor] Manual reconnect triggered');
+                        } catch (e) {
+                            console.log('[Blazor] Auto-reconnect will handle it');
+                        }
+                    }
                 }
             }
         });
+        
+        // Periodic connection health check (every 30 seconds)
+        setInterval(function() {
+            if (window.Blazor && !document.hidden) {
+                // Check if connection is still alive by checking if Blazor is responsive
+                // This helps detect stale connections that haven't officially disconnected
+                try {
+                    // Just logging - Blazor's keepalive should handle actual reconnects
+                    if (window.blazorConnection.connectionState === 'Connected') {
+                        console.log('[Blazor] Connection health check: OK');
+                    }
+                } catch (e) {
+                    console.warn('[Blazor] Connection health check failed:', e);
+                }
+            }
+        }, 30000); // Check every 30 seconds
         
         // Log when Blazor starts
         window.addEventListener('load', function() {

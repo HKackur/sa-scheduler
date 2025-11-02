@@ -393,8 +393,22 @@
         }
     }
 
+    private Guid? _lastSelectedPlaceId;
+    private bool _isInitialized = false;
+    
     protected override async Task OnParametersSetAsync()
     {
+        // Only reload if the selected place actually changed to avoid unnecessary database calls
+        var currentPlaceId = UI.SelectedPlaceId;
+        if (_isInitialized && _lastSelectedPlaceId == currentPlaceId)
+        {
+            // No change, skip reload
+            return;
+        }
+        
+        _lastSelectedPlaceId = currentPlaceId;
+        _isInitialized = true;
+        
         // Load all places and build the new tree structure
         places = await PlaceService.GetPlacesAsync();
         placesLoaded = true;
@@ -411,9 +425,9 @@
                 await SelectPlace(firstPlace.Id);
             }
         }
-        else if (UI.SelectedPlaceId is Guid pid)
+        else if (UI.SelectedPlaceId is Guid pid && !expandedPlaces.Contains(pid))
         {
-            // Ensure the selected place is expanded and has its areas loaded
+            // Only reload if place is not already expanded
             await SelectPlace(pid);
         }
     }

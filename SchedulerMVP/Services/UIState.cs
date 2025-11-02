@@ -1,4 +1,5 @@
 using SchedulerMVP.Data.Entities;
+using System.Threading;
 
 namespace SchedulerMVP.Services;
 
@@ -6,6 +7,11 @@ public class UIState
 {
     public event Action? OnChanged;
     public event Action? OnTestOpenModal;
+    
+    // Debounce timer to prevent excessive event firing
+    private Timer? _debounceTimer;
+    private readonly object _debounceLock = new object();
+    private const int DebounceDelayMs = 150; // 150ms debounce delay
     
     private Guid? _selectedPlaceId;
     private Guid? _selectedAreaId;
@@ -110,9 +116,27 @@ public class UIState
         }
     }
     
-    public void RaiseChanged() => OnChanged?.Invoke();
+    public void RaiseChanged() => NotifyChangedDebounced();
     
-    public void NotifyChanged() => OnChanged?.Invoke();
+    public void NotifyChanged() => NotifyChangedDebounced();
+    
+    private void NotifyChangedDebounced()
+    {
+        lock (_debounceLock)
+        {
+            // Cancel previous timer
+            _debounceTimer?.Dispose();
+            
+            // Create new timer that will fire after debounce delay
+            _debounceTimer = new Timer(_ =>
+            {
+                lock (_debounceLock)
+                {
+                    OnChanged?.Invoke();
+                }
+            }, null, DebounceDelayMs, Timeout.Infinite);
+        }
+    }
     
     public void TestOpenModal()
     {
