@@ -20,8 +20,8 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor(options =>
 {
-    // Disable circuit disconnect timeout for better reliability
-    options.DetailedErrors = false;
+    // Enable detailed errors temporarily to diagnose production circuit crash
+    options.DetailedErrors = true;
     options.DisconnectedCircuitMaxRetained = 100;
     options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
