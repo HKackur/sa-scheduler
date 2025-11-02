@@ -189,7 +189,8 @@ app.UseAuthorization();
 app.MapRazorPages();
 
 // Configure Blazor Server SignalR hub with proper transport options for Fly.io
-app.MapBlazorHub(options =>
+// CRITICAL: Map Blazor hub BEFORE fallback route
+var blazorHub = app.MapBlazorHub(options =>
 {
     // Enable WebSockets and Long Polling for better reliability behind proxies
     options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
@@ -200,6 +201,16 @@ app.MapBlazorHub(options =>
 });
 
 app.MapFallbackToPage("/_Host");
+
+// Log when Blazor hub is accessed (must be after MapFallbackToPage)
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/_blazor"))
+    {
+        Console.WriteLine($"[SignalR] Blazor hub request: {context.Request.Path} - Method: {context.Request.Method}");
+    }
+    await next();
+});
 
 // --- Auth endpoints ---
 app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager) =>
