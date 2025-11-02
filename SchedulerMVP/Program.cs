@@ -210,12 +210,13 @@ app.MapRazorPages();
 // CRITICAL: Map Blazor hub BEFORE fallback route
 var blazorHub = app.MapBlazorHub(options =>
 {
-    // Enable WebSockets and Long Polling for better reliability behind proxies
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
-                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+    // Prioritize Long Polling for Fly.io - WebSocket has connection issues on their proxy
+    // Long Polling works more reliably behind proxies
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling |
+                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
     
-    // Standard timeout - longer timeout can delay reconnect detection
-    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(30);
+    // Increase timeout for Long Polling to prevent frequent reconnects
+    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(90);
 });
 
 app.MapFallbackToPage("/_Host");
