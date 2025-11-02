@@ -714,15 +714,23 @@
         }
     }
     
-    private EventHandler<LocationChangedEventArgs>? _locationChangedHandler;
-    private Action? _uiChangedHandler;
-
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        UI.OnChanged += StateHasChanged;
+        try
+        {
+            var user = HttpContextAccessor?.HttpContext?.User;
+            currentUserEmail = user?.FindFirstValue(ClaimTypes.Email) ?? user?.Identity?.Name;
+            isCurrentUserAdmin = user?.IsInRole("Admin") == true;
+        }
+        catch { }
+    }
+    
     public void Dispose()
     {
-        if (_locationChangedHandler != null)
-            Navigation.LocationChanged -= _locationChangedHandler;
-        if (_uiChangedHandler != null)
-            UI.OnChanged -= _uiChangedHandler;
+        Navigation.LocationChanged -= OnLocationChanged;
+        UI.OnChanged -= StateHasChanged;
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -755,42 +763,20 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Register event handlers once
-        _locationChangedHandler = OnLocationChanged;
-        Navigation.LocationChanged += _locationChangedHandler;
-        
-        // Register single UI.OnChanged handler that updates state and reloads data asynchronously
-        _uiChangedHandler = () => 
-        {
-            // Immediate state update
-            StateHasChanged();
-            
-            // Async data reloading (fire and forget)
-            _ = InvokeAsync(async () =>
+        UI.OnChanged += async () => 
+        { 
+            try
             {
-                try
-                {
-                    await ReloadTemplatesForPlace();
-                    await LoadSelectedAreaAsync();
-                    StateHasChanged();
-                }
-                catch (Exception ex)
-                {
-                    // Silently handle errors during state changes to prevent crashes
-                    // The component will refresh on next successful state change
-                }
-            });
+                await ReloadTemplatesForPlace();
+                await LoadSelectedAreaAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                // Silently handle errors during state changes to prevent crashes
+                // The component will refresh on next successful state change
+            }
         };
-        UI.OnChanged += _uiChangedHandler;
-        
-        // Load user info synchronously if available
-        try
-        {
-            var user = HttpContextAccessor?.HttpContext?.User;
-            currentUserEmail = user?.FindFirstValue(ClaimTypes.Email) ?? user?.Identity?.Name;
-            isCurrentUserAdmin = user?.IsInRole("Admin") == true;
-        }
-        catch { }
         try
         {
             await ReloadTemplatesForPlace();

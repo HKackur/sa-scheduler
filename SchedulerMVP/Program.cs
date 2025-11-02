@@ -21,7 +21,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor(options =>
 {
     // Disable circuit disconnect timeout for better reliability
-    options.DetailedErrors = false;
+    options.DetailedErrors = true; // Temporarily enabled to diagnose white screen issue
     options.DisconnectedCircuitMaxRetained = 100;
     options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
