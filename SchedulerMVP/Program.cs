@@ -80,6 +80,8 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.Name = ".AspNetCore.Identity.Application";
     options.Cookie.IsEssential = true; // Required for authentication
+    // Explicitly set max age to ensure cookie persists across app restarts
+    options.Cookie.MaxAge = TimeSpan.FromDays(30);
 });
 
 // Add AppDbContext
