@@ -159,6 +159,9 @@
         
         @* Right column: 20% width - matches .sa-right-new - Only view toggle *@
         <div class="tb-topbar-right">
+            @* Test button *@
+            <button class="tb-btn" @onclick="OpenTestModal" style="margin-right: 12px;">Test</button>
+            
             @if (!isAdminPage && !isGroupsManagePage)
             {
                 @* View toggle tabs *@
@@ -647,6 +650,36 @@
             border: none;
             outline: none;
         }
+        
+        /* Test Modal Styles */
+        .test-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9998;
+        }
+        
+        .test-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            z-index: 9999;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            min-width: 300px;
+        }
+        
+        .test-modal-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
     </style>
 </div>
 }
@@ -657,6 +690,18 @@
 <ScheduleTemplateCopyModal IsOpen="@copyOpen" OnClose="CloseCopy" OnCopied="AfterTemplateSaved" />
 <ScheduleTemplateDeleteModal IsOpen="@deleteOpen" OnClose="CloseDelete" OnDeleted="AfterTemplateSaved" />
 <Onboarding />
+
+@* Test Modal *@
+@if (testModalOpen)
+{
+    <div class="test-modal-overlay" @onclick="CloseTestModal"></div>
+    <div class="test-modal">
+        <div class="test-modal-content">
+            <h3 style="margin: 0 0 16px 0; font-size: 20px; font-weight: 600;">Yes...det funkar</h3>
+            <button class="tb-btn" @onclick="CloseTestModal">Stäng</button>
+        </div>
+    </div>
+}
 
 @code {
     private List<SchedulerMVP.Data.Entities.ScheduleTemplate> templates = new();
@@ -674,6 +719,9 @@
     private bool userMenuOpen;
     private string? currentUserEmail;
     private bool isCurrentUserAdmin;
+    
+    // Test modal
+    private bool testModalOpen = false;
     
     // SelectedArea for breadcrumb - cached and loaded async
     private Area? selectedAreaCache;
@@ -913,6 +961,9 @@
     private void OpenCreate() { menuOpen = false; createOpen = true; }
     private void OpenCopy() { menuOpen = false; copyOpen = true; }
     private void OpenDelete() { menuOpen = false; deleteOpen = true; }
+    
+    private void OpenTestModal() { testModalOpen = true; StateHasChanged(); }
+    private void CloseTestModal() { testModalOpen = false; StateHasChanged(); }
     private void Save() { menuOpen = false; }
 
     private Task CloseEdit() { editOpen = false; return Task.CompletedTask; }
