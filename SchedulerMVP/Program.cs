@@ -76,12 +76,17 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/login";
     // Required for HTTPS/proxy environments (Fly.io)
     options.Cookie.SameSite = SameSiteMode.Lax; // Use Lax for better compatibility
-    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Works with both HTTP and HTTPS
+    // Force Secure in production (Fly.io uses HTTPS) - this ensures cookies persist
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
+        ? CookieSecurePolicy.SameAsRequest 
+        : CookieSecurePolicy.Always; // Always Secure in production
     options.Cookie.HttpOnly = true;
     options.Cookie.Name = ".AspNetCore.Identity.Application";
     options.Cookie.IsEssential = true; // Required for authentication
     // Explicitly set max age to ensure cookie persists across app restarts
     options.Cookie.MaxAge = TimeSpan.FromDays(30);
+    // Ensure cookie path is root so it's accessible everywhere
+    options.Cookie.Path = "/";
 });
 
 // Add AppDbContext
