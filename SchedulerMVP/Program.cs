@@ -82,10 +82,12 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.SlidingExpiration = true;
     options.LoginPath = "/login";
     // Required for HTTPS/proxy environments (Fly.io)
-    // Use None for WebSocket connections to work properly, requires Secure
-    options.Cookie.SameSite = SameSiteMode.None; 
-    // Always Secure when using SameSite=None (required for WebSocket connections)
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    // Use Lax - works for most cases including SignalR Long Polling
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    // Use SameAsRequest to work with both HTTP (dev) and HTTPS (production)
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
+        ? CookieSecurePolicy.SameAsRequest 
+        : CookieSecurePolicy.Always;
     options.Cookie.HttpOnly = true;
     options.Cookie.Name = ".AspNetCore.Identity.Application";
     options.Cookie.IsEssential = true; // Required for authentication

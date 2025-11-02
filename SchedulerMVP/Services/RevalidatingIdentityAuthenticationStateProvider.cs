@@ -24,7 +24,7 @@ public class RevalidatingIdentityAuthenticationStateProvider : RevalidatingServe
         _options = optionsAccessor.Value;
     }
 
-    protected override TimeSpan RevalidationInterval => TimeSpan.FromMinutes(30); // Revalidate every 30 minutes
+    protected override TimeSpan RevalidationInterval => TimeSpan.FromMinutes(5); // Revalidate every 5 minutes - more frequent for better reconnect handling
 
     protected override async Task<bool> ValidateAuthenticationStateAsync(
         AuthenticationState authenticationState,
