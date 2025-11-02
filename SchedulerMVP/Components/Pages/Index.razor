@@ -1,8 +1,9 @@
 @page "/"
 @using SchedulerMVP.Data.Entities
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.EntityFrameworkCore.Infrastructure
 @inject SchedulerMVP.Services.UIState UI
-@inject SchedulerMVP.Data.AppDbContext Db
+@inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 
 <PageTitle>@UI.PageTitle</PageTitle>
 
@@ -92,7 +93,8 @@
             try
             {
                 // Load area and place data from database
-                selectedArea = await Db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+                await using var db = await DbFactory.CreateDbContextAsync();
+                selectedArea = await db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
                 // Console.WriteLine($"Loaded area: {selectedArea?.Name ?? "NULL"} (Id: {selectedArea?.Id})");
                 
                 if (selectedArea?.Place != null)
@@ -186,7 +188,8 @@
         try
         {
             // Load the calendar booking with all related data
-            calendarEditBooking = await Db.CalendarBookings
+            await using var db = await DbFactory.CreateDbContextAsync();
+            calendarEditBooking = await db.CalendarBookings
                 .Include(cb => cb.Area)
                     .ThenInclude(a => a.Place)
                 .Include(cb => cb.Group)

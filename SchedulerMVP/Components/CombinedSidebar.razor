@@ -311,26 +311,35 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Load places
-        places = await PlaceService.GetPlacesAsync();
-        placesLoaded = true;
-        await LoadFavoritesAsync();
-        await BuildPlaceTree();
-        
-        // Auto-select first place on first load if none selected (favoriter först)
-        if (UI.SelectedPlaceId == null && places.Count > 0)
+        try
         {
-            var fav = places.Where(p => favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).FirstOrDefault();
-            var firstPlace = fav ?? places.OrderBy(p => p.Name).FirstOrDefault();
-            if (firstPlace is not null)
+            // Load places
+            places = await PlaceService.GetPlacesAsync();
+            placesLoaded = true;
+            await LoadFavoritesAsync();
+            await BuildPlaceTree();
+            
+            // Auto-select first place on first load if none selected (favoriter först)
+            if (UI.SelectedPlaceId == null && places.Count > 0)
             {
-                await SelectPlace(firstPlace.Id);
+                var fav = places.Where(p => favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).FirstOrDefault();
+                var firstPlace = fav ?? places.OrderBy(p => p.Name).FirstOrDefault();
+                if (firstPlace is not null)
+                {
+                    await SelectPlace(firstPlace.Id);
+                }
+            }
+            else if (UI.SelectedPlaceId is Guid pid)
+            {
+                // Ensure the selected place is expanded and has its areas loaded
+                await SelectPlace(pid);
             }
         }
-        else if (UI.SelectedPlaceId is Guid pid)
+        catch (Exception ex)
         {
-            // Ensure the selected place is expanded and has its areas loaded
-            await SelectPlace(pid);
+            // Silently handle errors to prevent circuit crashes
+            places = new List<Place>();
+            placesLoaded = true;
         }
 
         // Load groups
