@@ -172,8 +172,8 @@ else
     }
     else if (stepIndex == 1)
     {
-        <!-- Position to the right of Platser & ytor sidebar -->
-        <div class="onb-card" style="top: 100px; right: 320px;">
+        <!-- Position to the left of Platser & ytor sidebar, but closer -->
+        <div class="onb-card" style="top: 100px; right: 350px;">
             <div class="onb-card-header">
                 <div class="onb-card-title">Börja med att skapa en plats</div>
                 <button class="onb-close" @onclick="SkipAndNext">✕</button>
@@ -223,8 +223,8 @@ else
 }
 
 <style>
-    /* Keep onboarding pop-cards behind app modals */
-    .onb-card{position:fixed; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 10px 24px rgba(16,24,40,.18); padding:10px; width:320px; z-index:3000}
+    /* Keep onboarding pop-cards behind app modals but allow clicks through areas without cards */
+    .onb-card{position:fixed; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 10px 24px rgba(16,24,40,.18); padding:10px; width:320px; z-index:1000}
     .onb-card-header{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px}
     .onb-card-title{font-size:14px; font-weight:600; color:#111827}
     .onb-close{border:none; background:transparent; cursor:pointer; color:#6b7280; font-size:14px}
