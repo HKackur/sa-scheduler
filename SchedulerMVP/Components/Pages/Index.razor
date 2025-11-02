@@ -2,6 +2,8 @@
 @using SchedulerMVP.Data.Entities
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.EntityFrameworkCore.Infrastructure
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Navigation
 @inject SchedulerMVP.Services.UIState UI
 @inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 
@@ -73,9 +75,9 @@
             // Query param trigger for opening place modal after hard navigation
             try
             {
-                var uri = new Uri(NavigationManager.Uri);
-                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-                if (string.Equals(query.Get("openPlace"), "1", StringComparison.Ordinal))
+                var uri = new Uri(Navigation.Uri);
+                var query = QueryHelpers.ParseQuery(uri.Query);
+                if (query.TryGetValue("openPlace", out var val) && val == "1")
                 {
                     UI.ShouldOpenPlaceCreateModal = true;
                     UI.RaiseChanged();
