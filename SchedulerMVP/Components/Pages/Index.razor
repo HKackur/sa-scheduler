@@ -70,6 +70,19 @@
     {
         if (firstRender)
         {
+            // Query param trigger for opening place modal after hard navigation
+            try
+            {
+                var uri = new Uri(NavigationManager.Uri);
+                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+                if (string.Equals(query.Get("openPlace"), "1", StringComparison.Ordinal))
+                {
+                    UI.ShouldOpenPlaceCreateModal = true;
+                    UI.RaiseChanged();
+                }
+            }
+            catch { }
+
             // Watch for modal open requests
             UI.OnChanged += async () =>
             {

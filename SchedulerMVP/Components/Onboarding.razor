@@ -193,7 +193,7 @@ else
             </div>
             <div class="onb-card-footer">
                 <div class="onb-steps">Steg 1 av @totalSteps</div>
-                <button class="tb-btn" style="height:30px;" @onclick="CreatePlaceAsync">Skapa plats</button>
+                <a href="/?openPlace=1" class="tb-btn" style="height:30px; text-decoration:none; display:inline-flex; align-items:center;">Skapa plats</a>
             </div>
         </div>
     }
@@ -210,7 +210,7 @@ else
             </div>
             <div class="onb-card-footer">
                 <div class="onb-steps">Steg 2 av @totalSteps</div>
-                <button class="tb-btn" style="height:30px;" @onclick="OpenGroupsManageAsync">Hantera grupper</button>
+                <a href="/grupper" class="tb-btn" style="height:30px; text-decoration:none; display:inline-flex; align-items:center;">Hantera grupper</a>
             </div>
         </div>
     }
