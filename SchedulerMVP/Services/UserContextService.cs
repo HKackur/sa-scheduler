@@ -32,10 +32,14 @@ public class UserContextService
         }
 
         // Fallback to AuthenticationStateProvider (works in Blazor Server SignalR circuits)
-        // Note: This is a synchronous method, so we can only use already-completed tasks
+        // In Blazor Server, we need to wait for the async task even in a sync method
+        // This is safe because GetAuthenticationStateAsync typically completes synchronously
+        // or very quickly when the authentication state is already loaded
         try
         {
             var authStateTask = _authenticationStateProvider.GetAuthenticationStateAsync();
+            
+            // If task is already completed, use the result immediately
             if (authStateTask.IsCompletedSuccessfully)
             {
                 var authState = authStateTask.Result;
@@ -43,10 +47,63 @@ public class UserContextService
                 if (!string.IsNullOrEmpty(userId))
                     return userId;
             }
+            else if (authStateTask.IsCompleted)
+            {
+                // Task completed but might have faulted
+                try
+                {
+                    var authState = authStateTask.Result;
+                    var userId = authState?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+                    if (!string.IsNullOrEmpty(userId))
+                        return userId;
+                }
+                catch { }
+            }
+            else
+            {
+                // Task not completed - in Blazor Server SignalR context, we might need to wait
+                // But blocking here could cause deadlocks, so we'll try to get result if possible
+                // This is a best-effort approach for sync methods in async contexts
+                if (authStateTask.IsCompleted)
+                {
+                    try
+                    {
+                        var authState = authStateTask.GetAwaiter().GetResult();
+                        var userId = authState?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+                        if (!string.IsNullOrEmpty(userId))
+                            return userId;
+                    }
+                    catch { }
+                }
+            }
         }
         catch { }
 
         return null;
+    }
+
+    public async Task<string?> GetCurrentUserIdAsync()
+    {
+        // Async version that properly awaits AuthenticationStateProvider
+        // Use this in async methods for reliable user ID retrieval
+        try
+        {
+            var httpUser = _httpContextAccessor.HttpContext?.User;
+            if (httpUser?.Identity?.IsAuthenticated == true)
+            {
+                var httpUserId = httpUser.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (!string.IsNullOrEmpty(httpUserId))
+                    return httpUserId;
+            }
+
+            var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
+            var authUserId = authState?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            return authUserId;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<bool> IsAdminAsync()
@@ -84,7 +141,7 @@ public class UserContextService
 
     public async Task<bool> CanAccessUserDataAsync(string targetUserId)
     {
-        var currentUserId = GetCurrentUserId();
+        var currentUserId = await GetCurrentUserIdAsync();
         if (string.IsNullOrEmpty(currentUserId))
             return false;
 

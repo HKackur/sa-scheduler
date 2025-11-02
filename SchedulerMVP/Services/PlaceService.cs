@@ -19,7 +19,7 @@ public class PlaceService : IPlaceService
     public async Task<List<Place>> GetPlacesAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var userId = _userContext.GetCurrentUserId();
+        var userId = await _userContext.GetCurrentUserIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
 
         var query = db.Places.AsQueryable();
@@ -39,7 +39,7 @@ public class PlaceService : IPlaceService
         var place = await db.Places.FirstOrDefaultAsync(p => p.Id == id);
         if (place == null) return null;
 
-        var userId = _userContext.GetCurrentUserId();
+        var userId = await _userContext.GetCurrentUserIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
 
         // Check access rights
@@ -57,7 +57,7 @@ public class PlaceService : IPlaceService
         if (place.Id == Guid.Empty) place.Id = Guid.NewGuid();
 
         // Set UserId for the current user
-        var userId = _userContext.GetCurrentUserId();
+        var userId = await _userContext.GetCurrentUserIdAsync();
         if (!string.IsNullOrEmpty(userId))
         {
             place.UserId = userId;
@@ -75,7 +75,7 @@ public class PlaceService : IPlaceService
         var existingPlace = await db.Places.FindAsync(place.Id);
         if (existingPlace == null) throw new InvalidOperationException("Place not found");
 
-        var userId = _userContext.GetCurrentUserId();
+        var userId = await _userContext.GetCurrentUserIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
 
         if (!isAdmin && !string.IsNullOrEmpty(userId) && existingPlace.UserId != userId && existingPlace.UserId != null)
@@ -98,7 +98,7 @@ public class PlaceService : IPlaceService
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
         // Verify access
-        var userId = _userContext.GetCurrentUserId();
+        var userId = await _userContext.GetCurrentUserIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
 
         // Delete all related data in correct order due to foreign key constraints

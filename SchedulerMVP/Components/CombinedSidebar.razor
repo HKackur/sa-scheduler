@@ -346,7 +346,7 @@
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            var userId = UserContext.GetCurrentUserId();
+            var userId = await UserContext.GetCurrentUserIdAsync();
             var isAdmin = await UserContext.IsAdminAsync();
             var gq = db.Groups.AsQueryable();
             if (!isAdmin && !string.IsNullOrEmpty(userId))
