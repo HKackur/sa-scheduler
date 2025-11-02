@@ -435,8 +435,15 @@
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            // Show ALL groups - no user filtering (users can create bookings for any group)
-            Groups = await db.Groups.OrderBy(g => g.Name).ToListAsync();
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var isAdmin = await UserContext.IsAdminAsync();
+            var query = db.Groups.AsQueryable();
+            // Filter by user - only show groups created by the current user (unless admin)
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                query = query.Where(g => g.UserId == userId);
+            }
+            Groups = await query.OrderBy(g => g.Name).ToListAsync();
         }
         catch (Exception ex)
         {
