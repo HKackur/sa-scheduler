@@ -20,14 +20,14 @@ window.blazorConnection = {
                 window.blazorConnection.connectionState = 'Reconnecting';
                 window.blazorConnection.updateConnectionStatus('Återansluter...');
                 
-                // Add timeout to prevent infinite reconnecting
-                const maxRetries = 10;
+                // Add timeout to prevent infinite reconnecting - reduced to 5 attempts
+                const maxRetries = 5;
                 if (retryCount > maxRetries) {
                     console.error('[Blazor] Max reconnect attempts reached, reloading page to preserve authentication');
                     // Reload page instead of infinite reconnect - cookies will persist
                     setTimeout(() => {
                         window.location.reload();
-                    }, 2000);
+                    }, 1000);
                     return;
                 }
                 
@@ -44,10 +44,10 @@ window.blazorConnection = {
             // Listen for failed reconnection
             Blazor.addEventListener('reconnectionfailed', function() {
                 console.error('[Blazor] Reconnection failed - reloading page to preserve authentication');
-                // Reload to preserve auth cookies and retry connection
+                // Reload to preserve auth cookies and retry connection - faster reload
                 setTimeout(() => {
                     window.location.reload();
-                }, 2000);
+                }, 500);
             });
         }
         

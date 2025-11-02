@@ -11,7 +11,7 @@ public class UIState
     // Debounce timer to prevent excessive event firing
     private Timer? _debounceTimer;
     private readonly object _debounceLock = new object();
-    private const int DebounceDelayMs = 150; // 150ms debounce delay
+    private const int DebounceDelayMs = 100; // Reduced from 150ms to 100ms for better responsiveness
     
     private Guid? _selectedPlaceId;
     private Guid? _selectedAreaId;

@@ -23,9 +23,8 @@ builder.Services.AddServerSideBlazor(options =>
     // Enable detailed errors temporarily to diagnose production circuit crash
     options.DetailedErrors = true;
     options.DisconnectedCircuitMaxRetained = 100;
-    // Increased retention period to allow more time for reconnection (15 minutes)
-    // This prevents users from being logged out when connection is temporarily lost
-    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(15);
+    // Standard retention period (3 minutes) - longer retention can cause memory issues
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
     options.MaxBufferedUnacknowledgedRenderBatches = 20;
 });
@@ -122,10 +121,10 @@ builder.Services.AddSignalR(options =>
     options.EnableDetailedErrors = true;
     options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
     options.StreamBufferCapacity = 10;
-    // Increased timeouts to prevent disconnections during inactivity
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60); // Increased from 30 to 60
-    options.KeepAliveInterval = TimeSpan.FromSeconds(5); // More frequent keepalive (reduced from 15 to 5)
-    options.HandshakeTimeout = TimeSpan.FromSeconds(30); // Increased from 15 to 30
+    // Use standard timeouts - aggressive keepalive can cause connection issues
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15); // Standard 15 seconds
+    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
 });
 
 // Add DbContextFactory for thread-safe DbContext access in Blazor Server
@@ -216,8 +215,8 @@ var blazorHub = app.MapBlazorHub(options =>
     options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
                          Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
     
-    // Increased timeout to prevent disconnections during inactivity
-    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(60); // Increased from 30 to 60
+    // Standard timeout - longer timeout can delay reconnect detection
+    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(30);
 });
 
 app.MapFallbackToPage("/_Host");
