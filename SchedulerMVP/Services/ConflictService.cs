@@ -5,16 +5,17 @@ using SchedulerMVP.Services.Models;
 
 namespace SchedulerMVP.Services;
 
-public class ConflictService(AppDbContext db, ILogger<ConflictService> _logger) : IConflictService
+public class ConflictService(IDbContextFactory<AppDbContext> dbFactory, ILogger<ConflictService> _logger) : IConflictService
 {
     public async Task<List<ConflictDto>> CheckTemplateConflictsAsync(Guid templateId, IEnumerable<BookingCandidate> candidateBookings)
     {
+        await using var db = await dbFactory.CreateDbContextAsync();
         var candidates = candidateBookings.ToList();
         var conflicts = new List<ConflictDto>();
 
         foreach (var candidate in candidates)
         {
-            var areaLeafIds = await GetLeafIdsForArea(candidate.AreaId);
+            var areaLeafIds = await GetLeafIdsForArea(db, candidate.AreaId);
             var overlapping = await db.BookingTemplates
                 .Include(b => b.Area)
                 .Include(b => b.Group)
@@ -24,7 +25,7 @@ public class ConflictService(AppDbContext db, ILogger<ConflictService> _logger) 
 
             foreach (var other in overlapping)
             {
-                var otherLeafIds = await GetLeafIdsForArea(other.AreaId);
+                var otherLeafIds = await GetLeafIdsForArea(db, other.AreaId);
                 if (areaLeafIds.Overlaps(otherLeafIds))
                 {
                     conflicts.Add(new ConflictDto(
@@ -38,7 +39,8 @@ public class ConflictService(AppDbContext db, ILogger<ConflictService> _logger) 
 
     public async Task<List<ConflictDto>> CheckAreaConflictsAsync(Guid areaId, int dayOfWeek, int startMin, int endMin, Guid? excludeBookingId = null, Guid? templateId = null)
     {
-        var leafIds = await GetLeafIdsForArea(areaId);
+        await using var db = await dbFactory.CreateDbContextAsync();
+        var leafIds = await GetLeafIdsForArea(db, areaId);
         var query = db.BookingTemplates
             .Include(b => b.Area)
             .Include(b => b.Group)
@@ -61,7 +63,7 @@ public class ConflictService(AppDbContext db, ILogger<ConflictService> _logger) 
 
         foreach (var other in overlapping)
         {
-            var otherLeafIds = await GetLeafIdsForArea(other.AreaId);
+            var otherLeafIds = await GetLeafIdsForArea(db, other.AreaId);
             if (leafIds.Overlaps(otherLeafIds))
             {
                 conflicts.Add(new ConflictDto(other.Group?.Name ?? "", other.Area?.Name ?? "", other.DayOfWeek, other.StartMin, other.EndMin));
@@ -73,9 +75,10 @@ public class ConflictService(AppDbContext db, ILogger<ConflictService> _logger) 
 
     public async Task<List<ConflictDto>> CheckCalendarConflictsAsync(Guid areaId, DateOnly date, int startMin, int endMin, Guid? excludeBookingId = null)
     {
+        await using var db = await dbFactory.CreateDbContextAsync();
         // Check ONLY against calendar bookings on the same date
         // Templates should NOT conflict with calendar bookings
-        var leafIds = await GetLeafIdsForArea(areaId);
+        var leafIds = await GetLeafIdsForArea(db, areaId);
 
         // Calendar bookings (same date only)
         var calQuery = db.CalendarBookings
@@ -92,7 +95,7 @@ public class ConflictService(AppDbContext db, ILogger<ConflictService> _logger) 
         var conflicts = new List<ConflictDto>();
         foreach (var other in calOverlaps)
         {
-            var otherLeafIds = await GetLeafIdsForArea(other.AreaId);
+            var otherLeafIds = await GetLeafIdsForArea(db, other.AreaId);
             if (leafIds.Overlaps(otherLeafIds))
             {
                 conflicts.Add(new ConflictDto(other.Group?.Name ?? "", other.Area?.Name ?? "", (int)date.DayOfWeek switch { 0 => 7, _ => (int)date.DayOfWeek }, other.StartMin, other.EndMin));
@@ -102,7 +105,7 @@ public class ConflictService(AppDbContext db, ILogger<ConflictService> _logger) 
         return conflicts;
     }
 
-    private async Task<HashSet<Guid>> GetLeafIdsForArea(Guid areaId)
+    private async Task<HashSet<Guid>> GetLeafIdsForArea(AppDbContext db, Guid areaId)
     {
         var ids = await db.AreaLeafs
             .Where(al => al.AreaId == areaId)
