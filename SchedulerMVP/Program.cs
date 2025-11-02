@@ -186,6 +186,17 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Log SignalR requests BEFORE mapping routes
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/_blazor"))
+    {
+        Console.WriteLine($"[SignalR] Blazor hub request: {context.Request.Path} - Method: {context.Request.Method}");
+        Console.WriteLine($"[SignalR] Headers: Connection={context.Request.Headers["Connection"]}, Upgrade={context.Request.Headers["Upgrade"]}");
+    }
+    await next();
+});
+
 app.MapRazorPages();
 
 // Configure Blazor Server SignalR hub with proper transport options for Fly.io
@@ -201,16 +212,6 @@ var blazorHub = app.MapBlazorHub(options =>
 });
 
 app.MapFallbackToPage("/_Host");
-
-// Log when Blazor hub is accessed (must be after MapFallbackToPage)
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/_blazor"))
-    {
-        Console.WriteLine($"[SignalR] Blazor hub request: {context.Request.Path} - Method: {context.Request.Method}");
-    }
-    await next();
-});
 
 // --- Auth endpoints ---
 app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager) =>

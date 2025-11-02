@@ -20,6 +20,36 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         base.OnModelCreating(modelBuilder);
 
+        // CRITICAL FIX: Configure Guid properties to work with TEXT columns in PostgreSQL
+        // This allows reading TEXT columns as Guid (for compatibility with SQLite migrations)
+        if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            // Configure all Guid properties to use TEXT storage and string conversion
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                foreach (var property in entityType.GetProperties())
+                {
+                    if (property.ClrType == typeof(Guid) || property.ClrType == typeof(Guid?))
+                    {
+                        property.SetColumnType("text");
+                        // Use value converter to handle TEXT -> Guid conversion
+                        if (property.ClrType == typeof(Guid))
+                        {
+                            property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<Guid, string>(
+                                v => v.ToString(),
+                                v => Guid.Parse(v)));
+                        }
+                        else // Guid?
+                        {
+                            property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<Guid?, string>(
+                                v => v.HasValue ? v.Value.ToString() : null!,
+                                v => string.IsNullOrEmpty(v) ? null : Guid.Parse(v)));
+                        }
+                    }
+                }
+            }
+        }
+
         modelBuilder.Entity<AreaLeaf>()
             .HasKey(al => new { al.AreaId, al.LeafId });
 
