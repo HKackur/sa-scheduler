@@ -130,12 +130,19 @@
 
     private async Task CreateType()
     {
-        var name = (newTypeName ?? string.Empty).Trim();
-        if (string.IsNullOrEmpty(name)) return;
-        await GroupTypes.CreateAsync(name);
-        newTypeName = string.Empty;
-        await LoadData();
-        StateHasChanged();
+        try
+        {
+            var name = (newTypeName ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(name)) return;
+            await GroupTypes.CreateAsync(name);
+            newTypeName = string.Empty;
+            await LoadData();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GroupsManage] Error creating type: {ex.Message}");
+        }
     }
 
     private void EditType(SchedulerMVP.Data.Entities.GroupType t)
@@ -145,19 +152,35 @@
     }
     private async Task SaveType()
     {
-        if (editingTypeId is Guid id)
+        try
         {
-            await GroupTypes.UpdateAsync(id, editTypeName);
-            editingTypeId = null;
-            editTypeName = string.Empty;
-            await LoadData();
+            if (editingTypeId is Guid id)
+            {
+                await GroupTypes.UpdateAsync(id, editTypeName);
+                editingTypeId = null;
+                editTypeName = string.Empty;
+                await LoadData();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GroupsManage] Error saving type: {ex.Message}");
         }
     }
     private void CancelTypeEdit() { editingTypeId = null; editTypeName = string.Empty; }
     private async Task DeleteType(Guid id)
     {
-        await GroupTypes.DeleteAsync(id);
-        await LoadData();
+        try
+        {
+            await GroupTypes.DeleteAsync(id);
+            await LoadData();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GroupsManage] Error deleting type: {ex.Message}");
+        }
     }
 
     private async Task CreateGroup()
@@ -191,29 +214,45 @@
     }
     private async Task SaveGroup()
     {
-        if (editingGroupId is Guid id)
+        try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var g = await db.Groups.FindAsync(id);
-            if (g != null)
+            if (editingGroupId is Guid id)
             {
-                g.Name = editGroupName;
-                g.GroupType = types.FirstOrDefault(x => x.Id.ToString() == editGroupTypeId)?.Name;
-                await db.SaveChangesAsync();
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var g = await db.Groups.FindAsync(id);
+                if (g != null)
+                {
+                    g.Name = editGroupName;
+                    g.GroupType = types.FirstOrDefault(x => x.Id.ToString() == editGroupTypeId)?.Name;
+                    await db.SaveChangesAsync();
+                }
+                editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null;
+                await LoadData();
+                StateHasChanged();
             }
-            editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null;
-            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GroupsManage] Error saving group: {ex.Message}");
         }
     }
     private void CancelGroupEdit(){ editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null; }
     private async Task DeleteGroup(Guid id)
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var g = await db.Groups.FindAsync(id);
-        if (g == null) return;
-        db.Groups.Remove(g);
-        await db.SaveChangesAsync();
-        await LoadData();
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var g = await db.Groups.FindAsync(id);
+            if (g == null) return;
+            db.Groups.Remove(g);
+            await db.SaveChangesAsync();
+            await LoadData();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GroupsManage] Error deleting group: {ex.Message}");
+        }
     }
 }
 
