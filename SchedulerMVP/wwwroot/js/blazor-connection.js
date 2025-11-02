@@ -19,8 +19,36 @@ window.blazorConnection = {
                 console.log('[Blazor] Attempting reconnect, attempt:', retryCount);
                 window.blazorConnection.connectionState = 'Reconnecting';
                 window.blazorConnection.updateConnectionStatus('Återansluter...');
+                
+                // Add timeout to prevent infinite reconnecting
+                const maxRetries = 10;
+                if (retryCount > maxRetries) {
+                    console.error('[Blazor] Max reconnect attempts reached, reloading page to preserve authentication');
+                    // Reload page instead of infinite reconnect - cookies will persist
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    return;
+                }
+                
                 return originalReconnect.apply(this, arguments);
             };
+            
+            // Listen for successful reconnection
+            Blazor.addEventListener('reconnected', function() {
+                console.log('[Blazor] Successfully reconnected!');
+                window.blazorConnection.connectionState = 'Connected';
+                window.blazorConnection.updateConnectionStatus('Ansluten');
+            });
+            
+            // Listen for failed reconnection
+            Blazor.addEventListener('reconnectionfailed', function() {
+                console.error('[Blazor] Reconnection failed - reloading page to preserve authentication');
+                // Reload to preserve auth cookies and retry connection
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            });
         }
         
         // Monitor page visibility (detect when tab is hidden/visible)

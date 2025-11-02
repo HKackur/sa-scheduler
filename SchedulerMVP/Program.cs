@@ -23,7 +23,9 @@ builder.Services.AddServerSideBlazor(options =>
     // Enable detailed errors temporarily to diagnose production circuit crash
     options.DetailedErrors = true;
     options.DisconnectedCircuitMaxRetained = 100;
-    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
+    // Increased retention period to allow more time for reconnection (15 minutes)
+    // This prevents users from being logged out when connection is temporarily lost
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(15);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
     options.MaxBufferedUnacknowledgedRenderBatches = 20;
 });
