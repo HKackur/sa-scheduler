@@ -72,9 +72,6 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// TEMPORARILY REMOVED: RevalidatingIdentityAuthenticationStateProvider to diagnose connection issues
-// Using default ServerAuthenticationStateProvider to test if custom provider causes WebSocket disconnects
-// builder.Services.AddScoped<AuthenticationStateProvider, RevalidatingIdentityAuthenticationStateProvider>();
 
 // Persist login for 30 days
 builder.Services.ConfigureApplicationCookie(options =>
@@ -199,36 +196,18 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 
-// CRITICAL: Map Blazor hub BEFORE authentication middleware
-// SignalR connections must be allowed to establish without auth blocking
-// Authentication will still be enforced for the actual Blazor circuit operations
-var blazorHub = app.MapBlazorHub(options =>
-{
-    // Prioritize Long Polling for Fly.io - WebSocket has connection issues on their proxy
-    // Long Polling works more reliably behind proxies
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling |
-                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
-    
-    // Increase timeout for Long Polling to prevent frequent reconnects
-    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(90);
-}).AllowAnonymous(); // Allow SignalR connection establishment without auth requirement
-
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Log SignalR requests AFTER authentication (for logging auth status)
-app.Use(async (context, next) =>
-{
-    if (context.Request.Path.StartsWithSegments("/_blazor"))
-    {
-        Console.WriteLine($"[SignalR] Blazor hub request: {context.Request.Path} - Method: {context.Request.Method}");
-        Console.WriteLine($"[SignalR] Headers: Connection={context.Request.Headers["Connection"]}, Upgrade={context.Request.Headers["Upgrade"]}");
-        Console.WriteLine($"[SignalR] User authenticated: {context.User?.Identity?.IsAuthenticated ?? false}");
-    }
-    await next();
-});
-
 app.MapRazorPages();
+
+// Configure Blazor Server SignalR hub with proper transport options for Fly.io
+app.MapBlazorHub(options =>
+{
+    // Enable WebSockets and Long Polling for better reliability behind proxies
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+});
 
 app.MapFallbackToPage("/_Host");
 
