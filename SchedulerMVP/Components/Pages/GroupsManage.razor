@@ -111,13 +111,21 @@
 
     private async Task LoadData()
     {
-        types = await GroupTypes.GetTypesAsync();
-        var userId = UserContext.GetCurrentUserId();
-        var isAdmin = await UserContext.IsAdminAsync();
-        await using var db = await DbFactory.CreateDbContextAsync();
-        var gq = db.Groups.AsQueryable();
-        if (!isAdmin && !string.IsNullOrEmpty(userId)) gq = gq.Where(x => x.UserId == userId);
-        groups = await gq.OrderBy(x => x.Name).ToListAsync();
+        try
+        {
+            types = await GroupTypes.GetTypesAsync();
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var isAdmin = await UserContext.IsAdminAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var gq = db.Groups.AsQueryable();
+            if (!isAdmin && !string.IsNullOrEmpty(userId)) gq = gq.Where(x => x.UserId == userId);
+            groups = await gq.OrderBy(x => x.Name).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GroupsManage] Error loading data: {ex.Message}");
+            // Keep existing data on error
+        }
     }
 
     private async Task CreateType()
@@ -154,17 +162,25 @@
 
     private async Task CreateGroup()
     {
-        var name = (newGroupName ?? string.Empty).Trim();
-        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(selectedTypeId)) return;
-        var type = types.FirstOrDefault(x => x.Id.ToString() == selectedTypeId);
-        if (type == null) return;
-        var userId = UserContext.GetCurrentUserId();
-        var g = new SchedulerMVP.Data.Entities.Group { Id = Guid.NewGuid(), Name = name, GroupType = type.Name, UserId = userId };
-        await using var db = await DbFactory.CreateDbContextAsync();
-        db.Groups.Add(g);
-        await db.SaveChangesAsync();
-        newGroupName = string.Empty; selectedTypeId = null;
-        await LoadData();
+        try
+        {
+            var name = (newGroupName ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(selectedTypeId)) return;
+            var type = types.FirstOrDefault(x => x.Id.ToString() == selectedTypeId);
+            if (type == null) return;
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var g = new SchedulerMVP.Data.Entities.Group { Id = Guid.NewGuid(), Name = name, GroupType = type.Name, UserId = userId };
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Groups.Add(g);
+            await db.SaveChangesAsync();
+            newGroupName = string.Empty; selectedTypeId = null;
+            await LoadData();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[GroupsManage] Error creating group: {ex.Message}");
+        }
     }
 
     private void EditGroup(SchedulerMVP.Data.Entities.Group g)
