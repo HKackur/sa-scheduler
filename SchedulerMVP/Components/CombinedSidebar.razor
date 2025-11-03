@@ -311,6 +311,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // CRITICAL: Check for place modal open request FIRST, before loading data
+        if (UI.ShouldOpenPlaceCreateModal)
+        {
+            UI.ShouldOpenPlaceCreateModal = false;
+            placeOpen = true;
+            StateHasChanged();
+            // Continue with normal load
+        }
+        
         try
         {
             // Load places

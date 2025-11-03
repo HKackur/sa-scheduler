@@ -71,6 +71,19 @@
     protected override void OnInitialized()
     {
         UI.OnChanged += StateHasChanged;
+        
+        // CRITICAL: Check query param early to ensure modal opens on navigation
+        try
+        {
+            var uri = new Uri(Navigation.Uri);
+            var query = QueryHelpers.ParseQuery(uri.Query);
+            if (query.TryGetValue("openPlace", out var val) && val == "1")
+            {
+                UI.ShouldOpenPlaceCreateModal = true;
+                UI.RaiseChanged();
+            }
+        }
+        catch { }
     }
     
     protected override async Task OnAfterRenderAsync(bool firstRender)
