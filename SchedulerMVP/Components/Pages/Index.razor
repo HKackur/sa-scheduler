@@ -176,10 +176,14 @@
         prefilledStartTime = null;
         prefilledEndTime = null;
         
-        StateHasChanged();
-        
-        // Notify WeekGrid to refresh
+        // CRITICAL: Trigger immediate UI refresh for WeekGrid
+        // This ensures new bookings appear without page reload
         UI.RaiseChanged();
+        
+        // Small delay to ensure database transaction is committed
+        await Task.Delay(100);
+        
+        StateHasChanged();
     }
     
     private void CloseCopyTemplateModal()

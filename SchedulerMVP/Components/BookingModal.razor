@@ -870,7 +870,9 @@
             }
 
             var result = await db.SaveChangesAsync();
-            // Console.WriteLine($"Database save result: {result} rows affected");
+            
+            // CRITICAL: Ensure database transaction is committed before triggering UI refresh
+            await Task.Yield(); // Allow database transaction to complete
 
             // Navigate to the selected place and area if different from current
             if (SelectedPlaceId.HasValue && SelectedPlaceId.Value != SelectedPlace?.Id)
@@ -884,9 +886,11 @@
                 UI.SelectedAreaId = targetArea.Id;
             }
             
+            // CRITICAL: Trigger UI refresh BEFORE closing modal to ensure new booking appears
+            UI.RaiseChanged();
+            
             await OnSave.InvokeAsync();
             await OnClose.InvokeAsync();
-            // Console.WriteLine("=== SAVE BOOKING SUCCESS ===");
         }
         catch (Exception ex)
         {

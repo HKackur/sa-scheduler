@@ -325,6 +325,7 @@
             try
             {
                 await LoadDataAsync();
+                await InvokeAsync(StateHasChanged); // CRITICAL: Force re-render after data reload
             }
             catch (Exception ex)
             {
@@ -386,14 +387,14 @@
                 selectedPlace = null;
             }
 
-            var currentUserId = UserContext.GetCurrentUserId();
+            // CRITICAL: Use async version to avoid blocking and improve performance
+            var currentUserId = await UserContext.GetCurrentUserIdAsync();
             var currentIsAdmin = await UserContext.IsAdminAsync();
 
             if (!UI.IsCalendarViewMode)
             {
                 // Veckoschema: load templates for selected schedule template with ghost logic
-                Console.WriteLine($"WeekGrid LoadDataAsync - UI.IsGroupFilterActive: {UI.IsGroupFilterActive}");
-                Console.WriteLine($"WeekGrid LoadDataAsync - UI.FilteredGroupId: {UI.FilteredGroupId}");
+                // Removed Console.WriteLine for performance
                 if (UI.IsGroupFilterActive)
                 {
                     // Gruppfiltrering i veckoschema: visa alla mallar för den valda gruppen i aktuell veckomall
