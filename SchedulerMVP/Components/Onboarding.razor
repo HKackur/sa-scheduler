@@ -34,12 +34,12 @@
             try
             {
                 await using var db = await DbFactory.CreateDbContextAsync();
-                var userId = await UserContext.GetCurrentUserIdAsync();
+                var authUserId = await UserContext.GetCurrentUserIdAsync();
                 var isAdmin = await UserContext.IsAdminAsync();
                 var groupsQuery = db.Groups.AsQueryable();
-                if (!isAdmin && !string.IsNullOrEmpty(userId))
+                if (!isAdmin && !string.IsNullOrEmpty(authUserId))
                 {
-                    groupsQuery = groupsQuery.Where(g => g.UserId == userId);
+                    groupsQuery = groupsQuery.Where(g => g.UserId == authUserId);
                 }
                 groupsCount = await groupsQuery.CountAsync();
             }
@@ -163,7 +163,16 @@
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
-        if (!isDisposed) InvokeAsync(StateHasChanged);
+        if (!isDisposed)
+        {
+            // CRITICAL: Hide modal when on /grupper page or if groups already exist
+            var path = e.Location.TrimEnd('/').ToLowerInvariant();
+            if (path == "/grupper")
+            {
+                isOpen = false;
+            }
+            InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task CompleteCurrentAsync()
