@@ -1,8 +1,11 @@
+@using Microsoft.EntityFrameworkCore
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.UserContextService UserContext
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject SchedulerMVP.Services.IPlaceService PlaceService
+@inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
+@inject SchedulerMVP.Services.UserContextService UserContextForGroups
 
 @code {
     private bool isOpen;
@@ -27,6 +30,21 @@
             }
             catch { places = new List<SchedulerMVP.Data.Entities.Place>(); }
             
+            // CRITICAL: Check if groups exist - if they do, don't show step 2
+            try
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var userId = await UserContext.GetCurrentUserIdAsync();
+                var isAdmin = await UserContext.IsAdminAsync();
+                var groupsQuery = db.Groups.AsQueryable();
+                if (!isAdmin && !string.IsNullOrEmpty(userId))
+                {
+                    groupsQuery = groupsQuery.Where(g => g.UserId == userId);
+                }
+                groupsCount = await groupsQuery.CountAsync();
+            }
+            catch { groupsCount = 0; }
+            
             var saved = await JS.InvokeAsync<string>("localStorage.getItem", userKey);
             if (string.IsNullOrWhiteSpace(saved))
             {
@@ -42,11 +60,21 @@
                     // CRITICAL: If places exist, skip step 1 (place creation)
                     if (places.Count > 0 && lastDone == 0)
                     {
-                        // User has places but hasn't completed intro - show step 2 instead
-                        isOpen = true;
-                        stepIndex = 2;
-                        // Mark step 1 as done
-                        await JS.InvokeVoidAsync("localStorage.setItem", userKey, "1");
+                        // User has places but hasn't completed intro - check groups too
+                        if (groupsCount > 0)
+                        {
+                            // Has both places and groups - show step 3
+                            isOpen = true;
+                            stepIndex = 3;
+                            await JS.InvokeVoidAsync("localStorage.setItem", userKey, "2");
+                        }
+                        else
+                        {
+                            // Has places but no groups - show step 2
+                            isOpen = true;
+                            stepIndex = 2;
+                            await JS.InvokeVoidAsync("localStorage.setItem", userKey, "1");
+                        }
                     }
                     else if (lastDone < totalSteps)
                     {
@@ -55,8 +83,22 @@
                         // CRITICAL: If showing step 1 but places exist, skip to step 2
                         if (stepIndex == 1 && places.Count > 0)
                         {
-                            stepIndex = 2;
-                            await JS.InvokeVoidAsync("localStorage.setItem", userKey, "1");
+                            if (groupsCount > 0)
+                            {
+                                stepIndex = 3;
+                                await JS.InvokeVoidAsync("localStorage.setItem", userKey, "2");
+                            }
+                            else
+                            {
+                                stepIndex = 2;
+                                await JS.InvokeVoidAsync("localStorage.setItem", userKey, "1");
+                            }
+                        }
+                        // CRITICAL: If showing step 2 but groups exist, skip to step 3
+                        else if (stepIndex == 2 && groupsCount > 0)
+                        {
+                            stepIndex = 3;
+                            await JS.InvokeVoidAsync("localStorage.setItem", userKey, "2");
                         }
                     }
                 }
@@ -87,6 +129,34 @@
             {
                 places = newPlaces;
             }
+            
+            // Also check groups count
+            try
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var userId = await UserContext.GetCurrentUserIdAsync();
+                var isAdmin = await UserContext.IsAdminAsync();
+                var groupsQuery = db.Groups.AsQueryable();
+                if (!isAdmin && !string.IsNullOrEmpty(userId))
+                {
+                    groupsQuery = groupsQuery.Where(g => g.UserId == userId);
+                }
+                var newGroupsCount = await groupsQuery.CountAsync();
+                if (newGroupsCount > 0 && groupsCount == 0)
+                {
+                    // Groups were just created - if we're on step 2, skip to step 3
+                    groupsCount = newGroupsCount;
+                    if (stepIndex == 2 && isOpen)
+                    {
+                        await CompleteCurrentAsync();
+                    }
+                }
+                else
+                {
+                    groupsCount = newGroupsCount;
+                }
+            }
+            catch { }
         }
         catch { }
     }
@@ -174,7 +244,16 @@
     {
         try
         {
-            await CompleteCurrentAsync();
+            // CRITICAL: Close modal before navigating - don't show on /grupper page
+            isOpen = false;
+            StateHasChanged();
+            
+            // Mark step as complete
+            if (!string.IsNullOrEmpty(userKey))
+            {
+                await JS.InvokeVoidAsync("localStorage.setItem", userKey, stepIndex.ToString());
+            }
+            
             // Use forceLoad to bypass Blazor Server circuit if it's broken
             Nav.NavigateTo("/grupper", forceLoad: true);
         }
