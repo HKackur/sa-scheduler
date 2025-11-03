@@ -8,10 +8,8 @@ public class UIState
     public event Action? OnChanged;
     public event Action? OnTestOpenModal;
     
-    // Debounce cancellation token to prevent excessive event firing
-    private CancellationTokenSource? _debounceCts;
-    private readonly object _debounceLock = new object();
-    private const int DebounceDelayMs = 100; // Reduced from 150ms to 100ms for better responsiveness
+    // Removed debouncing - caused threading issues (Dispatcher crash)
+    // Components handle state changes correctly without debouncing
     
     private Guid? _selectedPlaceId;
     private Guid? _selectedAreaId;
@@ -116,41 +114,9 @@ public class UIState
         }
     }
     
-    public void RaiseChanged() => NotifyChangedDebounced();
+    public void RaiseChanged() => OnChanged?.Invoke();
     
-    public void NotifyChanged() => NotifyChangedDebounced();
-    
-    private void NotifyChangedDebounced()
-    {
-        lock (_debounceLock)
-        {
-            // Cancel previous debounce
-            _debounceCts?.Cancel();
-            _debounceCts?.Dispose();
-            
-            // Create new cancellation token source
-            _debounceCts = new CancellationTokenSource();
-            var token = _debounceCts.Token;
-            
-            // Use Task.Delay instead of Timer to avoid threading issues
-            // This runs on the current synchronization context (Blazor's Dispatcher)
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(DebounceDelayMs, token);
-                    if (!token.IsCancellationRequested)
-                    {
-                        OnChanged?.Invoke();
-                    }
-                }
-                catch (TaskCanceledException)
-                {
-                    // Ignore - this means debounce was cancelled by a new change
-                }
-            });
-        }
-    }
+    public void NotifyChanged() => OnChanged?.Invoke();
     
     public void TestOpenModal()
     {
