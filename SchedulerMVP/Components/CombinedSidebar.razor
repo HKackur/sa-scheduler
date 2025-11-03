@@ -398,6 +398,15 @@
     
     protected override async Task OnParametersSetAsync()
     {
+        // CRITICAL: Check for place modal open request FIRST
+        if (UI.ShouldOpenPlaceCreateModal)
+        {
+            UI.ShouldOpenPlaceCreateModal = false;
+            placeOpen = true;
+            StateHasChanged();
+            // Continue with normal load
+        }
+        
         // Only reload if the selected place actually changed to avoid unnecessary database calls
         var currentPlaceId = UI.SelectedPlaceId;
         if (_isInitialized && _lastSelectedPlaceId == currentPlaceId)
