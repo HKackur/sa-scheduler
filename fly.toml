@@ -37,3 +37,8 @@ primary_region = "ams"
 
   [services.http_options.websocket]
     enabled = true
+
+# Note: Volume mount removed - not needed without DataProtection keys
+# If volume exists on machine, remove it with:
+# flyctl volumes list -a sa-scheduler
+# flyctl volumes destroy <volume-id> -a sa-scheduler
