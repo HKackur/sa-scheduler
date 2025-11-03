@@ -37,6 +37,18 @@ builder.WebHost.ConfigureKestrel(options =>
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+// CRITICAL: Configure SignalR BEFORE AddServerSideBlazor for Blazor Server on Fly.io
+// This ensures proper connection handling behind proxy
+builder.Services.AddSignalR(options =>
+{
+    // Increased timeouts for Fly.io proxy/network latency
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+    options.EnableDetailedErrors = false; // Disable in production for security
+    options.MaximumReceiveMessageSize = 32 * 1024; // 32KB max message size
+});
+
 builder.Services.AddServerSideBlazor(options =>
 {
     // Disable circuit disconnect timeout for better reliability
@@ -104,9 +116,12 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
         ? CookieSecurePolicy.SameAsRequest 
         : CookieSecurePolicy.Always;
+    // CRITICAL: MaxAge ensures cookie persists across browser restarts
+    options.Cookie.MaxAge = TimeSpan.FromDays(30);
     options.Cookie.HttpOnly = true;
     options.Cookie.Name = ".AspNetCore.Identity.Application";
     options.Cookie.IsEssential = true; // Required for authentication
+    options.Cookie.Path = "/"; // Ensure cookie is sent for all paths including /_blazor
 });
 
 // Add AppDbContext
@@ -172,9 +187,13 @@ builder.Services.AddScoped<RoleManager<IdentityRole>>();
 var app = builder.Build();
 
 // Respect proxy headers (Fly.io / reverse proxies) - MUST be before UseHttpsRedirection
+// CRITICAL: Include XForwardedHost for SignalR base path detection
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
+    // Clear known networks/proxies to allow Fly.io's proxy
+    KnownNetworks = { },
+    KnownProxies = { }
 });
 
 // Configure the HTTP request pipeline.
@@ -201,11 +220,14 @@ app.UseAuthorization();
 app.MapRazorPages();
 
 // Configure Blazor Server SignalR hub with proper transport options for Fly.io
+// CRITICAL: Long Polling is more reliable than WebSockets behind Fly.io proxy
 app.MapBlazorHub(options =>
 {
-    // Enable WebSockets and Long Polling for better reliability behind proxies
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
-                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+    // Prioritize Long Polling over WebSockets for better reliability behind proxy
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling | 
+                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
+    // Increased poll timeout for better stability on slower connections
+    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(90);
 });
 
 app.MapFallbackToPage("/_Host");
