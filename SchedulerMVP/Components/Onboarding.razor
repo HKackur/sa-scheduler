@@ -2,6 +2,7 @@
 @inject SchedulerMVP.Services.UserContextService UserContext
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject SchedulerMVP.Services.IPlaceService PlaceService
 
 @code {
     private bool isOpen;
@@ -9,6 +10,7 @@
     private string? userKey;
     private int totalSteps = 3;
     private bool isDisposed;
+    private List<SchedulerMVP.Data.Entities.Place> places = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -17,6 +19,14 @@
             var userId = UserContext.GetCurrentUserId();
             if (string.IsNullOrEmpty(userId)) return;
             userKey = $"sa_onb_{userId}";
+            
+            // CRITICAL: Check if places exist - if they do, don't show step 1
+            try
+            {
+                places = await PlaceService.GetPlacesAsync();
+            }
+            catch { places = new List<SchedulerMVP.Data.Entities.Place>(); }
+            
             var saved = await JS.InvokeAsync<string>("localStorage.getItem", userKey);
             if (string.IsNullOrWhiteSpace(saved))
             {
@@ -29,14 +39,54 @@
                 // Saved as simple number: last completed step
                 if (int.TryParse(saved, out var lastDone))
                 {
-                    if (lastDone < totalSteps)
+                    // CRITICAL: If places exist, skip step 1 (place creation)
+                    if (places.Count > 0 && lastDone == 0)
+                    {
+                        // User has places but hasn't completed intro - show step 2 instead
+                        isOpen = true;
+                        stepIndex = 2;
+                        // Mark step 1 as done
+                        await JS.InvokeVoidAsync("localStorage.setItem", userKey, "1");
+                    }
+                    else if (lastDone < totalSteps)
                     {
                         isOpen = true;
                         stepIndex = lastDone + 1; // next step
+                        // CRITICAL: If showing step 1 but places exist, skip to step 2
+                        if (stepIndex == 1 && places.Count > 0)
+                        {
+                            stepIndex = 2;
+                            await JS.InvokeVoidAsync("localStorage.setItem", userKey, "1");
+                        }
                     }
                 }
             }
             Nav.LocationChanged += OnLocationChanged;
+            // Subscribe to UI changes to check when places are created
+            UI.OnChanged += CheckPlacesAndUpdateStep;
+        }
+        catch { }
+    }
+    
+    private async Task CheckPlacesAndUpdateStep()
+    {
+        try
+        {
+            // Reload places when UI changes (e.g., after place creation)
+            var newPlaces = await PlaceService.GetPlacesAsync();
+            if (newPlaces.Count > 0 && places.Count == 0)
+            {
+                // Places were just created - if we're on step 1, skip to step 2
+                places = newPlaces;
+                if (stepIndex == 1 && isOpen)
+                {
+                    await CompleteCurrentAsync();
+                }
+            }
+            else
+            {
+                places = newPlaces;
+            }
         }
         catch { }
     }
@@ -103,13 +153,19 @@
     {
         try
         {
+            // Open place modal
             UI.ShouldOpenPlaceCreateModal = true;
             UI.RaiseChanged();
-            await CompleteCurrentAsync();
+            
+            // Don't complete step yet - wait for place to be created
+            // The CheckPlacesAndUpdateStep will handle moving to next step when place is created
+            StateHasChanged();
         }
         catch (Exception ex)
         {
-            isOpen = false;
+            // On error, still try to open modal
+            UI.ShouldOpenPlaceCreateModal = true;
+            UI.RaiseChanged();
             StateHasChanged();
         }
     }
@@ -267,6 +323,11 @@ else
     public void Dispose()
     {
         isDisposed = true;
-        try { Nav.LocationChanged -= OnLocationChanged; } catch { }
+        try 
+        { 
+            Nav.LocationChanged -= OnLocationChanged;
+            UI.OnChanged -= CheckPlacesAndUpdateStep;
+        } 
+        catch { }
     }
 }
