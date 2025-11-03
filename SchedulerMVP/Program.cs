@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Http.Connections;
 var builder = WebApplication.CreateBuilder(args);
 
 // Ensure Kestrel listens on 0.0.0.0:8080 for Fly.io
+builder.WebHost.UseUrls("http://0.0.0.0:8080");
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.Listen(System.Net.IPAddress.Any, 8080);
