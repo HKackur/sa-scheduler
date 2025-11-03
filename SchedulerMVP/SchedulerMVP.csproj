@@ -18,8 +18,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Connections.Common" Version="9.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="9.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="9.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR" Version="1.2.0" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="1.2.0" />
   </ItemGroup>
 
 </Project>
