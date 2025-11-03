@@ -15,6 +15,9 @@ using Microsoft.AspNetCore.Http.Connections;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Ensure Kestrel listens on the Fly.io-assigned port (default 8080)
+var listenPort = int.TryParse(Environment.GetEnvironmentVariable("PORT"), out var p) ? p : 8080;
+builder.WebHost.ConfigureKestrel(o => o.ListenAnyIP(listenPort));
 
 // Persist Data Protection keys so auth cookies remain valid across restarts/restarts (Fly.io)
 builder.Services.AddDataProtection()
@@ -366,9 +369,5 @@ finally
 {
     scope?.Dispose();
 }
-
-// Ensure app listens on Fly.io expected port
-var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
-app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();

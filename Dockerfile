@@ -23,6 +23,11 @@ WORKDIR /app
 # Copy published output from build stage
 COPY --from=build /app/publish .
 
+# Install curl for healthcheck
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 # Environment configuration
 ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
