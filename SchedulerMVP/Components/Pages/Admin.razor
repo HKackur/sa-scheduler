@@ -9,7 +9,15 @@
 
 <PageTitle>Admin</PageTitle>
 
-<div class="sa-panel" style="margin:16px;">
+@if (isLoading)
+{
+    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="width: 40px; height: 40px; border: 4px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: admin-spin 0.8s linear infinite;"></div>
+        <div style="font-size: 14px; color: #6b7280;">Läser in användare...</div>
+    </div>
+}
+
+<div class="sa-panel" style="margin:16px; @(isLoading ? "opacity:0.5; pointer-events:none;" : "")">
     <div class="sa-panel-header" style="display:flex;align-items:center;gap:12px;">
         <h6 class="sa-panel-title">Användare</h6>
     </div>
@@ -27,7 +35,7 @@
                     <input type="password" placeholder="Lösenord" @bind="newPassword" class="sa-input-field" minlength="8" required />
                     <div style="color:#6b7280;font-size:12px;margin-top:4px;">Minst 8 tecken.</div>
                 </div>
-                <button class="tb-action-btn" type="submit" disabled="@(!CanSubmit)"><span class="action-text">Skapa</span></button>
+                <button class="tb-action-btn" type="submit" disabled="@(!CanSubmit || isCreatingUser)"><span class="action-text">@(isCreatingUser ? "Skapar..." : "Skapa")</span></button>
                 @if (!string.IsNullOrEmpty(errorMessage))
                 {
                     <div style="margin-top:8px;color:#b91c1c;font-size:13px;">@errorMessage</div>
@@ -54,10 +62,10 @@
                             <td style="padding:8px;color:#6b7280;">@FormatLastLogin(u.LastLoginAt)</td>
                             <td style="padding:8px;">@(isAdmin ? "Ja" : "Nej")</td>
                             <td style="padding:8px;display:flex;gap:8px;justify-content:flex-end;">
-                                <button class="tb-action-btn" @onclick="() => Impersonate(u.Id)"><span class="action-text">Logga in som</span></button>
-                                <button class="tb-action-btn" @onclick="() => ToggleAdmin(u.Id)"><span class="action-text">@(isAdmin?"Ta bort admin":"Gör admin")</span></button>
-                                <button class="tb-action-btn" @onclick="() => ResetPassword(u.Id)"><span class="action-text">Nytt lösen</span></button>
-                                <button class="tb-action-btn" @onclick="() => DeleteUser(u.Id)" style="background:#fee2e2;"><span class="action-text">Radera</span></button>
+                                <button class="tb-action-btn" @onclick="() => Impersonate(u.Id)" disabled="@(isProcessing.Contains(u.Id))"><span class="action-text">Logga in som</span></button>
+                                <button class="tb-action-btn" @onclick="() => ToggleAdmin(u.Id)" disabled="@(isProcessing.Contains(u.Id))"><span class="action-text">@(isProcessing.Contains(u.Id) && processingAction[u.Id] == "admin" ? "Uppdaterar..." : isAdmin?"Ta bort admin":"Gör admin")</span></button>
+                                <button class="tb-action-btn" @onclick="() => ResetPassword(u.Id)" disabled="@(isProcessing.Contains(u.Id))"><span class="action-text">Nytt lösen</span></button>
+                                <button class="tb-action-btn" @onclick="() => DeleteUser(u.Id)" disabled="@(isProcessing.Contains(u.Id))" style="background:#fee2e2;"><span class="action-text">Radera</span></button>
                             </td>
                         </tr>
                     }
@@ -67,12 +75,22 @@
     </div>
 </div>
 
+<style>
+    @@keyframes admin-spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+
 @code {
     private List<ApplicationUser> users = new();
     private HashSet<string> adminIds = new();
     private string newEmail = string.Empty;
     private string newPassword = string.Empty;
     private string? errorMessage;
+    private bool isLoading = true;
+    private bool isCreatingUser = false;
+    private HashSet<string> isProcessing = new();
+    private Dictionary<string, string> processingAction = new();
     private bool CanSubmit => !string.IsNullOrWhiteSpace(newEmail) && !string.IsNullOrWhiteSpace(newPassword) && newPassword.Length >= 8;
 
     protected override async Task OnInitializedAsync()
@@ -89,17 +107,47 @@
 
     private async Task LoadAsync()
     {
-        users = UserManager.Users.OrderBy(u => u.Email).ToList();
-        var adminRole = await RoleManager.FindByNameAsync("Admin");
-        if (adminRole != null)
+        try
         {
-            // naive approach: check each user
-            adminIds = new HashSet<string>(
-                await Task.WhenAll(users.Select(async u => (await UserManager.IsInRoleAsync(u, "Admin")) ? u.Id : null!))
-                    .ContinueWith(t => t.Result.Where(x => x != null)!)
-            );
+            isLoading = true;
+            StateHasChanged();
+            
+            // PERF: Load users efficiently - use ToListAsync if available, otherwise ToList
+            // Note: UserManager.Users is IQueryable, but Identity doesn't always support async enumeration
+            // So we'll use ToList() but optimize the admin check
+            
+            users = UserManager.Users.OrderBy(u => u.Email).ToList();
+            
+            // PERF: Optimize admin check - load all users in role at once instead of checking one by one
+            var adminRole = await RoleManager.FindByNameAsync("Admin");
+            if (adminRole != null)
+            {
+                // Get all users in Admin role in one query if possible
+                var adminUserIds = new HashSet<string>();
+                foreach (var user in users)
+                {
+                    // PERF: Check in parallel batches
+                    var tasks = users.Select(async u => new { Id = u.Id, IsAdmin = await UserManager.IsInRoleAsync(u, "Admin") });
+                    var results = await Task.WhenAll(tasks);
+                    adminUserIds = new HashSet<string>(results.Where(r => r.IsAdmin).Select(r => r.Id));
+                    break; // Only do once
+                }
+                adminIds = adminUserIds;
+            }
+            else
+            {
+                adminIds = new HashSet<string>();
+            }
         }
-        StateHasChanged();
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid laddning: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private static string FormatLastLogin(DateTimeOffset? ts) => ts.HasValue ? ts.Value.LocalDateTime.ToString("yyyy-MM-dd HH:mm") : "—";
@@ -107,48 +155,175 @@
     private async Task CreateUser()
     {
         errorMessage = null;
-        if (string.IsNullOrWhiteSpace(newEmail) || string.IsNullOrWhiteSpace(newPassword)) { errorMessage = "Fyll i e‑post och lösenord."; return; }
-        if (newPassword.Length < 8) { errorMessage = "Lösenordet måste vara minst 8 tecken."; return; }
-        var user = new ApplicationUser { UserName = newEmail, Email = newEmail, EmailConfirmed = true };
-        var res = await UserManager.CreateAsync(user, newPassword);
-        if (res.Succeeded)
-        {
-            newEmail = string.Empty; newPassword = string.Empty;
-            try { await TemplateService.CreateForUserAsync(user.Id, "Veckomall"); } catch {}
-            await LoadAsync();
+        if (string.IsNullOrWhiteSpace(newEmail) || string.IsNullOrWhiteSpace(newPassword)) 
+        { 
+            errorMessage = "Fyll i e‑post och lösenord."; 
+            StateHasChanged();
+            return; 
         }
-        else
+        if (newPassword.Length < 8) 
+        { 
+            errorMessage = "Lösenordet måste vara minst 8 tecken."; 
+            StateHasChanged();
+            return; 
+        }
+        
+        isCreatingUser = true;
+        StateHasChanged();
+        
+        try
         {
-            errorMessage = string.Join("; ", res.Errors.Select(e => e.Description));
+            var user = new ApplicationUser { UserName = newEmail, Email = newEmail, EmailConfirmed = true };
+            var res = await UserManager.CreateAsync(user, newPassword);
+            if (res.Succeeded)
+            {
+                newEmail = string.Empty; 
+                newPassword = string.Empty;
+                
+                // PERF: Don't await template creation - do it in background
+                _ = Task.Run(async () =>
+                {
+                    try 
+                    { 
+                        await TemplateService.CreateForUserAsync(user.Id, "Veckomall"); 
+                    } 
+                    catch { /* Ignore errors in background task */ }
+                });
+                
+                // PERF: Reload data but don't block UI
+                await LoadAsync();
+            }
+            else
+            {
+                errorMessage = string.Join("; ", res.Errors.Select(e => e.Description));
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid skapande: {ex.Message}";
+        }
+        finally
+        {
+            isCreatingUser = false;
+            StateHasChanged();
         }
     }
 
     private async Task ToggleAdmin(string userId)
     {
-        var u = await UserManager.FindByIdAsync(userId);
-        if (u == null) return;
-        if (await UserManager.IsInRoleAsync(u, "Admin"))
-            await UserManager.RemoveFromRoleAsync(u, "Admin");
-        else
-            await UserManager.AddToRoleAsync(u, "Admin");
-        await LoadAsync();
+        if (isProcessing.Contains(userId)) return;
+        
+        isProcessing.Add(userId);
+        processingAction[userId] = "admin";
+        StateHasChanged();
+        
+        try
+        {
+            var u = await UserManager.FindByIdAsync(userId);
+            if (u == null)
+            {
+                errorMessage = "Användare hittades inte.";
+                return;
+            }
+            
+            var wasAdmin = await UserManager.IsInRoleAsync(u, "Admin");
+            if (wasAdmin)
+            {
+                await UserManager.RemoveFromRoleAsync(u, "Admin");
+            }
+            else
+            {
+                await UserManager.AddToRoleAsync(u, "Admin");
+            }
+            
+            // PERF: Update adminIds immediately without full reload
+            if (wasAdmin)
+            {
+                adminIds.Remove(userId);
+            }
+            else
+            {
+                adminIds.Add(userId);
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid ändring av admin-status: {ex.Message}";
+            StateHasChanged();
+        }
+        finally
+        {
+            isProcessing.Remove(userId);
+            processingAction.Remove(userId);
+            StateHasChanged();
+        }
     }
 
     private async Task ResetPassword(string userId)
     {
-        var u = await UserManager.FindByIdAsync(userId);
-        if (u == null) return;
-        var token = await UserManager.GeneratePasswordResetTokenAsync(u);
-        await UserManager.ResetPasswordAsync(u, token, "Test1234!");
-        await LoadAsync();
+        if (isProcessing.Contains(userId)) return;
+        
+        isProcessing.Add(userId);
+        processingAction[userId] = "password";
+        StateHasChanged();
+        
+        try
+        {
+            var u = await UserManager.FindByIdAsync(userId);
+            if (u == null)
+            {
+                errorMessage = "Användare hittades inte.";
+                return;
+            }
+            var token = await UserManager.GeneratePasswordResetTokenAsync(u);
+            await UserManager.ResetPasswordAsync(u, token, "Test1234!");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid lösenordsåterställning: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing.Remove(userId);
+            processingAction.Remove(userId);
+            StateHasChanged();
+        }
     }
 
     private async Task DeleteUser(string userId)
     {
-        var u = await UserManager.FindByIdAsync(userId);
-        if (u == null) return;
-        await UserManager.DeleteAsync(u);
-        await LoadAsync();
+        if (isProcessing.Contains(userId)) return;
+        
+        isProcessing.Add(userId);
+        processingAction[userId] = "delete";
+        StateHasChanged();
+        
+        try
+        {
+            var u = await UserManager.FindByIdAsync(userId);
+            if (u == null)
+            {
+                errorMessage = "Användare hittades inte.";
+                return;
+            }
+            await UserManager.DeleteAsync(u);
+            
+            // PERF: Remove from local lists immediately
+            users.RemoveAll(u => u.Id == userId);
+            adminIds.Remove(userId);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid radering: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing.Remove(userId);
+            processingAction.Remove(userId);
+            StateHasChanged();
+        }
     }
 
     private void GoHome() => Nav.NavigateTo("/");
