@@ -7,8 +7,25 @@ using SchedulerMVP.Data.Entities;
 using SchedulerMVP.Data.Seed;
 using SchedulerMVP.Services;
 using System.Security.Claims;
+using Microsoft.AspNetCore.DataProtection;
+using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// CRITICAL: Configure DataProtection to persist keys across app restarts on Fly.io
+// This ensures authentication cookies can be decrypted even after deployment/restart
+// Keys are stored in /app/keys (mounted volume on Fly.io)
+if (!builder.Environment.IsDevelopment())
+{
+    var keysPath = "/app/keys";
+    if (Directory.Exists(keysPath))
+    {
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+            .SetApplicationName("SchedulerMVP");
+    }
+    // If directory doesn't exist, DataProtection will use in-memory keys (works but cookies invalid on restart)
+}
 
 // Explicitly tell Kestrel to listen on Fly.io port
 builder.WebHost.ConfigureKestrel(options =>
