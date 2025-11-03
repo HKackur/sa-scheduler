@@ -318,19 +318,37 @@
         public int LeafCount { get; set; }
     }
 
+    // PERF: Track last loaded state to avoid unnecessary reloads
+    private Guid? _lastLoadedAreaId;
+    private Guid? _lastLoadedTemplateId;
+    private bool _lastLoadedCalendarMode;
+    private DateOnly _lastLoadedWeekStart;
+    
     protected override async Task OnInitializedAsync()
     {
         UI.OnChanged += async () => 
         { 
             try
             {
-                await LoadDataAsync();
-                await InvokeAsync(StateHasChanged); // CRITICAL: Force re-render after data reload
+                // PERF: Only reload if relevant state actually changed
+                var areaChanged = _lastLoadedAreaId != UI.SelectedAreaId;
+                var templateChanged = _lastLoadedTemplateId != UI.SelectedTemplateId;
+                var viewModeChanged = _lastLoadedCalendarMode != UI.IsCalendarViewMode;
+                var weekChanged = _lastLoadedWeekStart != UI.CurrentWeekStart;
+                
+                if (areaChanged || templateChanged || viewModeChanged || weekChanged)
+                {
+                    await LoadDataAsync();
+                    _lastLoadedAreaId = UI.SelectedAreaId;
+                    _lastLoadedTemplateId = UI.SelectedTemplateId;
+                    _lastLoadedCalendarMode = UI.IsCalendarViewMode;
+                    _lastLoadedWeekStart = UI.CurrentWeekStart;
+                    await InvokeAsync(StateHasChanged);
+                }
             }
             catch (Exception ex)
             {
                 // Silently handle errors to prevent circuit crashes
-                // Data will reload on next successful state change
             }
         };
         // Ensure templates (and SelectedTemplateId) are available before the first data load
@@ -359,21 +377,59 @@
         }
     }
 
+    // PERF: Cache areas per place to avoid loading ALL areas every time
+    private Dictionary<Guid, Dictionary<Guid, Area>> _areasByPlaceCache = new();
+    private DateTime _areasCacheExpiry = DateTime.MinValue;
+    private const int AREAS_CACHE_TTL_SECONDS = 60; // Cache for 60 seconds
+    
     private async Task LoadDataAsync()
     {
         try
         {
-            // Load all areas into cache to avoid syncing DbContext calls
+            // PERF: Only load areas for selected place, not ALL areas
             await using var db = await DbFactory.CreateDbContextAsync();
-            var allAreas = await db.Areas
-                .Include(a => a.Place)
-                .AsNoTracking()
-                .ToListAsync();
             
-            areaCache.Clear();
-            foreach (var area in allAreas)
+            // Check if we need to refresh area cache
+            var cacheExpired = DateTime.UtcNow > _areasCacheExpiry;
+            
+            if (UI.SelectedPlaceId.HasValue)
             {
-                areaCache[area.Id] = area;
+                // Load areas for selected place only (much faster)
+                if (!_areasByPlaceCache.TryGetValue(UI.SelectedPlaceId.Value, out var placeAreas) || cacheExpired)
+                {
+                    placeAreas = await db.Areas
+                        .Where(a => a.PlaceId == UI.SelectedPlaceId.Value)
+                        .Include(a => a.Place)
+                        .AsNoTracking()
+                        .ToDictionaryAsync(a => a.Id, a => a);
+                    _areasByPlaceCache[UI.SelectedPlaceId.Value] = placeAreas;
+                    _areasCacheExpiry = DateTime.UtcNow.AddSeconds(AREAS_CACHE_TTL_SECONDS);
+                }
+                
+                // Update areaCache from place-specific cache
+                areaCache.Clear();
+                foreach (var area in placeAreas.Values)
+                {
+                    areaCache[area.Id] = area;
+                }
+            }
+            else
+            {
+                // Only load all areas if no place selected (shouldn't happen often)
+                if (cacheExpired || areaCache.Count == 0)
+                {
+                    var allAreas = await db.Areas
+                        .Include(a => a.Place)
+                        .AsNoTracking()
+                        .ToListAsync();
+                    
+                    areaCache.Clear();
+                    foreach (var area in allAreas)
+                    {
+                        areaCache[area.Id] = area;
+                    }
+                    _areasCacheExpiry = DateTime.UtcNow.AddSeconds(AREAS_CACHE_TTL_SECONDS);
+                }
             }
             
             if (UI.SelectedAreaId.HasValue)
@@ -727,7 +783,7 @@
             }
 
 
-            var userId = UserContext.GetCurrentUserId();
+            var userId = await UserContext.GetCurrentUserIdAsync();
             var isAdmin = await UserContext.IsAdminAsync();
             var groupQuery = db.Groups.AsQueryable();
             if (!isAdmin && !string.IsNullOrEmpty(userId))

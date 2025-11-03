@@ -871,26 +871,25 @@
 
             var result = await db.SaveChangesAsync();
             
-            // CRITICAL: Ensure database transaction is committed before triggering UI refresh
-            await Task.Yield(); // Allow database transaction to complete
-
             // Navigate to the selected place and area if different from current
             if (SelectedPlaceId.HasValue && SelectedPlaceId.Value != SelectedPlace?.Id)
             {
-                // Update the UI state to navigate to the selected place
                 UI.SelectedPlaceId = SelectedPlaceId.Value;
             }
             if (targetArea != null && targetArea.Id != SelectedArea?.Id)
             {
-                // Update the UI state to navigate to the selected area
                 UI.SelectedAreaId = targetArea.Id;
             }
             
-            // CRITICAL: Trigger UI refresh BEFORE closing modal to ensure new booking appears
-            UI.RaiseChanged();
-            
-            await OnSave.InvokeAsync();
+            // Close modal FIRST to avoid glitch
             await OnClose.InvokeAsync();
+            
+            // Trigger save callback and refresh AFTER modal is closed
+            await OnSave.InvokeAsync();
+            
+            // Small delay to ensure DOM updates, then refresh
+            await Task.Delay(50);
+            UI.RaiseChanged();
         }
         catch (Exception ex)
         {

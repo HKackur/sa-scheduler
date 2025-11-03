@@ -871,26 +871,35 @@
     
     private void SwitchToWeekPlanner()
     {
+        // PERF: Only trigger refresh if view actually changed
+        if (!UI.IsCalendarViewMode) return;
+        
         UI.IsCalendarViewMode = false;
         UI.PageTitle = "Veckoschema";
-        // Ensure week view shows the Monday of the current week
         var today = DateOnly.FromDateTime(DateTime.Today);
         var monday = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday);
         UI.CurrentWeekStart = monday;
         UI.IsDayView = false;
         menuOpen = false;
+        
+        // Trigger refresh - WeekGrid will load week template data
+        UI.RaiseChanged();
     }
     
     private void SwitchToCalendar()
     {
+        // PERF: Only trigger refresh if view actually changed
+        if (UI.IsCalendarViewMode) return;
+        
         UI.IsCalendarViewMode = true;
         UI.PageTitle = "Kalender";
-        // Default to week view (current week's Monday) when switching to calendar
         var today = DateOnly.FromDateTime(DateTime.Today);
         var monday = today.AddDays(-(int)today.DayOfWeek + (int)DayOfWeek.Monday);
         UI.CurrentWeekStart = monday;
         UI.IsDayView = false;
         menuOpen = false;
+        
+        // Trigger refresh - WeekGrid will load calendar booking data
         UI.RaiseChanged();
     }
 
