@@ -338,16 +338,12 @@
                 
                 if (areaChanged || templateChanged || viewModeChanged || weekChanged)
                 {
-                    // PERF: Don't await StateHasChanged - let it happen async
-                    _ = Task.Run(async () =>
-                    {
-                        await LoadDataAsync();
-                        _lastLoadedAreaId = UI.SelectedAreaId;
-                        _lastLoadedTemplateId = UI.SelectedTemplateId;
-                        _lastLoadedCalendarMode = UI.IsCalendarViewMode;
-                        _lastLoadedWeekStart = UI.CurrentWeekStart;
-                        await InvokeAsync(StateHasChanged);
-                    });
+                    await LoadDataAsync();
+                    _lastLoadedAreaId = UI.SelectedAreaId;
+                    _lastLoadedTemplateId = UI.SelectedTemplateId;
+                    _lastLoadedCalendarMode = UI.IsCalendarViewMode;
+                    _lastLoadedWeekStart = UI.CurrentWeekStart;
+                    await InvokeAsync(StateHasChanged);
                 }
             }
             catch (Exception ex)
@@ -515,14 +511,14 @@
 
                     if (UI.SelectedAreaId.HasValue && selectedArea != null)
                     {
-                        // Load all templates for the selected area's place for ghost detection
-                        var allPlaceAreaIds = await db.Areas
+                        // PERF: Use cached area IDs from areaCache instead of querying DB again
+                        var allPlaceAreaIds = areaCache.Values
                             .Where(a => a.PlaceId == selectedArea.PlaceId)
                             .Select(a => a.Id)
-                            .ToListAsync();
+                            .ToList();
                         
-                        // Pre-load leaf counts for all areas
-                        await LoadLeafCountCacheAsync(allPlaceAreaIds);
+                        // Pre-load leaf counts for all areas (in parallel with template query)
+                        var leafCountTask = LoadLeafCountCacheAsync(allPlaceAreaIds);
 
                         var overlappingTemplatesQuery = db.BookingTemplates
                             .Where(bt => bt.ScheduleTemplateId == templateId && allPlaceAreaIds.Contains(bt.AreaId))
@@ -536,7 +532,10 @@
                             overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => bt.Group!.UserId == currentUserId);
                         }
 
-                        var overlappingTemplates = await overlappingTemplatesQuery.ToListAsync();
+                        // PERF: Run leaf count and template query in parallel
+                        var templateTask = overlappingTemplatesQuery.ToListAsync();
+                        await Task.WhenAll(leafCountTask, templateTask);
+                        var overlappingTemplates = await templateTask;
 
                         // Convert to TemplateView with ghost logic
                         var templateViews = new List<TemplateView>();
@@ -671,14 +670,14 @@
 
                 if (UI.SelectedAreaId.HasValue && selectedArea != null)
                 {
-                    // Load all bookings for the selected area's place for ghost detection
-                    var allPlaceAreaIds = await db.Areas
+                    // PERF: Use cached area IDs from areaCache instead of querying DB again
+                    var allPlaceAreaIds = areaCache.Values
                         .Where(a => a.PlaceId == selectedArea.PlaceId)
                         .Select(a => a.Id)
-                        .ToListAsync();
+                        .ToList();
                     
-                    // Pre-load leaf counts for all areas
-                    await LoadLeafCountCacheAsync(allPlaceAreaIds);
+                    // Pre-load leaf counts for all areas (in parallel with booking query)
+                    var leafCountTask = LoadLeafCountCacheAsync(allPlaceAreaIds);
 
                     var overlappingBookingsQuery = db.CalendarBookings
                         .Where(c => c.Date >= weekStart && c.Date <= weekEnd && allPlaceAreaIds.Contains(c.AreaId))
@@ -692,10 +691,13 @@
                         overlappingBookingsQuery = overlappingBookingsQuery.Where(c => c.Group.UserId == currentUserId);
                     }
 
-                    var overlappingBookings = await overlappingBookingsQuery
+                    // PERF: Run leaf count and booking query in parallel
+                    var bookingTask = overlappingBookingsQuery
                         .OrderBy(c => c.Date)
                         .ThenBy(c => c.StartMin)
                         .ToListAsync();
+                    await Task.WhenAll(leafCountTask, bookingTask);
+                    var overlappingBookings = await bookingTask;
 
                     // Convert calendar bookings to TemplateView format with proper ghost logic
                     var templateViews = new List<TemplateView>();
