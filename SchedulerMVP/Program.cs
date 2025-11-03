@@ -1,39 +1,27 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.WebSockets;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.EntityFrameworkCore;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
 using SchedulerMVP.Data.Seed;
 using SchedulerMVP.Services;
-using Microsoft.AspNetCore.DataProtection;
-using System.IO;
-
 using System.Security.Claims;
-using Microsoft.AspNetCore.Http.Connections;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Ensure Kestrel listens on 0.0.0.0:8080 for Fly.io
-builder.WebHost.UseUrls("http://0.0.0.0:8080");
+// Explicitly tell Kestrel to listen on Fly.io port
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Listen(System.Net.IPAddress.Any, 8080);
+    options.ListenAnyIP(8080);
 });
-
-// Persist Data Protection keys so auth cookies remain valid across restarts/restarts (Fly.io)
-builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo("/app/keys"))
-    .SetApplicationName("SchedulerMVP");
-// DataProtection keys will be stored in /app/keys (mounted volume on Fly.io)
 
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor(options =>
 {
-    // Disable circuit disconnect timeout for better reliability
-    options.DetailedErrors = false;
+    // Enable detailed errors temporarily to diagnose production circuit crash
+    options.DetailedErrors = true;
     options.DisconnectedCircuitMaxRetained = 100;
     options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
@@ -88,13 +76,12 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/login";
     // Required for HTTPS/proxy environments (Fly.io)
     options.Cookie.SameSite = SameSiteMode.Lax; // Use Lax for better compatibility
-    // CRITICAL: Use Always in production (HTTPS) to ensure cookies work with SignalR
-    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
-        ? CookieSecurePolicy.SameAsRequest 
-        : CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Works with both HTTP and HTTPS
     options.Cookie.HttpOnly = true;
     options.Cookie.Name = ".AspNetCore.Identity.Application";
     options.Cookie.IsEssential = true; // Required for authentication
+    // Explicitly set max age to ensure cookie persists across app restarts
+    options.Cookie.MaxAge = TimeSpan.FromDays(30);
 });
 
 // Add AppDbContext
@@ -121,6 +108,17 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 }, ServiceLifetime.Scoped);
 
 builder.Services.AddHttpContextAccessor();
+
+// Add SignalR options for better reliability (MUST be before AddServerSideBlazor)
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+    options.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
+    options.StreamBufferCapacity = 10;
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+});
 
 // Add DbContextFactory for thread-safe DbContext access in Blazor Server
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
@@ -158,11 +156,15 @@ builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
 var app = builder.Build();
 
-// Respect proxy headers (Fly.io / reverse proxies) - MUST be before UseHttpsRedirection
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+// Respect proxy headers (Fly.io / reverse proxies) - MUST be first in pipeline
+var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
+};
+// Trust Fly.io proxy
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -182,22 +184,32 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 
-// Ensure WebSockets have a keep-alive (important for Blazor Server behind proxies)
-app.UseWebSockets(new Microsoft.AspNetCore.Builder.WebSocketOptions
-{
-    KeepAliveInterval = TimeSpan.FromSeconds(30)
-});
-
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Log SignalR requests BEFORE mapping routes
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/_blazor"))
+    {
+        Console.WriteLine($"[SignalR] Blazor hub request: {context.Request.Path} - Method: {context.Request.Method}");
+        Console.WriteLine($"[SignalR] Headers: Connection={context.Request.Headers["Connection"]}, Upgrade={context.Request.Headers["Upgrade"]}");
+    }
+    await next();
+});
 
 app.MapRazorPages();
 
 // Configure Blazor Server SignalR hub with proper transport options for Fly.io
-app.MapBlazorHub(options =>
+// CRITICAL: Map Blazor hub BEFORE fallback route
+var blazorHub = app.MapBlazorHub(options =>
 {
-    // Prefer WebSockets but allow LongPolling fallback
-    options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
+    // Enable WebSockets and Long Polling for better reliability behind proxies
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+    
+    // Increase timeout for slow connections
+    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(30);
 });
 
 app.MapFallbackToPage("/_Host");
