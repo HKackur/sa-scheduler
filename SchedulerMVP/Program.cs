@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.EntityFrameworkCore;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
@@ -8,6 +7,7 @@ using SchedulerMVP.Data.Seed;
 using SchedulerMVP.Services;
 using Microsoft.AspNetCore.DataProtection;
 using System.IO;
+
 using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -174,7 +174,7 @@ app.UseStaticFiles();
 app.UseRouting();
 
 // Ensure WebSockets have a keep-alive (important for Blazor Server behind proxies)
-app.UseWebSockets(new WebSocketOptions
+app.UseWebSockets(new Microsoft.AspNetCore.Builder.WebSocketOptions
 {
     KeepAliveInterval = TimeSpan.FromSeconds(30)
 });
