@@ -5,6 +5,8 @@
 @inject NavigationManager Navigation
 @inject SchedulerMVP.Services.UIState UI
 @inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
+@inject SchedulerMVP.Services.IPlaceService PlaceService
+@inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
 
 <PageTitle>@UI.PageTitle</PageTitle>
 
