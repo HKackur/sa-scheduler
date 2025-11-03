@@ -455,6 +455,9 @@
         StateHasChanged();
     }
 
+    // PERF: Cache areas per place to avoid reloading on every BuildPlaceTree call
+    private Dictionary<Guid, List<Area>> _cachedAreasByPlace = new();
+    
     private async Task BuildPlaceTree()
     {
         placeTreeNodes = new List<PlaceTreeNode>();
@@ -464,16 +467,26 @@
         var nonFavs = places.Where(p => !favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).ToList();
         var sortedPlaces = favs.Concat(nonFavs).ToList();
         
-        foreach (var p in sortedPlaces)
+        // PERF: Load all areas in parallel for all places (one query per place, but parallel)
+        var areaTasks = sortedPlaces.Select(async p =>
         {
-            var placeNode = new PlaceTreeNode(p);
-            
-            // Load areas for this place
-            var placeAreas = await PlaceService.GetAreasForPlaceAsync(p.Id);
+            if (!_cachedAreasByPlace.TryGetValue(p.Id, out var placeAreas))
+            {
+                placeAreas = await PlaceService.GetAreasForPlaceAsync(p.Id);
+                _cachedAreasByPlace[p.Id] = placeAreas;
+            }
+            return new { Place = p, Areas = placeAreas };
+        });
+        
+        var placeAreaData = await Task.WhenAll(areaTasks);
+        
+        foreach (var data in placeAreaData)
+        {
+            var placeNode = new PlaceTreeNode(data.Place);
             
             // Build area tree for this place
-            var idToNode = placeAreas.ToDictionary(a => a.Id, a => new TreeNode(a));
-            foreach (var a in placeAreas)
+            var idToNode = data.Areas.ToDictionary(a => a.Id, a => new TreeNode(a));
+            foreach (var a in data.Areas)
             {
                 if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out var parent))
                 {

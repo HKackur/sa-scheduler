@@ -62,6 +62,10 @@
     private bool templateEditOpen = false;
     private Guid? templateEditId = null;
     
+    // PERF: Preloading state
+    private bool isInitialLoading = true;
+    private string loadingMessage = "Läser in era bokningar... Snart redo";
+    
     protected override void OnInitialized()
     {
         UI.OnChanged += StateHasChanged;
@@ -71,6 +75,45 @@
     {
         if (firstRender)
         {
+            // PERF: Preload critical data in background for faster subsequent clicks
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    loadingMessage = "Läser in platser...";
+                    await InvokeAsync(StateHasChanged);
+                    
+                    // Preload all places and areas
+                    var places = await PlaceService.GetPlacesAsync();
+                    foreach (var place in places.Take(3)) // Preload first 3 places' areas
+                    {
+                        await PlaceService.GetAreasForPlaceAsync(place.Id);
+                    }
+                    
+                    loadingMessage = "Läser in veckomallar...";
+                    await InvokeAsync(StateHasChanged);
+                    
+                    // Preload templates
+                    await TemplateService.GetTemplatesAsync();
+                    
+                    loadingMessage = "Nästan klart...";
+                    await InvokeAsync(StateHasChanged);
+                    
+                    // Small delay for smooth transition
+                    await Task.Delay(300);
+                    
+                    // Hide loading screen
+                    isInitialLoading = false;
+                    await InvokeAsync(StateHasChanged);
+                }
+                catch
+                {
+                    // On error, just hide loading screen
+                    isInitialLoading = false;
+                    await InvokeAsync(StateHasChanged);
+                }
+            });
+
             // Query param trigger for opening place modal after hard navigation
             try
             {
@@ -269,6 +312,44 @@
         
         // Notify WeekGrid to refresh after template edit
         UI.RaiseChanged();
+    }
+    
+    private async Task PreloadDataAsync()
+    {
+        try
+        {
+            loadingMessage = "Läser in platser...";
+            await InvokeAsync(StateHasChanged);
+            
+            // Preload all places and areas
+            var places = await PlaceService.GetPlacesAsync();
+            foreach (var place in places.Take(3)) // Preload first 3 places' areas
+            {
+                await PlaceService.GetAreasForPlaceAsync(place.Id);
+            }
+            
+            loadingMessage = "Läser in veckomallar...";
+            await InvokeAsync(StateHasChanged);
+            
+            // Preload templates
+            await TemplateService.GetTemplatesAsync();
+            
+            loadingMessage = "Nästan klart...";
+            await InvokeAsync(StateHasChanged);
+            
+            // Small delay for smooth transition
+            await Task.Delay(300);
+            
+            // Hide loading screen
+            isInitialLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // On error, just hide loading screen
+            isInitialLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 }
 

@@ -811,10 +811,12 @@
     {
         var templates = allTemplates.Where(t => t.DayOfWeek == dayOfWeek).ToList();
         
-        // If group filtering is active, show all templates for that group (all are primary/blue)
+        // CRITICAL FIX: When group filtering is active, templates are already filtered in LoadDataAsync
+        // Don't filter again here - it causes no bookings to show
         if (UI.IsGroupFilterActive)
         {
-            return templates.Where(t => t.GroupId == UI.FilteredGroupId.Value).ToList();
+            // Templates are already filtered by group in LoadDataAsync - just return them
+            return templates;
         }
         
         // If a specific area is selected, only show templates for that area (not ghosts)
