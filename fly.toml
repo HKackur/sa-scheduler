@@ -35,6 +35,9 @@ primary_region = "ams"
   [services.http_options]
     h2_backend = true
 
+  [services.http_options.websocket]
+    enabled = true
+
 [[mounts]]
   source = "sa_scheduler_keys"
   destination = "/app/keys"
