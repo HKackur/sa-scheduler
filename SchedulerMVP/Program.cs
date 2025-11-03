@@ -9,6 +9,8 @@ using SchedulerMVP.Services;
 using System.Security.Claims;
 using Microsoft.AspNetCore.DataProtection;
 using System.IO;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -84,6 +86,11 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
+
+// CRITICAL: Use ServerAuthenticationStateProvider for Blazor Server
+// This is REQUIRED for Blazor Server to preserve auth state during circuit reconnects
+// Without this, users get logged out when SignalR reconnects
+builder.Services.AddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
 
 // Persist login for 30 days
 builder.Services.ConfigureApplicationCookie(options =>
