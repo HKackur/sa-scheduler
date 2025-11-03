@@ -6,15 +6,18 @@ using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
 using SchedulerMVP.Data.Seed;
 using SchedulerMVP.Services;
+using Microsoft.AspNetCore.DataProtection;
+using System.IO;
 using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Explicitly tell Kestrel to listen on Fly.io port
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenAnyIP(8080);
-});
+
+// Persist Data Protection keys so auth cookies remain valid across restarts/restarts (Fly.io)
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("/app/keys"))
+    .SetApplicationName("SchedulerMVP");
+// DataProtection keys will be stored in /app/keys (mounted volume on Fly.io)
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -170,6 +173,12 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 
+// Ensure WebSockets have a keep-alive (important for Blazor Server behind proxies)
+app.UseWebSockets(new WebSocketOptions
+{
+    KeepAliveInterval = TimeSpan.FromSeconds(30)
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -178,9 +187,8 @@ app.MapRazorPages();
 // Configure Blazor Server SignalR hub with proper transport options for Fly.io
 app.MapBlazorHub(options =>
 {
-    // Enable WebSockets and Long Polling for better reliability behind proxies
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
-                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+    // Prefer WebSockets but allow LongPolling fallback
+    options.Transports = HttpTransportType.WebSockets | HttpTransportType.LongPolling;
 });
 
 app.MapFallbackToPage("/_Host");
