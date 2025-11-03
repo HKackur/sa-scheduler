@@ -338,12 +338,16 @@
                 
                 if (areaChanged || templateChanged || viewModeChanged || weekChanged)
                 {
-                    await LoadDataAsync();
-                    _lastLoadedAreaId = UI.SelectedAreaId;
-                    _lastLoadedTemplateId = UI.SelectedTemplateId;
-                    _lastLoadedCalendarMode = UI.IsCalendarViewMode;
-                    _lastLoadedWeekStart = UI.CurrentWeekStart;
-                    await InvokeAsync(StateHasChanged);
+                    // PERF: Don't await StateHasChanged - let it happen async
+                    _ = Task.Run(async () =>
+                    {
+                        await LoadDataAsync();
+                        _lastLoadedAreaId = UI.SelectedAreaId;
+                        _lastLoadedTemplateId = UI.SelectedTemplateId;
+                        _lastLoadedCalendarMode = UI.IsCalendarViewMode;
+                        _lastLoadedWeekStart = UI.CurrentWeekStart;
+                        await InvokeAsync(StateHasChanged);
+                    });
                 }
             }
             catch (Exception ex)

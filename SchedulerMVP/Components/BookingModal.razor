@@ -748,67 +748,61 @@
     
     private async Task SaveBookingTemplate()
     {
-        // Console.WriteLine("=== SAVE BOOKING START ===");
-        // Console.WriteLine($"Mode: {(UI.IsCalendarViewMode ? "Calendar" : "Weekplanner")}");
-        // Console.WriteLine($"SelectedArea: {SelectedArea?.Name ?? "NULL"}");
-        // Console.WriteLine($"SelectedGroupId: {SelectedGroupId}");
-        // Console.WriteLine($"StartTime: {StartTime}");
-        // Console.WriteLine($"EndTime: {EndTime}");
-
-        // Get the selected area
-        var targetArea = SelectedArea;
-        if (SelectedAreaId.HasValue && AvailableAreas != null)
+        // CRITICAL: Disable button immediately to prevent double-clicks
+        var wasDisabled = hasConflicts;
+        if (!wasDisabled)
         {
-            var selectedAreaFromList = AvailableAreas.FirstOrDefault(a => a.Id == SelectedAreaId.Value);
-            if (selectedAreaFromList != null)
-            {
-                targetArea = selectedAreaFromList;
-            }
-        }
-        
-        if (!SelectedPlaceId.HasValue)
-        {
-            // Console.WriteLine("ERROR: No place selected");
-            return;
-        }
-        if (targetArea == null)
-        {
-            // Console.WriteLine("ERROR: No area selected");
-            return;
-        }
-        if (!SelectedGroupId.HasValue)
-        {
-            // Console.WriteLine("ERROR: No group selected");
-            return;
-        }
-
-        // Validate based on mode
-        if (UI.IsCalendarViewMode)
-        {
-            // Calendar mode: validate date
-            if (SelectedDate == default)
-            {
-                // Console.WriteLine("ERROR: No date selected");
-                return;
-            }
-        }
-        else
-        {
-            // Weekplanner mode: validate template and days
-            if (!UI.SelectedTemplateId.HasValue)
-            {
-                // Console.WriteLine("ERROR: No ScheduleTemplate selected");
-                return;
-            }
-            if (SelectedDays.Count == 0)
-            {
-                // Console.WriteLine("ERROR: No days selected");
-                return;
-            }
+            hasConflicts = true; // Temporarily disable
+            StateHasChanged();
         }
 
         try
         {
+            // Get the selected area
+            var targetArea = SelectedArea;
+            if (SelectedAreaId.HasValue && AvailableAreas != null)
+            {
+                var selectedAreaFromList = AvailableAreas.FirstOrDefault(a => a.Id == SelectedAreaId.Value);
+                if (selectedAreaFromList != null)
+                {
+                    targetArea = selectedAreaFromList;
+                }
+            }
+            
+            if (!SelectedPlaceId.HasValue)
+            {
+                return;
+            }
+            if (targetArea == null)
+            {
+                return;
+            }
+            if (!SelectedGroupId.HasValue)
+            {
+                return;
+            }
+
+            // Validate based on mode
+            if (UI.IsCalendarViewMode)
+            {
+                if (SelectedDate == default)
+                {
+                    return;
+                }
+            }
+            else
+            {
+                if (!UI.SelectedTemplateId.HasValue)
+                {
+                    return;
+                }
+                if (SelectedDays.Count == 0)
+                {
+                    return;
+                }
+            }
+
+            
             await using var db = await DbFactory.CreateDbContextAsync();
             
             var startParts = StartTime.Split(':');
@@ -887,16 +881,24 @@
             // Trigger save callback and refresh AFTER modal is closed
             await OnSave.InvokeAsync();
             
-            // Small delay to ensure DOM updates, then refresh
-            await Task.Delay(50);
+            // Refresh immediately - no delay needed
             UI.RaiseChanged();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[BookingModal] Error saving booking: {ex.Message}");
+            // Re-enable button on error
+            if (!wasDisabled)
+            {
+                hasConflicts = false;
+            }
         }
         finally
         {
+            if (!wasDisabled)
+            {
+                hasConflicts = false; // Re-enable button
+            }
             StateHasChanged();
         }
     }
