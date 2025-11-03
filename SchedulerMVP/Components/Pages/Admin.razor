@@ -118,21 +118,14 @@
             
             users = UserManager.Users.OrderBy(u => u.Email).ToList();
             
-            // PERF: Optimize admin check - load all users in role at once instead of checking one by one
+            // PERF: Optimize admin check - check all users in parallel
             var adminRole = await RoleManager.FindByNameAsync("Admin");
             if (adminRole != null)
             {
-                // Get all users in Admin role in one query if possible
-                var adminUserIds = new HashSet<string>();
-                foreach (var user in users)
-                {
-                    // PERF: Check in parallel batches
-                    var tasks = users.Select(async u => new { Id = u.Id, IsAdmin = await UserManager.IsInRoleAsync(u, "Admin") });
-                    var results = await Task.WhenAll(tasks);
-                    adminUserIds = new HashSet<string>(results.Where(r => r.IsAdmin).Select(r => r.Id));
-                    break; // Only do once
-                }
-                adminIds = adminUserIds;
+                // Check all users in parallel for better performance
+                var adminCheckTasks = users.Select(async u => new { Id = u.Id, IsAdmin = await UserManager.IsInRoleAsync(u, "Admin") });
+                var results = await Task.WhenAll(adminCheckTasks);
+                adminIds = new HashSet<string>(results.Where(r => r.IsAdmin).Select(r => r.Id));
             }
             else
             {
