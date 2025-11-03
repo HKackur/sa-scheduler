@@ -823,6 +823,9 @@
     {
         try
         {
+            // CRITICAL: Trigger UI.RaiseChanged so Onboarding can detect place creation
+            UI.RaiseChanged();
+            
             // Reload places from database
             places = await PlaceService.GetPlacesAsync();
             placesLoaded = true;
