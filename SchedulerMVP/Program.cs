@@ -111,6 +111,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 
 // Add DbContextFactory for thread-safe DbContext access in Blazor Server
+// CRITICAL: Must use AddDbContextFactory (not AddDbContext) with proper lifetime
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
 {
     if (!string.IsNullOrEmpty(connectionString))
@@ -130,7 +131,7 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
         options.UseSqlite("Data Source=app.db", sqlite =>
             sqlite.MigrationsAssembly("SchedulerMVP"));
     }
-});
+}, ServiceLifetime.Scoped); // CRITICAL: Must be Scoped, not Singleton
 
 // Add services
 builder.Services.AddScoped<IConflictService, ConflictService>();
