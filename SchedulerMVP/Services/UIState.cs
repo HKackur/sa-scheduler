@@ -8,8 +8,8 @@ public class UIState
     public event Action? OnChanged;
     public event Action? OnTestOpenModal;
     
-    // Debounce timer to prevent excessive event firing
-    private Timer? _debounceTimer;
+    // Debounce cancellation token to prevent excessive event firing
+    private CancellationTokenSource? _debounceCts;
     private readonly object _debounceLock = new object();
     private const int DebounceDelayMs = 100; // Reduced from 150ms to 100ms for better responsiveness
     
@@ -124,17 +124,31 @@ public class UIState
     {
         lock (_debounceLock)
         {
-            // Cancel previous timer
-            _debounceTimer?.Dispose();
+            // Cancel previous debounce
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
             
-            // Create new timer that will fire after debounce delay
-            _debounceTimer = new Timer(_ =>
+            // Create new cancellation token source
+            _debounceCts = new CancellationTokenSource();
+            var token = _debounceCts.Token;
+            
+            // Use Task.Delay instead of Timer to avoid threading issues
+            // This runs on the current synchronization context (Blazor's Dispatcher)
+            _ = Task.Run(async () =>
             {
-                lock (_debounceLock)
+                try
                 {
-                    OnChanged?.Invoke();
+                    await Task.Delay(DebounceDelayMs, token);
+                    if (!token.IsCancellationRequested)
+                    {
+                        OnChanged?.Invoke();
+                    }
                 }
-            }, null, DebounceDelayMs, Timeout.Infinite);
+                catch (TaskCanceledException)
+                {
+                    // Ignore - this means debounce was cancelled by a new change
+                }
+            });
         }
     }
     
