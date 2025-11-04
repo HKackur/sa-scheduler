@@ -297,9 +297,7 @@ app.MapBlazorHub(options =>
     options.LongPolling.PollTimeout = TimeSpan.FromSeconds(90);
 });
 
-app.MapFallbackToPage("/_Host");
-
-// --- Debug endpoint for password testing ---
+// --- Debug endpoints (must be BEFORE MapFallbackToPage) ---
 app.MapGet("/debug/test-password", async (HttpContext context, string email, string password) =>
 {
     try
@@ -334,7 +332,6 @@ app.MapGet("/debug/test-password", async (HttpContext context, string email, str
     }
 });
 
-// --- Debug endpoint (remove in production) ---
 app.MapGet("/debug/users", async (HttpContext context) =>
 {
     try
@@ -426,6 +423,8 @@ app.MapGet("/debug/users", async (HttpContext context) =>
         return Results.Problem($"Error: {ex.Message}\n{ex.StackTrace}");
     }
 });
+
+app.MapFallbackToPage("/_Host");
 
 // --- Health check endpoint ---
 app.MapGet("/health", async (HttpContext context) =>
