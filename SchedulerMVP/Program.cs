@@ -308,11 +308,21 @@ app.MapGet("/debug/test-password", async (HttpContext context, string email, str
         var user = await userManager.FindByEmailAsync(email);
         if (user == null)
         {
-            return Results.Ok(new { found = false, message = $"User with email {email} not found" });
+            // List all users to help debug
+            var allUsers = await userManager.Users.Select(u => new { u.Email, u.UserName, u.Id }).ToListAsync();
+            scope.Dispose();
+            return Results.Ok(new 
+            { 
+                found = false, 
+                message = $"User with email {email} not found",
+                totalUsers = allUsers.Count,
+                users = allUsers
+            });
         }
         
         var passwordCheck = await userManager.CheckPasswordAsync(user, password);
         var hasPassword = !string.IsNullOrEmpty(user.PasswordHash);
+        var isInAdminRole = await userManager.IsInRoleAsync(user, "Admin");
         
         scope.Dispose();
         
@@ -323,7 +333,38 @@ app.MapGet("/debug/test-password", async (HttpContext context, string email, str
             userName = user.UserName,
             hasPassword,
             passwordCheck,
-            emailConfirmed = user.EmailConfirmed
+            emailConfirmed = user.EmailConfirmed,
+            isInAdminRole
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error: {ex.Message}\n{ex.StackTrace}");
+    }
+});
+
+app.MapGet("/debug/list-users", async (HttpContext context) =>
+{
+    try
+    {
+        var scope = context.RequestServices.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        
+        var users = await userManager.Users.Select(u => new 
+        { 
+            u.Email, 
+            u.UserName, 
+            u.Id,
+            HasPassword = !string.IsNullOrEmpty(u.PasswordHash),
+            u.EmailConfirmed
+        }).ToListAsync();
+        
+        scope.Dispose();
+        
+        return Results.Ok(new 
+        { 
+            totalUsers = users.Count,
+            users = users
         });
     }
     catch (Exception ex)
@@ -628,12 +669,19 @@ try
     
     try
     {
+        Console.WriteLine("[SEED] Starting database seed...");
+        logger.LogInformation("=== Starting database seed ===");
         var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
         await seeder.SeedAsync();
+        Console.WriteLine("[SEED] Database seed completed");
+        logger.LogInformation("=== Database seed completed ===");
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Failed to seed database");
+        Console.WriteLine($"[SEED] ERROR: Failed to seed database: {ex.Message}");
+        Console.WriteLine($"[SEED] Stack: {ex.StackTrace}");
+        logger.LogError(ex, "=== FAILED to seed database: {Message} ===", ex.Message);
+        logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
     }
 
     // One-time data ownership fix: attach legacy data without UserId to admin account
