@@ -66,27 +66,24 @@ public class DbSeeder
         }
         else
         {
-            // Check if password is already correct before resetting
-            var passwordCheck = await _userManager.CheckPasswordAsync(adminUser, adminPassword);
+            // Always reset password using RemovePassword + AddPassword (more reliable than ResetPassword)
+            // This ensures password is definitely correct
+            _logger.LogInformation("Admin user exists - resetting password to ensure it's correct.");
             
-            if (!passwordCheck)
+            var removeResult = await _userManager.RemovePasswordAsync(adminUser);
+            if (!removeResult.Succeeded)
             {
-                // Password is incorrect - reset it
-                var token = await _userManager.GeneratePasswordResetTokenAsync(adminUser);
-                var resetResult = await _userManager.ResetPasswordAsync(adminUser, token, adminPassword);
-                
-                if (resetResult.Succeeded)
-                {
-                    _logger.LogInformation("Admin user exists - password was incorrect, reset to default.");
-                }
-                else
-                {
-                    _logger.LogError("Failed to reset admin password: {Errors}", string.Join(", ", resetResult.Errors.Select(e => e.Description)));
-                }
+                _logger.LogError("Failed to remove old password: {Errors}", string.Join(", ", removeResult.Errors.Select(e => e.Description)));
+            }
+            
+            var addResult = await _userManager.AddPasswordAsync(adminUser, adminPassword);
+            if (addResult.Succeeded)
+            {
+                _logger.LogInformation("Admin password successfully reset to default.");
             }
             else
             {
-                _logger.LogInformation("Admin user exists - password is already correct, no reset needed.");
+                _logger.LogError("Failed to set admin password: {Errors}", string.Join(", ", addResult.Errors.Select(e => e.Description)));
             }
             
             // Ensure user is in Admin role

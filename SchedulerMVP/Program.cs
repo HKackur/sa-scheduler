@@ -299,6 +299,41 @@ app.MapBlazorHub(options =>
 
 app.MapFallbackToPage("/_Host");
 
+// --- Debug endpoint for password testing ---
+app.MapGet("/debug/test-password", async (HttpContext context, string email, string password) =>
+{
+    try
+    {
+        var scope = context.RequestServices.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        
+        var user = await userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            return Results.Ok(new { found = false, message = $"User with email {email} not found" });
+        }
+        
+        var passwordCheck = await userManager.CheckPasswordAsync(user, password);
+        var hasPassword = !string.IsNullOrEmpty(user.PasswordHash);
+        
+        scope.Dispose();
+        
+        return Results.Ok(new 
+        { 
+            found = true,
+            email = user.Email,
+            userName = user.UserName,
+            hasPassword,
+            passwordCheck,
+            emailConfirmed = user.EmailConfirmed
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error: {ex.Message}\n{ex.StackTrace}");
+    }
+});
+
 // --- Debug endpoint (remove in production) ---
 app.MapGet("/debug/users", async (HttpContext context) =>
 {
@@ -463,25 +498,37 @@ app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<Applica
 
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             return Results.Redirect("/login?error=missing");
-        logger.LogInformation("Login attempt for email: {Email}", email);
         
-        // PasswordSignInAsync can use email directly (Identity supports this)
-        // But we also need to find the user to update LastLoginAt
-        var result = await signInManager.PasswordSignInAsync(email, password, isPersistent: true, lockoutOnFailure: false);
+        logger.LogInformation("Login attempt for email: {Email}, Password length: {Length}", email, password?.Length ?? 0);
+        
+        // Find user first to verify they exist
+        var user = await userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            logger.LogWarning("Login failed - user not found for email: {Email}", email);
+            return Results.Redirect("/login?error=invalid");
+        }
+        
+        logger.LogInformation("User found: {Email}, UserName: {UserName}, HasPassword: {HasPassword}", 
+            user.Email, user.UserName, !string.IsNullOrEmpty(user.PasswordHash));
+        
+        // Test password directly
+        var passwordValid = await userManager.CheckPasswordAsync(user, password);
+        logger.LogInformation("Password check result: {Valid}", passwordValid);
+        
+        // Try sign in with username (Identity needs username, not email)
+        var result = await signInManager.PasswordSignInAsync(user.UserName!, password, isPersistent: true, lockoutOnFailure: false);
         
         if (result.Succeeded)
         {
             logger.LogInformation("Login successful for email: {Email}", email);
-            var user = await userManager.FindByEmailAsync(email);
-            if (user != null)
-            {
-                user.LastLoginAt = DateTimeOffset.UtcNow;
-                await userManager.UpdateAsync(user);
-            }
+            user.LastLoginAt = DateTimeOffset.UtcNow;
+            await userManager.UpdateAsync(user);
             return Results.Redirect("/");
         }
         
-        logger.LogWarning("Login failed for email: {Email}, Result: {Result}", email, result);
+        logger.LogWarning("Login failed for email: {Email}, Result: {Result}, IsLockedOut: {Locked}, RequiresVerification: {Verify}", 
+            email, result, result.IsLockedOut, result.RequiresTwoFactor);
         return Results.Redirect("/login?error=invalid");
     }
     catch (Exception ex)
