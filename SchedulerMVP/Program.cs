@@ -465,23 +465,19 @@ app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<Applica
             return Results.Redirect("/login?error=missing");
         logger.LogInformation("Login attempt for email: {Email}", email);
         
-        // Find user by email first, then use username for sign-in
-        // This ensures we can sign in with email even if UserName differs
-        var user = await userManager.FindByEmailAsync(email);
-        if (user == null)
-        {
-            logger.LogWarning("Login failed - user not found for email: {Email}", email);
-            return Results.Redirect("/login?error=invalid");
-        }
-        
-        // Try sign in with username (which should match email in our case)
-        var result = await signInManager.PasswordSignInAsync(user.UserName!, password, isPersistent: true, lockoutOnFailure: false);
+        // PasswordSignInAsync can use email directly (Identity supports this)
+        // But we also need to find the user to update LastLoginAt
+        var result = await signInManager.PasswordSignInAsync(email, password, isPersistent: true, lockoutOnFailure: false);
         
         if (result.Succeeded)
         {
             logger.LogInformation("Login successful for email: {Email}", email);
-            user.LastLoginAt = DateTimeOffset.UtcNow;
-            await userManager.UpdateAsync(user);
+            var user = await userManager.FindByEmailAsync(email);
+            if (user != null)
+            {
+                user.LastLoginAt = DateTimeOffset.UtcNow;
+                await userManager.UpdateAsync(user);
+            }
             return Results.Redirect("/");
         }
         
