@@ -16,6 +16,12 @@ using System.Net;
 using System.Net.Sockets;
 using Npgsql;
 using System.Net.NetworkInformation;
+using System.Globalization;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+
+// Fix Azure culture issue - set default culture to avoid "__10" invalid culture error
+CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("en-US");
+CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("en-US");
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,23 +60,30 @@ if (!builder.Environment.IsDevelopment())
     // If both fail, DataProtection uses in-memory keys (cookies invalid on restart)
 }
 
-// Port configuration: Supports both Fly.io (8080) and Azure App Service (PORT env var)
-// Azure App Service sets PORT environment variable automatically
+// Port configuration: Supports both Fly.io (8080) and Azure App Service
+// Azure App Service handles port automatically - don't override Kestrel config
+// Only configure Kestrel for Fly.io or local dev
 var port = Environment.GetEnvironmentVariable("PORT");
-if (!string.IsNullOrEmpty(port) && int.TryParse(port, out var portNumber))
-{
-    // Azure App Service: Use PORT from environment
-    builder.WebHost.ConfigureKestrel(options =>
-    {
-        options.ListenAnyIP(portNumber);
-    });
-}
-else
+var isAzure = !string.IsNullOrEmpty(port) && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WEBSITE_SITE_NAME"));
+if (string.IsNullOrEmpty(port))
 {
     // Fly.io or local dev: Use default 8080
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(8080);
+        // Support both HTTP/1.1 and HTTP/2 for compatibility
+        options.ConfigureEndpointDefaults(lo => lo.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2);
+    });
+}
+// Azure App Service: Let Azure handle port configuration automatically
+// But configure protocol support to avoid HTTP/2 protocol errors
+else if (isAzure)
+{
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        // Azure App Service: Explicitly support HTTP/1.1 and HTTP/2
+        // This helps avoid ERR_HTTP2_PROTOCOL_ERROR issues
+        options.ConfigureEndpointDefaults(lo => lo.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1AndHttp2);
     });
 }
 
@@ -233,54 +246,36 @@ var app = builder.Build();
 // Respect proxy headers: Supports both Fly.io and Azure App Service
 // CRITICAL: Include XForwardedHost for SignalR base path detection
 // Azure App Service uses X-Forwarded-* headers, Fly.io uses Fly-Forwarded-* headers
+// MUST be called before UseStaticFiles and other middleware
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
     // Clear known networks/proxies to allow both Fly.io and Azure App Service proxies
     KnownNetworks = { },
-    KnownProxies = { }
+    KnownProxies = { },
+    // Azure App Service requirement: require at least one header
+    RequireHeaderSymmetry = false
 });
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
+    
+    // HSTS: Only enable if we're sure we're on HTTPS
+    // UseForwardedHeaders should have already set the scheme correctly
     app.UseHsts();
     
-    // Handle HTTPS scheme detection for both Fly.io and Azure App Service
-    // Fly.io uses Fly-Forwarded-Proto, Azure App Service uses X-Forwarded-Proto
+    // Additional HTTPS scheme detection for Fly.io (UseForwardedHeaders handles Azure)
+    // Fly.io uses Fly-Forwarded-Proto instead of X-Forwarded-Proto
     app.Use((ctx, next) =>
     {
-        // Try Fly.io header first
+        // Fly.io specific header
         if (ctx.Request.Headers.TryGetValue("Fly-Forwarded-Proto", out var flyProto) && flyProto == "https")
         {
             ctx.Request.Scheme = "https";
         }
-        // Fallback to standard X-Forwarded-Proto (Azure App Service)
-        else if (ctx.Request.Headers.TryGetValue("X-Forwarded-Proto", out var azureProto) && azureProto == "https")
-        {
-            ctx.Request.Scheme = "https";
-        }
-        // Also check if request is already HTTPS
-        else if (ctx.Request.IsHttps)
-        {
-            ctx.Request.Scheme = "https";
-        }
         return next();
-    });
-    
-    // Force HTTPS redirect for Azure App Service (only if not already HTTPS)
-    app.Use(async (context, next) =>
-    {
-        if (!context.Request.IsHttps && 
-            context.Request.Headers.TryGetValue("X-Forwarded-Proto", out var proto) && 
-            proto != "https")
-        {
-            // Don't redirect in Azure - let the proxy handle it
-            // But ensure scheme is set correctly
-            context.Request.Scheme = "https";
-        }
-        await next();
     });
 }
 
