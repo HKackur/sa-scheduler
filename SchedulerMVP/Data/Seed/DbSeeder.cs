@@ -64,17 +64,9 @@ public class DbSeeder
         }
         else
         {
-            _logger.LogInformation("Admin user already exists.");
+            _logger.LogInformation("Admin user already exists - skipping password reset.");
             
-            // Update password to ensure it's correct
-            var token = await _userManager.GeneratePasswordResetTokenAsync(adminUser);
-            var resetResult = await _userManager.ResetPasswordAsync(adminUser, token, "vårloggaärgrön");
-            if (resetResult.Succeeded)
-            {
-                _logger.LogInformation("Admin user password updated.");
-            }
-            
-            // Ensure user is in Admin role
+            // Only ensure user is in Admin role (don't reset password every time!)
             if (!await _userManager.IsInRoleAsync(adminUser, "Admin"))
             {
                 await _userManager.AddToRoleAsync(adminUser, "Admin");

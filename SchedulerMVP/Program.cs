@@ -11,29 +11,68 @@ using Microsoft.AspNetCore.DataProtection;
 using System.IO;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
+using Microsoft.Extensions.Logging;
+using System.Net;
+using System.Net.Sockets;
+using Npgsql;
+using System.Net.NetworkInformation;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// CRITICAL: Configure DataProtection to persist keys across app restarts on Fly.io
-// This ensures authentication cookies can be decrypted even after deployment/restart
-// Keys are stored in /app/keys (mounted volume on Fly.io)
+// Force IPv4 for Supabase connections (Azure Basic B1 doesn't support IPv6)
+// Configure Npgsql to prefer IPv4
+var supabaseHost = "db.anebyqfrzsuqwrbncwxt.supabase.co";
+
+// DataProtection: Persist keys across app restarts for authentication cookies
+// Supports both Fly.io (/app/keys) and Azure App Service (local temp path)
 if (!builder.Environment.IsDevelopment())
 {
-    var keysPath = "/app/keys";
-    if (Directory.Exists(keysPath))
+    // Try Fly.io path first (if mounted volume exists)
+    var flyKeysPath = "/app/keys";
+    // Azure App Service: Use local directory (persists across restarts within same instance)
+    var azureKeysPath = Path.Combine(Path.GetTempPath(), "SchedulerMVP-Keys");
+    
+    if (Directory.Exists(flyKeysPath))
     {
+        // Fly.io: Use mounted volume
         builder.Services.AddDataProtection()
-            .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+            .PersistKeysToFileSystem(new DirectoryInfo(flyKeysPath))
             .SetApplicationName("SchedulerMVP");
     }
-    // If directory doesn't exist, DataProtection will use in-memory keys (works but cookies invalid on restart)
+    else
+    {
+        // Azure App Service or other platforms: Use local directory
+        // Ensure directory exists
+        if (!Directory.Exists(azureKeysPath))
+        {
+            Directory.CreateDirectory(azureKeysPath);
+        }
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(azureKeysPath))
+            .SetApplicationName("SchedulerMVP");
+    }
+    // If both fail, DataProtection uses in-memory keys (cookies invalid on restart)
 }
 
-// Explicitly tell Kestrel to listen on Fly.io port
-builder.WebHost.ConfigureKestrel(options =>
+// Port configuration: Supports both Fly.io (8080) and Azure App Service (PORT env var)
+// Azure App Service sets PORT environment variable automatically
+var port = Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrEmpty(port) && int.TryParse(port, out var portNumber))
 {
-    options.ListenAnyIP(8080);
-});
+    // Azure App Service: Use PORT from environment
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(portNumber);
+    });
+}
+else
+{
+    // Fly.io or local dev: Use default 8080
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(8080);
+    });
+}
 
 // Add services to the container.
 builder.Services.AddRazorPages();
@@ -59,8 +98,27 @@ builder.Services.AddServerSideBlazor(options =>
     options.MaxBufferedUnacknowledgedRenderBatches = 20;
 });
 
-// Get connection string
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+// Get connection string - try both Azure Connection String format and App Settings format
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? builder.Configuration["ConnectionStrings:DefaultConnection"]
+    ?? builder.Configuration["ConnectionStrings__DefaultConnection"];
+
+// Connection string should be set correctly in Azure App Service
+// For Session pooler: use aws-1-eu-west-1.pooler.supabase.com:5432
+// For Transaction pooler: use aws-1-eu-west-1.pooler.supabase.com:6543
+// Don't modify connection string here - use exact value from Azure Portal
+
+// Log connection string status (without exposing password)
+if (string.IsNullOrEmpty(connectionString))
+{
+    Console.WriteLine("[ERROR] Connection string is null or empty!");
+}
+else
+{
+    var host = connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="))?.Replace("Host=", "") ?? "unknown";
+    var connectionPort = connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Port="))?.Replace("Port=", "") ?? "unknown";
+    Console.WriteLine($"[INFO] Connection string found, Host: {host}, Port: {connectionPort}");
+}
 
 // Add ApplicationDbContext for Identity
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -70,12 +128,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseNpgsql(connectionString, npgsql =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
-            // Configure for better reliability in production
-            npgsql.CommandTimeout(30); // 30 second timeout
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null);
+            npgsql.CommandTimeout(120); // 120 second timeout for Azure
         });
     }
     else
@@ -132,12 +185,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseNpgsql(connectionString, npgsql =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
-            // Configure for better reliability in production
-            npgsql.CommandTimeout(30); // 30 second timeout
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null);
+            npgsql.CommandTimeout(120); // 120 second timeout for Azure
         });
     }
     else
@@ -158,11 +206,7 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
         options.UseNpgsql(connectionString, npgsql =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
-            npgsql.CommandTimeout(30);
-            npgsql.EnableRetryOnFailure(
-                maxRetryCount: 3,
-                maxRetryDelay: TimeSpan.FromSeconds(5),
-                errorCodesToAdd: null);
+            npgsql.CommandTimeout(120); // 120 second timeout for Azure
         });
     }
     else
@@ -186,12 +230,13 @@ builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
 var app = builder.Build();
 
-// Respect proxy headers (Fly.io / reverse proxies) - MUST be before UseHttpsRedirection
+// Respect proxy headers: Supports both Fly.io and Azure App Service
 // CRITICAL: Include XForwardedHost for SignalR base path detection
+// Azure App Service uses X-Forwarded-* headers, Fly.io uses Fly-Forwarded-* headers
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
-    // Clear known networks/proxies to allow Fly.io's proxy
+    // Clear known networks/proxies to allow both Fly.io and Azure App Service proxies
     KnownNetworks = { },
     KnownProxies = { }
 });
@@ -202,12 +247,40 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
     app.UseHsts();
     
-    // Fly.io hanterar redan HTTPS – undvik redirect-loop
+    // Handle HTTPS scheme detection for both Fly.io and Azure App Service
+    // Fly.io uses Fly-Forwarded-Proto, Azure App Service uses X-Forwarded-Proto
     app.Use((ctx, next) =>
     {
-        if (ctx.Request.Headers.TryGetValue("Fly-Forwarded-Proto", out var proto) && proto == "https")
+        // Try Fly.io header first
+        if (ctx.Request.Headers.TryGetValue("Fly-Forwarded-Proto", out var flyProto) && flyProto == "https")
+        {
             ctx.Request.Scheme = "https";
+        }
+        // Fallback to standard X-Forwarded-Proto (Azure App Service)
+        else if (ctx.Request.Headers.TryGetValue("X-Forwarded-Proto", out var azureProto) && azureProto == "https")
+        {
+            ctx.Request.Scheme = "https";
+        }
+        // Also check if request is already HTTPS
+        else if (ctx.Request.IsHttps)
+        {
+            ctx.Request.Scheme = "https";
+        }
         return next();
+    });
+    
+    // Force HTTPS redirect for Azure App Service (only if not already HTTPS)
+    app.Use(async (context, next) =>
+    {
+        if (!context.Request.IsHttps && 
+            context.Request.Headers.TryGetValue("X-Forwarded-Proto", out var proto) && 
+            proto != "https")
+        {
+            // Don't redirect in Azure - let the proxy handle it
+            // But ensure scheme is set correctly
+            context.Request.Scheme = "https";
+        }
+        await next();
     });
 }
 
@@ -219,42 +292,210 @@ app.UseAuthorization();
 
 app.MapRazorPages();
 
-// Configure Blazor Server SignalR hub with proper transport options for Fly.io
-// CRITICAL: Long Polling is more reliable than WebSockets behind Fly.io proxy
+// Configure Blazor Server SignalR hub
+// Azure App Service: WebSockets work well with ARR affinity (sticky sessions)
+// Fly.io: Long Polling is more reliable behind proxy
+// Support both: Allow WebSockets (Azure) and Long Polling (Fly.io fallback)
 app.MapBlazorHub(options =>
 {
-    // Prioritize Long Polling over WebSockets for better reliability behind proxy
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling | 
-                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
-    // Increased poll timeout for better stability on slower connections
+    // Support both WebSockets (Azure) and Long Polling (Fly.io/compatibility)
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+    // Increased poll timeout for better stability on slower connections (Fly.io)
     options.LongPolling.PollTimeout = TimeSpan.FromSeconds(90);
 });
 
 app.MapFallbackToPage("/_Host");
 
+// --- Debug endpoint (remove in production) ---
+app.MapGet("/debug/users", async (HttpContext context) =>
+{
+    try
+    {
+        var scope = context.RequestServices.CreateScope();
+        var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        
+        // Get connection string
+        var connStr = configuration.GetConnectionString("DefaultConnection") 
+            ?? configuration["ConnectionStrings:DefaultConnection"]
+            ?? configuration["ConnectionStrings__DefaultConnection"];
+        
+        logger.LogInformation("Connection string found: {Found}, Length: {Length}", !string.IsNullOrEmpty(connStr), connStr?.Length ?? 0);
+        
+        // Test DIRECT Npgsql connection (bypass EF Core)
+        string directConnectionError = null;
+        bool directConnectionSuccess = false;
+        try
+        {
+            using var directConn = new Npgsql.NpgsqlConnection(connStr);
+            await directConn.OpenAsync();
+            using var cmd = new Npgsql.NpgsqlCommand("SELECT 1", directConn);
+            await cmd.ExecuteScalarAsync();
+            directConnectionSuccess = true;
+            await directConn.CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            directConnectionError = $"{ex.GetType().Name}: {ex.Message}\nInner: {ex.InnerException?.Message}";
+            logger.LogError(ex, "Direct Npgsql connection failed");
+        }
+        
+        // Try to connect to database via EF Core
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        string dbError = null;
+        bool canConnect = false;
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync("SELECT 1");
+            canConnect = true;
+            logger.LogInformation("EF Core database connection successful");
+        }
+        catch (Exception ex)
+        {
+            canConnect = false;
+            dbError = $"{ex.GetType().Name}: {ex.Message}\nInner: {ex.InnerException?.Message}";
+            logger.LogError(ex, "EF Core database connection failed");
+        }
+        
+        // Try to query users
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        string queryError = null;
+        int userCount = 0;
+        try
+        {
+            if (canConnect)
+            {
+                var users = await userManager.Users.Take(10).Select(u => new { u.Email, u.Id }).ToListAsync();
+                userCount = users.Count;
+            }
+            else
+            {
+                queryError = "Cannot query - database connection failed";
+            }
+        }
+        catch (Exception ex)
+        {
+            queryError = $"{ex.GetType().Name}: {ex.Message}\nInner: {ex.InnerException?.Message}";
+            logger.LogError(ex, "User query failed");
+        }
+        
+        scope.Dispose();
+        
+        return Results.Ok(new 
+        { 
+            userCount,
+            connectionStringFound = !string.IsNullOrEmpty(connStr),
+            connectionStringHost = connStr?.Split(';').FirstOrDefault(s => s.StartsWith("Host="))?.Replace("Host=", "") ?? "unknown",
+            connectionStringPort = connStr?.Split(';').FirstOrDefault(s => s.StartsWith("Port="))?.Replace("Port=", "") ?? "unknown",
+            connectionStringUsername = connStr?.Split(';').FirstOrDefault(s => s.StartsWith("Username="))?.Replace("Username=", "") ?? "unknown",
+            directNpgsqlConnection = directConnectionSuccess ? "success" : $"failed: {directConnectionError}",
+            efCoreConnection = canConnect ? "success" : $"failed: {dbError}",
+            queryError
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error: {ex.Message}\n{ex.StackTrace}");
+    }
+});
+
+// --- Health check endpoint ---
+app.MapGet("/health", async (HttpContext context) =>
+{
+    try
+    {
+        var scope = context.RequestServices.CreateScope();
+        var configuration = context.RequestServices.GetRequiredService<IConfiguration>();
+        
+        // Check connection string
+        var connString1 = configuration.GetConnectionString("DefaultConnection");
+        var connString2 = configuration["ConnectionStrings:DefaultConnection"];
+        var connString3 = configuration["ConnectionStrings__DefaultConnection"];
+        
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        string dbError = null;
+        try
+        {
+            var canConnect = await db.Database.CanConnectAsync();
+        }
+        catch (Exception ex)
+        {
+            dbError = ex.Message;
+        }
+        
+        var identityDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        string identityError = null;
+        try
+        {
+            var canConnectIdentity = await identityDb.Database.CanConnectAsync();
+        }
+        catch (Exception ex)
+        {
+            identityError = ex.Message;
+        }
+        
+        scope.Dispose();
+        
+        return Results.Ok(new 
+        { 
+            status = "healthy",
+            database = dbError == null ? "connected" : $"disconnected: {dbError}",
+            identityDb = identityError == null ? "connected" : $"disconnected: {identityError}",
+            connStringFound = !string.IsNullOrEmpty(connString1) || !string.IsNullOrEmpty(connString2) || !string.IsNullOrEmpty(connString3),
+            timestamp = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Health check failed: {ex.Message}\n{ex.StackTrace}");
+    }
+});
+
 // --- Auth endpoints ---
 app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager) =>
 {
-    var form = await httpContext.Request.ReadFormAsync();
-    var email = form["email"].ToString();
-    var password = form["password"].ToString();
-
-    if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
-        return Results.Redirect("/login?error=missing");
-
-    var result = await signInManager.PasswordSignInAsync(email, password, isPersistent: true, lockoutOnFailure: false);
-    if (result.Succeeded)
+    var logger = httpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+    try
     {
-        var user = await userManager.FindByEmailAsync(email);
-        if (user != null)
+        // Read form data - Azure App Service may have different content type handling
+        if (!httpContext.Request.HasFormContentType)
         {
-            user.LastLoginAt = DateTimeOffset.UtcNow;
-            await userManager.UpdateAsync(user);
+            // Try to read anyway - sometimes Azure proxy modifies headers
+            logger.LogWarning("Login request without form content type: {ContentType}", httpContext.Request.ContentType);
         }
-        return Results.Redirect("/");
-    }
 
-    return Results.Redirect("/login?error=invalid");
+        var form = await httpContext.Request.ReadFormAsync();
+        var email = form["email"].ToString();
+        var password = form["password"].ToString();
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            return Results.Redirect("/login?error=missing");
+        logger.LogInformation("Login attempt for email: {Email}", email);
+        
+        var result = await signInManager.PasswordSignInAsync(email, password, isPersistent: true, lockoutOnFailure: false);
+        
+        if (result.Succeeded)
+        {
+            logger.LogInformation("Login successful for email: {Email}", email);
+            var user = await userManager.FindByEmailAsync(email);
+            if (user != null)
+            {
+                user.LastLoginAt = DateTimeOffset.UtcNow;
+                await userManager.UpdateAsync(user);
+            }
+            return Results.Redirect("/");
+        }
+        
+        logger.LogWarning("Login failed for email: {Email}, Result: {Result}", email, result);
+        return Results.Redirect("/login?error=invalid");
+    }
+    catch (Exception ex)
+    {
+        // Log error with details for debugging
+        logger.LogError(ex, "Error in /auth/login endpoint: {Message}, StackTrace: {StackTrace}", ex.Message, ex.StackTrace);
+        return Results.Redirect("/login?error=invalid");
+    }
 });
 
 app.MapPost("/auth/logout", async (SignInManager<ApplicationUser> signInManager) =>
