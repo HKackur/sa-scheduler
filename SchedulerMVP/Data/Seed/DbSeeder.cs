@@ -42,6 +42,8 @@ public class DbSeeder
         const string adminEmail = "admin@sportadmin.se";
         var adminUser = await _userManager.FindByEmailAsync(adminEmail);
 
+        const string adminPassword = "vårloggaärgrön";
+        
         if (adminUser == null)
         {
             adminUser = new ApplicationUser
@@ -51,7 +53,7 @@ public class DbSeeder
                 EmailConfirmed = true
             };
 
-            var result = await _userManager.CreateAsync(adminUser, "vårloggaärgrön");
+            var result = await _userManager.CreateAsync(adminUser, adminPassword);
             if (result.Succeeded)
             {
                 await _userManager.AddToRoleAsync(adminUser, "Admin");
@@ -64,9 +66,21 @@ public class DbSeeder
         }
         else
         {
-            _logger.LogInformation("Admin user already exists - skipping password reset.");
+            // Ensure password is correct even if user already exists
+            // This fixes issues where password might have been changed or corrupted
+            var token = await _userManager.GeneratePasswordResetTokenAsync(adminUser);
+            var resetResult = await _userManager.ResetPasswordAsync(adminUser, token, adminPassword);
             
-            // Only ensure user is in Admin role (don't reset password every time!)
+            if (resetResult.Succeeded)
+            {
+                _logger.LogInformation("Admin user exists - password reset to default.");
+            }
+            else
+            {
+                _logger.LogWarning("Failed to reset admin password: {Errors}", string.Join(", ", resetResult.Errors.Select(e => e.Description)));
+            }
+            
+            // Ensure user is in Admin role
             if (!await _userManager.IsInRoleAsync(adminUser, "Admin"))
             {
                 await _userManager.AddToRoleAsync(adminUser, "Admin");
