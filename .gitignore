@@ -49,3 +49,12 @@ out/
 ## Backup folders (keep local but don't commit)
 *_Backup*/
 
+
+# Build outputs
+publish/
+deploy.zip
+*.zip
+
+# Azure
+.azure/
+
