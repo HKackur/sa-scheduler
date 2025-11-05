@@ -1,10 +1,13 @@
 name: Deploy to Fly.io
 
+# DISABLED: Only deploying to Azure now
+# on:
+#   push:
+#     branches:
+#       - main
+#   workflow_dispatch:
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+  workflow_dispatch:  # Only manual trigger, no auto-deploy
 
 jobs:
   deploy:
