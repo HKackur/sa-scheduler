@@ -28,10 +28,12 @@ jobs:
       - name: Publish
         run: dotnet publish SchedulerMVP/SchedulerMVP.csproj --configuration Release --output ./publish
       
-      - name: Create deployment package
+      - name: Verify publish output
         run: |
-          cd publish
-          zip -r ../deploy.zip . -q
+          echo "📦 Published files:"
+          ls -la ./publish | head -20
+          echo "📄 Main DLL:"
+          ls -la ./publish/*.dll | head -5
       
       - name: Azure Login
         uses: azure/login@v2
@@ -42,6 +44,6 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: scheduler-mvp-app-1762239380
-          package: ./deploy.zip
+          package: ./publish
           slot-name: production
 
