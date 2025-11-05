@@ -279,25 +279,7 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseRouting();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapRazorPages();
-
-// Configure Blazor Server SignalR hub
-// Azure App Service: WebSockets work well with ARR affinity (sticky sessions)
-// Fly.io: Long Polling is more reliable behind proxy
-// Support both: Allow WebSockets (Azure) and Long Polling (Fly.io fallback)
-app.MapBlazorHub(options =>
-{
-    // Support both WebSockets (Azure) and Long Polling (Fly.io/compatibility)
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
-                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
-    // Increased poll timeout for better stability on slower connections (Fly.io)
-    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(90);
-});
-
-// --- Debug endpoints (must be BEFORE MapFallbackToPage) ---
+// --- Debug endpoints (must be BEFORE authentication/authorization) ---
 app.MapGet("/debug/test-password", async (HttpContext context, string email, string password) =>
 {
     try
@@ -463,6 +445,19 @@ app.MapGet("/debug/users", async (HttpContext context) =>
     {
         return Results.Problem($"Error: {ex.Message}\n{ex.StackTrace}");
     }
+});
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapRazorPages();
+
+// Configure Blazor Server SignalR hub
+app.MapBlazorHub(options =>
+{
+    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | 
+                         Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+    options.LongPolling.PollTimeout = TimeSpan.FromSeconds(90);
 });
 
 app.MapFallbackToPage("/_Host");
