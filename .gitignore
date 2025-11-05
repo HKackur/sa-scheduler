@@ -58,3 +58,6 @@ deploy.zip
 # Azure
 .azure/
 
+azure-credentials.json
+azure-credentials.json
+add-azure-secret.sh
