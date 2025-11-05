@@ -28,6 +28,11 @@ jobs:
       - name: Publish
         run: dotnet publish SchedulerMVP/SchedulerMVP.csproj --configuration Release --output ./publish
       
+      - name: Create deployment package
+        run: |
+          cd publish
+          zip -r ../deploy.zip . -q
+      
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -37,6 +42,6 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: scheduler-mvp-app-1762239380
-          package: ./publish
+          package: ./deploy.zip
           slot-name: production
 
