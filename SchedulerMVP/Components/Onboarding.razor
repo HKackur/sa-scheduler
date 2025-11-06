@@ -55,7 +55,8 @@
                 var user = await UserManager.FindByIdAsync(userId);
                 if (user != null)
                 {
-                    lastDone = user.OnboardingCompletedStep;
+                    // TEMPORARILY DISABLED: OnboardingCompletedStep removed to fix login
+                    lastDone = null; // user.OnboardingCompletedStep;
                 }
             }
             catch { }
@@ -131,7 +132,8 @@
             var user = await UserManager.FindByIdAsync(userId);
             if (user != null)
             {
-                user.OnboardingCompletedStep = step;
+                // TEMPORARILY DISABLED: OnboardingCompletedStep removed to fix login
+                // user.OnboardingCompletedStep = step;
                 await UserManager.UpdateAsync(user);
             }
         }
