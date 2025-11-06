@@ -53,5 +53,4 @@ jobs:
           app-name: scheduler-mvp-app-1762239380
           package: ./publish
           slot-name: production
-          startup-command: "dotnet SchedulerMVP.dll"
 
