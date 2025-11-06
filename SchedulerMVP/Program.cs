@@ -355,6 +355,52 @@ app.MapGet("/debug/list-users", async (HttpContext context) =>
     }
 });
 
+app.MapGet("/debug/reset-password", async (HttpContext context, string email, string newPassword) =>
+{
+    try
+    {
+        var scope = context.RequestServices.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        
+        var user = await userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            scope.Dispose();
+            return Results.NotFound(new { message = $"User with email {email} not found" });
+        }
+        
+        // Remove old password
+        var removeResult = await userManager.RemovePasswordAsync(user);
+        if (!removeResult.Succeeded)
+        {
+            scope.Dispose();
+            return Results.Problem($"Failed to remove old password: {string.Join(", ", removeResult.Errors.Select(e => e.Description))}");
+        }
+        
+        // Add new password
+        var addResult = await userManager.AddPasswordAsync(user, newPassword);
+        if (addResult.Succeeded)
+        {
+            scope.Dispose();
+            return Results.Ok(new 
+            { 
+                success = true,
+                message = $"Password reset successfully for {email}",
+                email = user.Email
+            });
+        }
+        else
+        {
+            scope.Dispose();
+            return Results.Problem($"Failed to set new password: {string.Join(", ", addResult.Errors.Select(e => e.Description))}");
+        }
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error: {ex.Message}\n{ex.StackTrace}");
+    }
+});
+
 app.MapGet("/debug/users", async (HttpContext context) =>
 {
     try
