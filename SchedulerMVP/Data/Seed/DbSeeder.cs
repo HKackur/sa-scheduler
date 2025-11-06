@@ -23,10 +23,13 @@ public class DbSeeder
     {
         // Seed admin user and role (if not exists)
         await SeedAdminUserAsync();
+        
+        // Seed henrik user (if not exists)
+        await SeedHenrikUserAsync();
 
         // Note: Demo data seeding removed - users create their own data from scratch
         // No demo Places, Groups, or ScheduleTemplates are seeded
-        _logger.LogInformation("Seed completed - only admin user created.");
+        _logger.LogInformation("Seed completed - admin and henrik users created.");
     }
 
     private async Task SeedAdminUserAsync()
@@ -91,6 +94,56 @@ public class DbSeeder
             {
                 await _userManager.AddToRoleAsync(adminUser, "Admin");
                 _logger.LogInformation("Added admin user to Admin role.");
+            }
+        }
+    }
+    
+    private async Task SeedHenrikUserAsync()
+    {
+        const string henrikEmail = "henrik.kackur@sportadmin.se";
+        var henrikUser = await _userManager.FindByEmailAsync(henrikEmail);
+        
+        // Use same password as admin for now - can be changed later
+        const string henrikPassword = "vårloggaärgrön";
+        
+        if (henrikUser == null)
+        {
+            henrikUser = new ApplicationUser
+            {
+                UserName = henrikEmail,
+                Email = henrikEmail,
+                EmailConfirmed = true
+            };
+
+            var result = await _userManager.CreateAsync(henrikUser, henrikPassword);
+            if (result.Succeeded)
+            {
+                _logger.LogInformation("Created henrik user: {Email}", henrikEmail);
+            }
+            else
+            {
+                _logger.LogError("Failed to create henrik user: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            // Always reset password to ensure it's correct
+            _logger.LogInformation("Henrik user exists - resetting password to ensure it's correct.");
+            
+            var removeResult = await _userManager.RemovePasswordAsync(henrikUser);
+            if (!removeResult.Succeeded)
+            {
+                _logger.LogError("Failed to remove old password for henrik: {Errors}", string.Join(", ", removeResult.Errors.Select(e => e.Description)));
+            }
+            
+            var addResult = await _userManager.AddPasswordAsync(henrikUser, henrikPassword);
+            if (addResult.Succeeded)
+            {
+                _logger.LogInformation("Henrik password successfully reset to default.");
+            }
+            else
+            {
+                _logger.LogError("Failed to set henrik password: {Errors}", string.Join(", ", addResult.Errors.Select(e => e.Description)));
             }
         }
     }
