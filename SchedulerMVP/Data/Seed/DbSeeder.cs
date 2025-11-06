@@ -69,31 +69,15 @@ public class DbSeeder
         }
         else
         {
-            // Always reset password using RemovePassword + AddPassword (more reliable than ResetPassword)
-            // This ensures password is definitely correct
-            _logger.LogInformation("Admin user exists - resetting password to ensure it's correct.");
-            
-            var removeResult = await _userManager.RemovePasswordAsync(adminUser);
-            if (!removeResult.Succeeded)
-            {
-                _logger.LogError("Failed to remove old password: {Errors}", string.Join(", ", removeResult.Errors.Select(e => e.Description)));
-            }
-            
-            var addResult = await _userManager.AddPasswordAsync(adminUser, adminPassword);
-            if (addResult.Succeeded)
-            {
-                _logger.LogInformation("Admin password successfully reset to default.");
-            }
-            else
-            {
-                _logger.LogError("Failed to set admin password: {Errors}", string.Join(", ", addResult.Errors.Select(e => e.Description)));
-            }
-            
-            // Ensure user is in Admin role
+            // User exists - only ensure they're in Admin role, don't reset password
             if (!await _userManager.IsInRoleAsync(adminUser, "Admin"))
             {
                 await _userManager.AddToRoleAsync(adminUser, "Admin");
                 _logger.LogInformation("Added admin user to Admin role.");
+            }
+            else
+            {
+                _logger.LogInformation("Admin user already exists with correct role - password not changed.");
             }
         }
     }
@@ -127,24 +111,8 @@ public class DbSeeder
         }
         else
         {
-            // Always reset password to ensure it's correct
-            _logger.LogInformation("Henrik user exists - resetting password to ensure it's correct.");
-            
-            var removeResult = await _userManager.RemovePasswordAsync(henrikUser);
-            if (!removeResult.Succeeded)
-            {
-                _logger.LogError("Failed to remove old password for henrik: {Errors}", string.Join(", ", removeResult.Errors.Select(e => e.Description)));
-            }
-            
-            var addResult = await _userManager.AddPasswordAsync(henrikUser, henrikPassword);
-            if (addResult.Succeeded)
-            {
-                _logger.LogInformation("Henrik password successfully reset to default.");
-            }
-            else
-            {
-                _logger.LogError("Failed to set henrik password: {Errors}", string.Join(", ", addResult.Errors.Select(e => e.Description)));
-            }
+            // User exists - don't reset password, let user keep their own password
+            _logger.LogInformation("Henrik user already exists - password not changed.");
         }
     }
 }
