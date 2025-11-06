@@ -53,4 +53,5 @@ jobs:
           app-name: scheduler-mvp-app-1762239380
           package: ./publish
           slot-name: production
+          clean: true
 
