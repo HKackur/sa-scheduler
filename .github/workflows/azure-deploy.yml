@@ -34,11 +34,18 @@ jobs:
           ls -la ./publish | head -20
           echo "📄 Main DLL:"
           ls -la ./publish/*.dll | head -5
+          echo "📊 Total size:"
+          du -sh ./publish
       
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Verify Azure connection
+        run: |
+          az account show
+          az webapp show --name scheduler-mvp-app-1762239380 --resource-group scheduler-mvp-rg --query "{name:name, state:state, defaultHostName:defaultHostName}" -o json
       
       - name: Deploy to Azure App Service
         uses: azure/webapps-deploy@v3
@@ -46,4 +53,5 @@ jobs:
           app-name: scheduler-mvp-app-1762239380
           package: ./publish
           slot-name: production
+          startup-command: "dotnet SchedulerMVP.dll"
 
