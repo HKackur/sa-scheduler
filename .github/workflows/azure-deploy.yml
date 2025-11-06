@@ -26,7 +26,7 @@ jobs:
         run: dotnet build SchedulerMVP/SchedulerMVP.csproj --configuration Release --no-restore
       
       - name: Publish
-        run: dotnet publish SchedulerMVP/SchedulerMVP.csproj --configuration Release --output ./publish --self-contained false
+        run: dotnet publish SchedulerMVP/SchedulerMVP.csproj --configuration Release --output ./publish --self-contained false /p:UseAppHost=false
       
       - name: Verify publish output
         run: |
