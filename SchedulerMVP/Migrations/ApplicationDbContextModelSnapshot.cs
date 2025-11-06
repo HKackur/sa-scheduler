@@ -181,8 +181,9 @@ namespace SchedulerMVP.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
-                    b.Property<int?>("OnboardingCompletedStep")
-                        .HasColumnType("INTEGER");
+                    // TEMPORARILY DISABLED: OnboardingCompletedStep removed to fix login
+                    // b.Property<int?>("OnboardingCompletedStep")
+                    //     .HasColumnType("INTEGER");
 
                     b.Property<string>("PasswordHash")
                         .HasColumnType("TEXT");
