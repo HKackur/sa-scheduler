@@ -668,47 +668,7 @@ try
         Console.WriteLine("[MIGRATION] Identity database migration completed");
         logger.LogInformation("=== Identity database migration completed ===");
         
-        // CRITICAL FIX: Ensure OnboardingCompletedStep column exists (manual fix if migration failed)
-        // This is completely optional and should NEVER crash the app
-        try
-        {
-            var identityProvider = identityContext.Database.ProviderName ?? string.Empty;
-            if (identityProvider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
-            {
-                // Check if column exists first, then add if it doesn't
-                // Use DO block to handle IF NOT EXISTS safely
-                try
-                {
-                    await identityContext.Database.ExecuteSqlRawAsync(@"
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'AspNetUsers' 
-                                AND column_name = 'OnboardingCompletedStep'
-                            ) THEN
-                                ALTER TABLE ""AspNetUsers"" 
-                                ADD COLUMN ""OnboardingCompletedStep"" integer;
-                            END IF;
-                        END $$;
-                    ");
-                    Console.WriteLine("[MIGRATION] OnboardingCompletedStep column ensured");
-                    logger.LogInformation("OnboardingCompletedStep column ensured");
-                }
-                catch (Exception sqlEx)
-                {
-                    // If SQL fails, that's OK - column might already exist or migration will handle it
-                    Console.WriteLine($"[MIGRATION] Column ensure SQL failed (non-critical): {sqlEx.Message}");
-                    logger.LogInformation("Column ensure SQL failed (non-critical): {Message}", sqlEx.Message);
-                }
-            }
-        }
-        catch (Exception colEx)
-        {
-            // Non-critical - just log (column might already exist or migration will handle it)
-            Console.WriteLine($"[MIGRATION] Column ensure check failed (non-critical): {colEx.Message}");
-            logger.LogInformation("Column ensure check failed (non-critical): {Message}", colEx.Message);
-        }
+        // ONBOARDING DISABLED - All onboarding column creation code removed to ensure login works 100%
     }
     catch (Exception ex)
     {
@@ -718,45 +678,7 @@ try
         logger.LogError(ex, "=== FAILED to migrate Identity database: {Message} ===", ex.Message);
         logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
         
-        // CRITICAL: Try to add column manually even if migration failed
-        // This is completely optional and should NEVER crash the app
-        try
-        {
-            var identityProviderFallback = identityContext.Database.ProviderName ?? string.Empty;
-            if (identityProviderFallback.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    await identityContext.Database.ExecuteSqlRawAsync(@"
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (
-                                SELECT 1 FROM information_schema.columns 
-                                WHERE table_name = 'AspNetUsers' 
-                                AND column_name = 'OnboardingCompletedStep'
-                            ) THEN
-                                ALTER TABLE ""AspNetUsers"" 
-                                ADD COLUMN ""OnboardingCompletedStep"" integer;
-                            END IF;
-                        END $$;
-                    ");
-                    Console.WriteLine("[MIGRATION] OnboardingCompletedStep column added manually after migration failure");
-                    logger.LogInformation("OnboardingCompletedStep column added manually after migration failure");
-                }
-                catch (Exception sqlEx)
-                {
-                    // If SQL fails, that's OK - don't crash the app
-                    Console.WriteLine($"[MIGRATION] Failed to add column manually (non-critical): {sqlEx.Message}");
-                    logger.LogInformation("Failed to add column manually (non-critical): {Message}", sqlEx.Message);
-                }
-            }
-        }
-        catch (Exception manualEx)
-        {
-            // Non-critical - don't crash the app
-            Console.WriteLine($"[MIGRATION] Column add attempt failed (non-critical): {manualEx.Message}");
-            logger.LogInformation("Column add attempt failed (non-critical): {Message}", manualEx.Message);
-        }
+        // ONBOARDING DISABLED - All onboarding column creation code removed to ensure login works 100%
     }
     
     // Ensure application database is up-to-date

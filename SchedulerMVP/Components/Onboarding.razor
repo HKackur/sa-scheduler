@@ -41,9 +41,9 @@
                 var user = await UserManager.FindByIdAsync(userId);
                 if (user != null)
                 {
-                    // CRITICAL: OnboardingCompletedStep might not exist in DB - handle gracefully
-                    // If column doesn't exist, EF Core will throw - catch and ignore
-                    lastDone = user.OnboardingCompletedStep;
+                    // ONBOARDING DISABLED - OnboardingCompletedStep commented out
+                    // lastDone = user.OnboardingCompletedStep;
+                    lastDone = null; // Always show as not started when disabled
                 }
             }
             catch 
@@ -199,10 +199,10 @@
             var user = await UserManager.FindByIdAsync(userId);
             if (user != null)
             {
-                // CRITICAL: OnboardingCompletedStep might not exist in DB - handle gracefully
-                // If column doesn't exist, this will fail silently - that's OK
-                user.OnboardingCompletedStep = step;
-                await UserManager.UpdateAsync(user);
+                // ONBOARDING DISABLED - OnboardingCompletedStep commented out
+                // user.OnboardingCompletedStep = step;
+                // await UserManager.UpdateAsync(user);
+                // Do nothing - onboarding is disabled
             }
         }
         catch 

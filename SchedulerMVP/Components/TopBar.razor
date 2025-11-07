@@ -657,7 +657,8 @@
 <ScheduleTemplateCreateModal IsOpen="@createOpen" OnClose="CloseCreate" OnCreated="AfterTemplateSaved" />
 <ScheduleTemplateCopyModal IsOpen="@copyOpen" OnClose="CloseCopy" OnCopied="AfterTemplateSaved" />
 <ScheduleTemplateDeleteModal IsOpen="@deleteOpen" OnClose="CloseDelete" OnDeleted="AfterTemplateSaved" />
-<Onboarding />
+@* ONBOARDING DISABLED - Commented out to ensure login works 100% *@
+@* <Onboarding /> *@
 
 @code {
     private List<SchedulerMVP.Data.Entities.ScheduleTemplate> templates = new();
