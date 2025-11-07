@@ -16,11 +16,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     {
         base.OnModelCreating(builder);
         // Identity tables will be configured automatically
-        
-        // ONBOARDING DISABLED - Ignore OnboardingCompletedStep column if it exists in database
-        // This allows the app to work even if the column exists in the database
-        builder.Entity<ApplicationUser>()
-            .Ignore(u => u.OnboardingCompletedStep);
+        // ONBOARDING COMPLETELY REMOVED - No configuration needed
     }
 }
 
