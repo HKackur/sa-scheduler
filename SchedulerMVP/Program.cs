@@ -668,7 +668,36 @@ try
         Console.WriteLine("[MIGRATION] Identity database migration completed");
         logger.LogInformation("=== Identity database migration completed ===");
         
-        // ONBOARDING DISABLED - All onboarding column creation code removed to ensure login works 100%
+        // ONBOARDING REMOVED - Drop OnboardingCompletedStep column if it exists
+        try
+        {
+            var provider = identityContext.Database.ProviderName ?? string.Empty;
+            if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+            {
+                // Drop column if it exists (safe to run multiple times)
+                await identityContext.Database.ExecuteSqlRawAsync(@"
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT 1 FROM information_schema.columns 
+                            WHERE table_name = 'AspNetUsers' 
+                            AND column_name = 'OnboardingCompletedStep'
+                        ) THEN
+                            ALTER TABLE ""AspNetUsers"" 
+                            DROP COLUMN ""OnboardingCompletedStep"";
+                        END IF;
+                    END $$;
+                ");
+                Console.WriteLine("[MIGRATION] OnboardingCompletedStep column removed if it existed");
+                logger.LogInformation("OnboardingCompletedStep column removed if it existed");
+            }
+        }
+        catch (Exception dropEx)
+        {
+            // Non-critical - just log
+            Console.WriteLine($"[MIGRATION] Column drop check (non-critical): {dropEx.Message}");
+            logger.LogInformation("Column drop check (non-critical): {Message}", dropEx.Message);
+        }
     }
     catch (Exception ex)
     {
