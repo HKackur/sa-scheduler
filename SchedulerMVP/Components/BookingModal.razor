@@ -327,124 +327,147 @@
     
     protected override async Task OnParametersSetAsync()
     {
-        // If modal was open but is now closed, reset the flag
-        if (!IsOpen && _wasOpen)
+        try
         {
-            ResetAllFields();
-            _wasOpen = false;
-            return;
-        }
-        
-        if (IsOpen)
-        {
-            // CRITICAL: Only reset fields when modal is actually being opened (was closed, now open)
-            // This prevents resetting fields if parameters change while modal is already open
-            if (!_wasOpen)
+            // If modal was open but is now closed, reset the flag and fields
+            if (!IsOpen && _wasOpen)
             {
-                // Modal just opened - reset all fields to prevent showing stale data
                 ResetAllFields();
-            }
-            _wasOpen = true;
-            
-            // Set the initially selected place (default to the place the user clicked on)
-            // This must be set BEFORE loading areas, as LoadAvailableAreasAsync depends on SelectedPlaceId
-            if (SelectedPlace != null)
-            {
-                SelectedPlaceId = SelectedPlace.Id;
+                _wasOpen = false;
+                // Don't return early - let the method complete to ensure component state is valid
             }
             
-            // Load groups from database FIRST - we need them before setting SelectedGroupId
-            await LoadGroupsAsync();
-            
-            // Preselect group: Always use UI.FilteredGroupId if group filter is active
-            // This is the same value used to filter the week view
-            if (UI.IsGroupFilterActive && UI.FilteredGroupId.HasValue)
+            if (IsOpen)
             {
-                SelectedGroupId = UI.FilteredGroupId;
-            }
-            else if (PrefilledGroupId.HasValue)
-            {
-                SelectedGroupId = PrefilledGroupId;
-            }
-            else
-            {
-                SelectedGroupId = null;
-            }
-            
-            // Force UI update to reflect selected group
-            StateHasChanged();
-            
-            // Load available places
-            await LoadAvailablePlacesAsync();
-            
-            // Load available areas for the place (now that SelectedPlaceId is set)
-            await LoadAvailableAreasAsync();
-            
-            // Set the initially selected area (default to the area the user clicked on)
-            // This must be set AFTER loading areas, so AvailableAreas is populated
-            if (SelectedArea != null)
-            {
-                SelectedAreaId = SelectedArea.Id;
-            }
-            
-            // Reset selected days
-            SelectedDays.Clear();
-            
-            // Pre-fill day if provided (Weekplanner mode)
-            if (PrefilledDay.HasValue && PrefilledDay.Value >= 1 && PrefilledDay.Value <= 7)
-            {
-                SelectedDays.Add(PrefilledDay.Value);
-            }
-            
-            // Initialize date for Calendar mode
-            if (UI.IsCalendarViewMode)
-            {
-                // Set to a date from the current week being displayed
-                // If PrefilledDay is provided, use that day of the current week
+                // CRITICAL: Only reset fields when modal is actually being opened (was closed, now open)
+                // This prevents resetting fields if parameters change while modal is already open
+                if (!_wasOpen)
+                {
+                    // Modal just opened - reset all fields to prevent showing stale data
+                    ResetAllFields();
+                }
+                _wasOpen = true;
+                
+                // Set the initially selected place (default to the place the user clicked on)
+                // This must be set BEFORE loading areas, as LoadAvailableAreasAsync depends on SelectedPlaceId
+                if (SelectedPlace != null)
+                {
+                    SelectedPlaceId = SelectedPlace.Id;
+                }
+                
+                // Load groups from database FIRST - we need them before setting SelectedGroupId
+                await LoadGroupsAsync();
+                
+                // Preselect group: Always use UI.FilteredGroupId if group filter is active
+                // This is the same value used to filter the week view
+                if (UI.IsGroupFilterActive && UI.FilteredGroupId.HasValue)
+                {
+                    SelectedGroupId = UI.FilteredGroupId;
+                }
+                else if (PrefilledGroupId.HasValue)
+                {
+                    SelectedGroupId = PrefilledGroupId;
+                }
+                else
+                {
+                    SelectedGroupId = null;
+                }
+                
+                // Force UI update to reflect selected group
+                StateHasChanged();
+                
+                // Load available places
+                await LoadAvailablePlacesAsync();
+                
+                // Load available areas for the place (now that SelectedPlaceId is set)
+                await LoadAvailableAreasAsync();
+                
+                // Set the initially selected area (default to the area the user clicked on)
+                // This must be set AFTER loading areas, so AvailableAreas is populated
+                if (SelectedArea != null)
+                {
+                    SelectedAreaId = SelectedArea.Id;
+                }
+                
+                // Reset selected days
+                SelectedDays.Clear();
+                
+                // Pre-fill day if provided (Weekplanner mode)
                 if (PrefilledDay.HasValue && PrefilledDay.Value >= 1 && PrefilledDay.Value <= 7)
                 {
-                    var currentWeekStart = UI.CurrentWeekStart;
-                    SelectedDate = currentWeekStart.AddDays(PrefilledDay.Value - 1).ToDateTime(TimeOnly.MinValue);
+                    SelectedDays.Add(PrefilledDay.Value);
+                }
+                
+                // Initialize date for Calendar mode
+                if (UI.IsCalendarViewMode)
+                {
+                    // Set to a date from the current week being displayed
+                    // If PrefilledDay is provided, use that day of the current week
+                    if (PrefilledDay.HasValue && PrefilledDay.Value >= 1 && PrefilledDay.Value <= 7)
+                    {
+                        var currentWeekStart = UI.CurrentWeekStart;
+                        SelectedDate = currentWeekStart.AddDays(PrefilledDay.Value - 1).ToDateTime(TimeOnly.MinValue);
+                    }
+                    else
+                    {
+                        // Default to Monday of current week
+                        SelectedDate = UI.CurrentWeekStart.ToDateTime(TimeOnly.MinValue);
+                    }
+                }
+                
+                // Initialize times based on place default duration
+                if (SelectedPlace != null)
+                {
+                    currentDurationMinutes = SelectedPlace.DefaultDurationMin;
+                    
+                    // Use prefilled times if provided, otherwise use defaults
+                    StartTime = !string.IsNullOrEmpty(PrefilledStartTime) ? PrefilledStartTime : "08:00";
+                    if (!string.IsNullOrEmpty(PrefilledEndTime))
+                    {
+                        EndTime = PrefilledEndTime!;
+                        currentDurationMinutes = GetDurationInMinutes(StartTime, EndTime);
+                    }
+                    else
+                    {
+                        EndTime = AddMinutesToTime(StartTime, currentDurationMinutes);
+                    }
                 }
                 else
                 {
-                    // Default to Monday of current week
-                    SelectedDate = UI.CurrentWeekStart.ToDateTime(TimeOnly.MinValue);
-                }
-            }
-            
-            // Initialize times based on place default duration
-            if (SelectedPlace != null)
-            {
-                currentDurationMinutes = SelectedPlace.DefaultDurationMin;
-                
-                // Use prefilled times if provided, otherwise use defaults
-                StartTime = !string.IsNullOrEmpty(PrefilledStartTime) ? PrefilledStartTime : "08:00";
-                if (!string.IsNullOrEmpty(PrefilledEndTime))
-                {
-                    EndTime = PrefilledEndTime!;
-                    currentDurationMinutes = GetDurationInMinutes(StartTime, EndTime);
-                }
-                else
-                {
-                    EndTime = AddMinutesToTime(StartTime, currentDurationMinutes);
+                    // Fallback if SelectedPlace is null
+                    StartTime = !string.IsNullOrEmpty(PrefilledStartTime) ? PrefilledStartTime : "08:00";
+                    EndTime = !string.IsNullOrEmpty(PrefilledEndTime) ? PrefilledEndTime : "09:00";
                 }
                 
-                // Console.WriteLine($"=== BOOKING MODAL INIT ===");
-                // Console.WriteLine($"Place: {SelectedPlace.Name}");
-                // Console.WriteLine($"Default Duration: {currentDurationMinutes} minutes");
-                // Console.WriteLine($"PrefilledStartTime: {PrefilledStartTime}");
-                // Console.WriteLine($"Start Time: {StartTime}");
-                // Console.WriteLine($"End Time: {EndTime}");
-                // Console.WriteLine($"Prefilled Day: {PrefilledDay}");
+                // Check availability for ALL areas in the dropdown after all parameters are set
+                // This ensures the availability indicators are correct from the start
+                // Wrap in try-catch to prevent circuit crashes
+                try
+                {
+                    await CheckAllAreasAvailabilityAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[BookingModal] Error checking availability: {ex.Message}");
+                }
+                
+                // Then check conflicts for the selected area
+                try
+                {
+                    await RecheckConflictsAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[BookingModal] Error checking conflicts: {ex.Message}");
+                }
             }
-            
-            // Check availability for ALL areas in the dropdown after all parameters are set
-            // This ensures the availability indicators are correct from the start
-            await CheckAllAreasAvailabilityAsync();
-            
-            // Then check conflicts for the selected area
-            await RecheckConflictsAsync();
+        }
+        catch (Exception ex)
+        {
+            // CRITICAL: Catch all exceptions to prevent circuit crashes
+            // Log error but don't re-throw - component should still render
+            Console.WriteLine($"[BookingModal] Error in OnParametersSetAsync: {ex.Message}");
+            Console.WriteLine($"[BookingModal] Stack trace: {ex.StackTrace}");
         }
     }
     
@@ -1028,56 +1051,103 @@
     
     private async Task CloseModal()
     {
-        showAreaDropdown = false; // Close area dropdown when modal closes
-        showPlaceDropdown = false; // Close place dropdown when modal closes
-        
-        // CRITICAL: Reset all fields when modal closes to prevent stale data on next open
-        ResetAllFields();
-        
-        // Mark modal as closed so we know to reset on next open
-        _wasOpen = false;
-        
-        await OnClose.InvokeAsync();
-        StateHasChanged();
+        try
+        {
+            showAreaDropdown = false; // Close area dropdown when modal closes
+            showPlaceDropdown = false; // Close place dropdown when modal closes
+            
+            // CRITICAL: Reset all fields when modal closes to prevent stale data on next open
+            ResetAllFields();
+            
+            // Mark modal as closed so we know to reset on next open
+            _wasOpen = false;
+            
+            await OnClose.InvokeAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            // CRITICAL: Never throw from CloseModal - log and try to close anyway
+            Console.WriteLine($"[BookingModal] Error in CloseModal: {ex.Message}");
+            _wasOpen = false;
+            try
+            {
+                await OnClose.InvokeAsync();
+            }
+            catch
+            {
+                // If OnClose fails, at least mark as closed
+            }
+        }
     }
     
     /// <summary>
     /// Resets all form fields to their default values to prevent stale data from showing
     /// when the modal is opened again. This eliminates the "blink" effect.
+    /// CRITICAL: This method must never throw exceptions to prevent circuit crashes.
     /// </summary>
     private void ResetAllFields()
     {
-        // Reset selection fields
-        SelectedDays.Clear();
-        SelectedGroupId = null;
-        SelectedPlaceId = null;
-        SelectedAreaId = null;
-        SelectedDate = DateTime.Today;
-        
-        // Reset time fields to defaults
-        StartTime = "08:00";
-        EndTime = "09:00";
-        currentDurationMinutes = 60;
-        
-        // Reset contact/notes fields
-        Notes = null;
-        ContactName = null;
-        ContactPhone = null;
-        ContactEmail = null;
-        showExtras = false;
-        
-        // Reset conflict/state fields
-        hasConflicts = false;
-        conflictMessages.Clear();
-        saveInProgress = false;
-        
-        // Reset UI state
-        showAreaDropdown = false;
-        showPlaceDropdown = false;
-        AreaAvailability.Clear();
-        
-        // Note: We don't reset Groups, AvailablePlaces, AvailableAreas here
-        // as they will be reloaded in OnParametersSetAsync anyway
+        try
+        {
+            // Reset selection fields - ensure SelectedDays is initialized
+            if (SelectedDays == null)
+            {
+                SelectedDays = new List<int>();
+            }
+            else
+            {
+                SelectedDays.Clear();
+            }
+            SelectedGroupId = null;
+            SelectedPlaceId = null;
+            SelectedAreaId = null;
+            SelectedDate = DateTime.Today;
+            
+            // Reset time fields to defaults
+            StartTime = "08:00";
+            EndTime = "09:00";
+            currentDurationMinutes = 60;
+            
+            // Reset contact/notes fields
+            Notes = null;
+            ContactName = null;
+            ContactPhone = null;
+            ContactEmail = null;
+            showExtras = false;
+            
+            // Reset conflict/state fields
+            hasConflicts = false;
+            if (conflictMessages == null)
+            {
+                conflictMessages = new List<string>();
+            }
+            else
+            {
+                conflictMessages.Clear();
+            }
+            saveInProgress = false;
+            
+            // Reset UI state
+            showAreaDropdown = false;
+            showPlaceDropdown = false;
+            if (AreaAvailability == null)
+            {
+                AreaAvailability = new Dictionary<Guid, bool>();
+            }
+            else
+            {
+                AreaAvailability.Clear();
+            }
+            
+            // Note: We don't reset Groups, AvailablePlaces, AvailableAreas here
+            // as they will be reloaded in OnParametersSetAsync anyway
+        }
+        catch (Exception ex)
+        {
+            // CRITICAL: Never throw from ResetAllFields - log and continue
+            Console.WriteLine($"[BookingModal] Error in ResetAllFields: {ex.Message}");
+        }
     }
     
     private string GetDayName(int day)
