@@ -275,14 +275,10 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 // Configure the HTTP request pipeline.
 // Always use detailed error page in production for now to debug issues
 app.UseExceptionHandler("/Error");
-if (app.Environment.IsDevelopment())
-{
-    // Development error handling
-}
-    
-    // HSTS: Only enable if we're sure we're on HTTPS
-    // UseForwardedHeaders should have already set the scheme correctly
-    app.UseHsts();
+
+// HSTS: Only enable if we're sure we're on HTTPS
+// UseForwardedHeaders should have already set the scheme correctly
+app.UseHsts();
     
     // Additional HTTPS scheme detection for Fly.io (UseForwardedHeaders handles Azure)
     // Fly.io uses Fly-Forwarded-Proto instead of X-Forwarded-Proto
