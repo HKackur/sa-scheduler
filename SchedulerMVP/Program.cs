@@ -94,14 +94,14 @@ builder.Services.AddSignalR(options =>
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
     options.KeepAliveInterval = TimeSpan.FromSeconds(15);
     options.HandshakeTimeout = TimeSpan.FromSeconds(15);
-    options.EnableDetailedErrors = false; // Disable in production for security
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment(); // Enable in development for debugging
     options.MaximumReceiveMessageSize = 32 * 1024; // 32KB max message size
 });
 
 builder.Services.AddServerSideBlazor(options =>
 {
     // Disable circuit disconnect timeout for better reliability
-    options.DetailedErrors = false;
+    options.DetailedErrors = builder.Environment.IsDevelopment();
     options.DisconnectedCircuitMaxRetained = 100;
     options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
@@ -226,6 +226,24 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
     }
 }, ServiceLifetime.Scoped); // CRITICAL: Must be Scoped, not Singleton
 
+// Add DbContextFactory for ApplicationDbContext (Identity)
+builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
+{
+    if (!string.IsNullOrEmpty(connectionString))
+    {
+        options.UseNpgsql(connectionString, npgsql =>
+        {
+            npgsql.MigrationsAssembly("SchedulerMVP");
+            npgsql.CommandTimeout(120); // 120 second timeout for Azure
+        });
+    }
+    else
+    {
+        options.UseSqlite("Data Source=app.db", sqlite =>
+            sqlite.MigrationsAssembly("SchedulerMVP"));
+    }
+}, ServiceLifetime.Scoped); // CRITICAL: Must be Scoped, not Singleton
+
 // Add services
 builder.Services.AddScoped<IConflictService, ConflictService>();
 builder.Services.AddScoped<IScheduleTemplateService, ScheduleTemplateService>();
@@ -255,9 +273,12 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 });
 
 // Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
+// Always use detailed error page in production for now to debug issues
+app.UseExceptionHandler("/Error");
+if (app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error");
+    // Development error handling
+}
     
     // HSTS: Only enable if we're sure we're on HTTPS
     // UseForwardedHeaders should have already set the scheme correctly
@@ -719,10 +740,12 @@ try
     }
     catch (Exception ex)
     {
+        // Log but don't crash - app should start even if seeding fails
         Console.WriteLine($"[SEED] ERROR: Failed to seed database: {ex.Message}");
         Console.WriteLine($"[SEED] Stack: {ex.StackTrace}");
         logger.LogError(ex, "=== FAILED to seed database: {Message} ===", ex.Message);
         logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
+        // Don't rethrow - let app start anyway
     }
 
     // One-time data ownership fix: attach legacy data without UserId to admin account
