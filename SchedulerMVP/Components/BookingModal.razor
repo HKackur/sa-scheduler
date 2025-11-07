@@ -322,12 +322,29 @@
     // Semaphore to prevent concurrent availability checks and race conditions
     private readonly SemaphoreSlim availabilityCheckLock = new SemaphoreSlim(1, 1);
     
+    // Track previous IsOpen state to detect when modal is actually opened (not just parameter changes)
+    private bool _wasOpen = false;
+    
     protected override async Task OnParametersSetAsync()
     {
+        // If modal was open but is now closed, reset the flag
+        if (!IsOpen && _wasOpen)
+        {
+            ResetAllFields();
+            _wasOpen = false;
+            return;
+        }
+        
         if (IsOpen)
         {
-            // Clear previous area availability data to force refresh
-            AreaAvailability.Clear();
+            // CRITICAL: Only reset fields when modal is actually being opened (was closed, now open)
+            // This prevents resetting fields if parameters change while modal is already open
+            if (!_wasOpen)
+            {
+                // Modal just opened - reset all fields to prevent showing stale data
+                ResetAllFields();
+            }
+            _wasOpen = true;
             
             // Set the initially selected place (default to the place the user clicked on)
             // This must be set BEFORE loading areas, as LoadAvailableAreasAsync depends on SelectedPlaceId
@@ -1013,8 +1030,54 @@
     {
         showAreaDropdown = false; // Close area dropdown when modal closes
         showPlaceDropdown = false; // Close place dropdown when modal closes
+        
+        // CRITICAL: Reset all fields when modal closes to prevent stale data on next open
+        ResetAllFields();
+        
+        // Mark modal as closed so we know to reset on next open
+        _wasOpen = false;
+        
         await OnClose.InvokeAsync();
         StateHasChanged();
+    }
+    
+    /// <summary>
+    /// Resets all form fields to their default values to prevent stale data from showing
+    /// when the modal is opened again. This eliminates the "blink" effect.
+    /// </summary>
+    private void ResetAllFields()
+    {
+        // Reset selection fields
+        SelectedDays.Clear();
+        SelectedGroupId = null;
+        SelectedPlaceId = null;
+        SelectedAreaId = null;
+        SelectedDate = DateTime.Today;
+        
+        // Reset time fields to defaults
+        StartTime = "08:00";
+        EndTime = "09:00";
+        currentDurationMinutes = 60;
+        
+        // Reset contact/notes fields
+        Notes = null;
+        ContactName = null;
+        ContactPhone = null;
+        ContactEmail = null;
+        showExtras = false;
+        
+        // Reset conflict/state fields
+        hasConflicts = false;
+        conflictMessages.Clear();
+        saveInProgress = false;
+        
+        // Reset UI state
+        showAreaDropdown = false;
+        showPlaceDropdown = false;
+        AreaAvailability.Clear();
+        
+        // Note: We don't reset Groups, AvailablePlaces, AvailableAreas here
+        // as they will be reloaded in OnParametersSetAsync anyway
     }
     
     private string GetDayName(int day)
