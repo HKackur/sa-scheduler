@@ -136,9 +136,9 @@
                 isOpen = true;
                 stepIndex = 3;
             }
-            else if (lastDone == 3)
+            else if (lastDone == 3 || lastDone == 4)
             {
-                // Step 3 completed - onboarding done
+                // Step 3 or 4 completed - onboarding done
                 isOpen = false;
             }
             Nav.LocationChanged += OnLocationChanged;
