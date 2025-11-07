@@ -829,6 +829,18 @@
             var startMin = int.Parse(startParts[0]) * 60 + int.Parse(startParts[1]);
             var endMin = int.Parse(endParts[0]) * 60 + int.Parse(endParts[1]);
 
+            // Check conflicts one more time before saving (in case something changed)
+            await RecheckConflictsAsync();
+            
+            // Don't save if there are conflicts
+            if (hasConflicts)
+            {
+                Console.WriteLine("[BookingModal] Cannot save - conflicts detected");
+                hasConflicts = false; // Re-enable button so user can try again after fixing
+                StateHasChanged();
+                return;
+            }
+            
             if (UI.IsCalendarViewMode)
             {
                 // Calendar mode: Create calendar booking
@@ -853,6 +865,7 @@
             else
             {
                 // Weekplanner mode: Create template bookings
+                // Conflicts already checked above
                 foreach (var day in SelectedDays)
                 {
                     // Normalize weekday into 1-7 (Mon-Sun)
