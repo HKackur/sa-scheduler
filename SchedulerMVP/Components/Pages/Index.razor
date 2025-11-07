@@ -295,6 +295,7 @@
         StateHasChanged();
         
         // Notify WeekGrid to refresh after edit
+        UI.ForceRefresh = true;
         UI.RaiseChanged();
     }
     

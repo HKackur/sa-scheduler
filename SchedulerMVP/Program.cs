@@ -35,8 +35,21 @@ if (!builder.Environment.IsDevelopment())
 {
     // Try Fly.io path first (if mounted volume exists)
     var flyKeysPath = "/app/keys";
-    // Azure App Service: Use local directory (persists across restarts within same instance)
-    var azureKeysPath = Path.Combine(Path.GetTempPath(), "SchedulerMVP-Keys");
+    
+    // Azure App Service: Use persistent home directory (survives restarts and deployments)
+    // Linux App Service exposes HOME=/home; Windows uses D:\\home
+    string? azureHome = Environment.GetEnvironmentVariable("HOME");
+    string azureKeysPath;
+    if (!string.IsNullOrEmpty(azureHome))
+    {
+        azureKeysPath = Path.Combine(azureHome, "data", "ProtectionKeys");
+    }
+    else
+    {
+        var homeDrive = Environment.GetEnvironmentVariable("HOMEDRIVE") ?? "D:";
+        var homePath = Environment.GetEnvironmentVariable("HOMEPATH") ?? @"\home";
+        azureKeysPath = Path.Combine(homeDrive, homePath.TrimStart('\\', '/'), "data", "ProtectionKeys");
+    }
     
     if (Directory.Exists(flyKeysPath))
     {
@@ -47,8 +60,7 @@ if (!builder.Environment.IsDevelopment())
     }
     else
     {
-        // Azure App Service or other platforms: Use local directory
-        // Ensure directory exists
+        // Azure App Service or other platforms: Use persistent home directory
         if (!Directory.Exists(azureKeysPath))
         {
             Directory.CreateDirectory(azureKeysPath);
@@ -171,10 +183,10 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 // Without this, users get logged out when SignalR reconnects
 builder.Services.AddScoped<AuthenticationStateProvider, ServerAuthenticationStateProvider>();
 
-// Persist login for 30 days
+// Persist login for 7 days (sliding)
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.ExpireTimeSpan = TimeSpan.FromDays(30);
+    options.ExpireTimeSpan = TimeSpan.FromDays(7);
     options.SlidingExpiration = true;
     options.LoginPath = "/login";
     // Required for HTTPS/proxy environments (Fly.io)
@@ -184,7 +196,7 @@ builder.Services.ConfigureApplicationCookie(options =>
         ? CookieSecurePolicy.SameAsRequest 
         : CookieSecurePolicy.Always;
     // CRITICAL: MaxAge ensures cookie persists across browser restarts
-    options.Cookie.MaxAge = TimeSpan.FromDays(30);
+    options.Cookie.MaxAge = TimeSpan.FromDays(7);
     options.Cookie.HttpOnly = true;
     options.Cookie.Name = ".AspNetCore.Identity.Application";
     options.Cookie.IsEssential = true; // Required for authentication
