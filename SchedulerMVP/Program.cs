@@ -671,8 +671,8 @@ try
         // ONBOARDING REMOVED - Drop OnboardingCompletedStep column if it exists
         try
         {
-            var provider = identityContext.Database.ProviderName ?? string.Empty;
-            if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+            var identityDbProvider = identityContext.Database.ProviderName ?? string.Empty;
+            if (identityDbProvider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
             {
                 // Drop column if it exists (safe to run multiple times)
                 await identityContext.Database.ExecuteSqlRawAsync(@"
