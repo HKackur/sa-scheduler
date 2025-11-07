@@ -62,14 +62,19 @@ if (!builder.Environment.IsDevelopment())
 
 // Port configuration: Supports both Fly.io (8080) and Azure App Service
 // Azure App Service sets PORT environment variable - app MUST listen on that port
-// IMPORTANT: Azure App Service handles HTTP/2 at the proxy level, so we should only use HTTP/1.1
+// CRITICAL: Azure App Service has issues with HTTP/2 - use HTTP/1.1 only for Azure
+// For Azure, we MUST disable HTTP/2 completely to avoid ERR_HTTP2_PROTOCOL_ERROR
 var port = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrEmpty(port) && int.TryParse(port, out var portNumber))
 {
-    // Azure App Service: Use HTTP/1.1 only (Azure proxy handles HTTP/2)
+    // Azure App Service: Use HTTP/1.1 ONLY - Azure proxy has HTTP/2 issues
     builder.WebHost.ConfigureKestrel(options =>
     {
-        options.ListenAnyIP(portNumber);
+        options.ListenAnyIP(portNumber, listenOptions =>
+        {
+            listenOptions.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1;
+        });
+        // Also set default to HTTP/1.1 for any other endpoints
         options.ConfigureEndpointDefaults(lo => lo.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1);
     });
 }
