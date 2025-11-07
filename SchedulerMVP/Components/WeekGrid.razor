@@ -778,11 +778,11 @@
                         t.IsGhost = false;
                         if (t.Area?.Place != null && t.Area != null)
                         {
-                            t.SourceAreaName = $"{t.Area.Place.Name} / {t.Area.Name}";
+                        t.SourceAreaName = $"{t.Area.Place.Name} - {t.Area.Name}";
                         }
                         else if (selectedArea?.Place != null && t.Area != null)
                         {
-                            t.SourceAreaName = $"{selectedArea.Place.Name} / {t.Area.Name}";
+                        t.SourceAreaName = $"{selectedArea.Place.Name} - {t.Area.Name}";
                         }
                         return t;
                     })
@@ -946,7 +946,17 @@
     {
         var result = new List<PositionedBooking>();
         
-        if (!UI.SelectedAreaId.HasValue || selectedArea == null || bookings.Count == 0)
+        if (bookings.Count == 0)
+        {
+            return result;
+        }
+        
+        if (UI.IsGroupFilterActive)
+        {
+            return CalculatePositionsForGroupFilter(bookings);
+        }
+        
+        if (!UI.SelectedAreaId.HasValue || selectedArea == null)
             return result;
         
         if (selectedAreaTotalLeafs == 0) selectedAreaTotalLeafs = 1;
@@ -1025,6 +1035,59 @@
                     });
                     currentLeft += widthPercent;
                 }
+            }
+        }
+        
+        return result;
+    }
+
+    private List<PositionedBooking> CalculatePositionsForGroupFilter(List<TemplateView> bookings)
+    {
+        var result = new List<PositionedBooking>();
+        if (bookings.Count == 0)
+        {
+            return result;
+        }
+        
+        static bool Overlaps(TemplateView a, TemplateView b) =>
+            !(a.EndMin <= b.StartMin || a.StartMin >= b.EndMin);
+        
+        var sorted = bookings.OrderBy(b => b.StartMin).ThenBy(b => b.EndMin).ToList();
+        var groups = new List<List<TemplateView>>();
+        
+        foreach (var booking in sorted)
+        {
+            var group = groups.FirstOrDefault(g => g.Any(existing => Overlaps(existing, booking)));
+            if (group is null)
+            {
+                group = new List<TemplateView>();
+                groups.Add(group);
+            }
+            group.Add(booking);
+        }
+        
+        foreach (var group in groups)
+        {
+            var ordered = group.OrderBy(b => b.StartMin).ThenBy(b => b.EndMin).ToList();
+            var count = Math.Max(1, ordered.Count);
+            var width = 100.0 / count;
+            
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                var booking = ordered[i];
+                var left = i * width;
+                
+                booking.WidthPercent = width;
+                booking.LeftPercent = left;
+                
+                result.Add(new PositionedBooking
+                {
+                    Booking = booking,
+                    IsGhost = false,
+                    WidthPercent = width,
+                    LeftPercent = left,
+                    LeafCount = 1
+                });
             }
         }
         
@@ -1240,8 +1303,8 @@
 
     private async Task OnDayContentClick(MouseEventArgs e, int dayIndex)
     {
-        // Only allow clicking if we have a selected area
-        if (!UI.SelectedAreaId.HasValue)
+        // Only allow clicking if we have a context for new booking
+        if (!UI.SelectedAreaId.HasValue && !UI.IsGroupFilterActive)
         {
             return;
         }

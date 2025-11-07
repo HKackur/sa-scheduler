@@ -204,7 +204,21 @@
         }
         else
         {
-            // Console.WriteLine("ERROR: No area selected");
+            // Group filter or no specific area selected: open modal with basic defaults
+            selectedArea = null;
+            selectedPlace = null;
+            
+            prefilledDay = data.dayOfWeek;
+            prefilledStartTime = data.startTime;
+            
+            // Default duration 60 minutes when we don't have a place to derive from
+            var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
+            var endMinutes = startMinutes + 60;
+            var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
+            prefilledEndTime = endTime.ToString("HH:mm");
+            
+            UI.ShouldOpenBookingModal = true;
+            StateHasChanged();
         }
     }
     
