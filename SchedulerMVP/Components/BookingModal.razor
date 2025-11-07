@@ -769,16 +769,26 @@
                 }
             }
             
+            // Validate inputs and show errors
             if (!SelectedPlaceId.HasValue)
             {
+                Console.WriteLine("[BookingModal] Error: No place selected");
+                hasConflicts = false;
+                StateHasChanged();
                 return;
             }
             if (targetArea == null)
             {
+                Console.WriteLine("[BookingModal] Error: No area selected");
+                hasConflicts = false;
+                StateHasChanged();
                 return;
             }
             if (!SelectedGroupId.HasValue)
             {
+                Console.WriteLine("[BookingModal] Error: No group selected");
+                hasConflicts = false;
+                StateHasChanged();
                 return;
             }
 
@@ -787,6 +797,9 @@
             {
                 if (SelectedDate == default)
                 {
+                    Console.WriteLine("[BookingModal] Error: No date selected");
+                    hasConflicts = false;
+                    StateHasChanged();
                     return;
                 }
             }
@@ -794,10 +807,16 @@
             {
                 if (!UI.SelectedTemplateId.HasValue)
                 {
+                    Console.WriteLine("[BookingModal] Error: No template selected");
+                    hasConflicts = false;
+                    StateHasChanged();
                     return;
                 }
                 if (SelectedDays.Count == 0)
                 {
+                    Console.WriteLine("[BookingModal] Error: No days selected");
+                    hasConflicts = false;
+                    StateHasChanged();
                     return;
                 }
             }
@@ -887,11 +906,15 @@
         catch (Exception ex)
         {
             Console.WriteLine($"[BookingModal] Error saving booking: {ex.Message}");
+            Console.WriteLine($"[BookingModal] Stack trace: {ex.StackTrace}");
             // Re-enable button on error
             if (!wasDisabled)
             {
                 hasConflicts = false;
+                StateHasChanged();
             }
+            // Re-throw to see error in browser console
+            throw;
         }
         finally
         {
