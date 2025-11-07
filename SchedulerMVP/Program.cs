@@ -671,8 +671,8 @@ try
         // CRITICAL FIX: Ensure OnboardingCompletedStep column exists (manual fix if migration failed)
         try
         {
-            var provider = identityContext.Database.ProviderName ?? string.Empty;
-            if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+            var identityProvider = identityContext.Database.ProviderName ?? string.Empty;
+            if (identityProvider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
             {
                 // Try to add column if it doesn't exist (PostgreSQL IF NOT EXISTS will handle duplicates)
                 await identityContext.Database.ExecuteSqlRawAsync(@"
@@ -701,8 +701,8 @@ try
         // CRITICAL: Try to add column manually even if migration failed
         try
         {
-            var provider = identityContext.Database.ProviderName ?? string.Empty;
-            if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+            var identityProviderFallback = identityContext.Database.ProviderName ?? string.Empty;
+            if (identityProviderFallback.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
             {
                 await identityContext.Database.ExecuteSqlRawAsync(@"
                     ALTER TABLE ""AspNetUsers"" 
