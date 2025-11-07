@@ -20,17 +20,52 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // CRITICAL: Onboarding must NEVER crash the app - if anything fails, just hide onboarding
         try
         {
+            // First check if user is logged in - if not, don't show onboarding
             var userId = await UserContext.GetCurrentUserIdAsync();
-            if (string.IsNullOrEmpty(userId)) return;
+            if (string.IsNullOrEmpty(userId))
+            {
+                isOpen = false;
+                return;
+            }
+            
+            // Get onboarding status from database FIRST (simplest check)
+            int? lastDone = null;
+            try
+            {
+                await using var appDb = await AppDbFactory.CreateDbContextAsync();
+                var user = await UserManager.FindByIdAsync(userId);
+                if (user != null)
+                {
+                    lastDone = user.OnboardingCompletedStep;
+                }
+            }
+            catch 
+            { 
+                // If we can't read from DB, don't show onboarding
+                isOpen = false;
+                return;
+            }
+            
+            // Check if user has already completed onboarding (step 3 or 4 = fully completed)
+            if (lastDone.HasValue && lastDone >= 3)
+            {
+                // User has completed all steps - don't show onboarding
+                isOpen = false;
+                return;
+            }
             
             // CRITICAL: Check if places exist - if they do, don't show step 1
             try
             {
                 places = await PlaceService.GetPlacesAsync();
             }
-            catch { places = new List<SchedulerMVP.Data.Entities.Place>(); }
+            catch 
+            { 
+                places = new List<SchedulerMVP.Data.Entities.Place>(); 
+            }
             
             // CRITICAL: Check if groups exist - if they do, don't show step 2
             try
@@ -45,41 +80,31 @@
                 }
                 groupsCount = await groupsQuery.CountAsync();
             }
-            catch { groupsCount = 0; }
-            
-            // Get onboarding status from database
-            int? lastDone = null;
-            try
-            {
-                await using var appDb = await AppDbFactory.CreateDbContextAsync();
-                var user = await UserManager.FindByIdAsync(userId);
-                if (user != null)
-                {
-                    lastDone = user.OnboardingCompletedStep;
-                }
-            }
-            catch { }
-            
-            // Check if user has already completed onboarding (step 3 or 4 = fully completed)
-            if (lastDone.HasValue && lastDone >= 3)
-            {
-                // User has completed all steps - don't show onboarding
-                isOpen = false;
-                return;
+            catch 
+            { 
+                groupsCount = 0; 
             }
             
-            // If places exist, mark step 1 as completed
+            // If places exist, mark step 1 as completed (but don't fail if save fails)
             if (places.Count > 0 && (!lastDone.HasValue || lastDone < 1))
             {
-                await SaveOnboardingStepAsync(1);
-                lastDone = 1;
+                try
+                {
+                    await SaveOnboardingStepAsync(1);
+                    lastDone = 1;
+                }
+                catch { /* Don't fail if save fails */ }
             }
             
-            // If groups exist, mark step 2 as completed
+            // If groups exist, mark step 2 as completed (but don't fail if save fails)
             if (groupsCount > 0 && (!lastDone.HasValue || lastDone < 2))
             {
-                await SaveOnboardingStepAsync(2);
-                lastDone = 2;
+                try
+                {
+                    await SaveOnboardingStepAsync(2);
+                    lastDone = 2;
+                }
+                catch { /* Don't fail if save fails */ }
             }
             
             // Determine which step to show
@@ -141,15 +166,25 @@
                 // Step 3 or 4 completed - onboarding done
                 isOpen = false;
             }
-            Nav.LocationChanged += OnLocationChanged;
-            // Subscribe to UI changes to check when places are created
-            UI.OnChanged += CheckPlacesAndUpdateStep;
+            
+            // Subscribe to events (but don't fail if this fails)
+            try
+            {
+                Nav.LocationChanged += OnLocationChanged;
+                UI.OnChanged += CheckPlacesAndUpdateStep;
+            }
+            catch { /* Don't fail if subscription fails */ }
         }
-        catch { }
+        catch 
+        { 
+            // CRITICAL: If ANYTHING fails, just hide onboarding - never crash the app
+            isOpen = false;
+        }
     }
     
     private async Task SaveOnboardingStepAsync(int step)
     {
+        // CRITICAL: Never throw exceptions - if save fails, just continue
         try
         {
             var userId = await UserContext.GetCurrentUserIdAsync();
@@ -163,7 +198,10 @@
                 await UserManager.UpdateAsync(user);
             }
         }
-        catch { }
+        catch 
+        { 
+            // Silently fail - onboarding save is not critical
+        }
     }
     
     private async void CheckPlacesAndUpdateStep()
