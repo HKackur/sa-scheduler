@@ -831,7 +831,6 @@
 
             if (UI.IsCalendarViewMode)
             {
-                if (hasConflicts) return;
                 // Calendar mode: Create calendar booking
                 var calendarBooking = new CalendarBooking
                 {
@@ -854,7 +853,6 @@
             else
             {
                 // Weekplanner mode: Create template bookings
-                if (hasConflicts) return;
                 foreach (var day in SelectedDays)
                 {
                     // Normalize weekday into 1-7 (Mon-Sun)
