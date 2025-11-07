@@ -245,6 +245,10 @@ public class UIState
     // In-memory clipboard for week copy/paste in calendar view
     public List<CalendarBooking>? ClipboardWeek { get; set; }
     public DateOnly? ClipboardWeekStart { get; set; }
+    
+    // Force refresh flag - when set to true, WeekGrid will reload data even if state hasn't changed
+    // Used when bookings are created/updated to ensure they appear immediately
+    public bool ForceRefresh { get; set; } = false;
 }
 
 

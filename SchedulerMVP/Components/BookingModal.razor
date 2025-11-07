@@ -908,6 +908,9 @@
             // Close modal FIRST to avoid glitch
             await OnClose.InvokeAsync();
             
+            // Force WeekGrid to reload data to show new booking immediately
+            UI.ForceRefresh = true;
+            
             // Trigger save callback and refresh AFTER modal is closed
             await OnSave.InvokeAsync();
             

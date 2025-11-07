@@ -55,64 +55,91 @@
                 var user = await UserManager.FindByIdAsync(userId);
                 if (user != null)
                 {
-                    // TEMPORARILY DISABLED: OnboardingCompletedStep removed to fix login
-                    lastDone = null; // user.OnboardingCompletedStep;
+                    lastDone = user.OnboardingCompletedStep;
                 }
             }
             catch { }
             
+            // Check if user has already completed onboarding
+            if (lastDone.HasValue && lastDone >= totalSteps)
+            {
+                // User has completed all steps - don't show onboarding
+                isOpen = false;
+                return;
+            }
+            
+            // If places exist, mark step 1 as completed
+            if (places.Count > 0 && (!lastDone.HasValue || lastDone < 1))
+            {
+                await SaveOnboardingStepAsync(1);
+                lastDone = 1;
+            }
+            
+            // If groups exist, mark step 2 as completed
+            if (groupsCount > 0 && (!lastDone.HasValue || lastDone < 2))
+            {
+                await SaveOnboardingStepAsync(2);
+                lastDone = 2;
+            }
+            
+            // Determine which step to show
             if (!lastDone.HasValue)
             {
-                // First time – show intro
+                // First time – show intro (step 0)
                 isOpen = true;
                 stepIndex = 0;
             }
-            else
+            else if (lastDone == 0)
             {
-                // CRITICAL: If places exist, skip step 1 (place creation)
-                if (places.Count > 0 && lastDone == 0)
+                // Intro completed - show step 1 (or skip if places exist)
+                if (places.Count > 0)
                 {
-                    // User has places but hasn't completed intro - check groups too
                     if (groupsCount > 0)
                     {
-                        // Has both places and groups - show step 3
+                        // Has both - show step 3
                         isOpen = true;
                         stepIndex = 3;
-                        await SaveOnboardingStepAsync(2);
                     }
                     else
                     {
                         // Has places but no groups - show step 2
                         isOpen = true;
                         stepIndex = 2;
-                        await SaveOnboardingStepAsync(1);
                     }
                 }
-                else if (lastDone < totalSteps)
+                else
                 {
+                    // No places - show step 1
                     isOpen = true;
-                    stepIndex = lastDone.Value + 1; // next step
-                    // CRITICAL: If showing step 1 but places exist, skip to step 2
-                    if (stepIndex == 1 && places.Count > 0)
-                    {
-                        if (groupsCount > 0)
-                        {
-                            stepIndex = 3;
-                            await SaveOnboardingStepAsync(2);
-                        }
-                        else
-                        {
-                            stepIndex = 2;
-                            await SaveOnboardingStepAsync(1);
-                        }
-                    }
-                    // CRITICAL: If showing step 2 but groups exist, skip to step 3
-                    else if (stepIndex == 2 && groupsCount > 0)
-                    {
-                        stepIndex = 3;
-                        await SaveOnboardingStepAsync(2);
-                    }
+                    stepIndex = 1;
                 }
+            }
+            else if (lastDone == 1)
+            {
+                // Step 1 completed - show step 2 (or skip if groups exist)
+                if (groupsCount > 0)
+                {
+                    // Has groups - show step 3
+                    isOpen = true;
+                    stepIndex = 3;
+                }
+                else
+                {
+                    // No groups - show step 2
+                    isOpen = true;
+                    stepIndex = 2;
+                }
+            }
+            else if (lastDone == 2)
+            {
+                // Step 2 completed - show step 3
+                isOpen = true;
+                stepIndex = 3;
+            }
+            else if (lastDone == 3)
+            {
+                // Step 3 completed - onboarding done
+                isOpen = false;
             }
             Nav.LocationChanged += OnLocationChanged;
             // Subscribe to UI changes to check when places are created
@@ -132,8 +159,7 @@
             var user = await UserManager.FindByIdAsync(userId);
             if (user != null)
             {
-                // TEMPORARILY DISABLED: OnboardingCompletedStep removed to fix login
-                // user.OnboardingCompletedStep = step;
+                user.OnboardingCompletedStep = step;
                 await UserManager.UpdateAsync(user);
             }
         }
@@ -210,12 +236,14 @@
         try
         {
             // Persist as last completed step index (0..3) in database
+            // stepIndex: 0 = intro, 1 = place, 2 = groups, 3 = planning
+            // Save step as completed: 0 = intro done, 1 = place done, 2 = groups done, 3 = planning done, 4 = all done
             await SaveOnboardingStepAsync(stepIndex);
             var next = stepIndex + 1;
             if (next > totalSteps)
             {
-                // Mark as fully completed
-                await SaveOnboardingStepAsync(totalSteps);
+                // Mark as fully completed (step 4)
+                await SaveOnboardingStepAsync(4);
                 isOpen = false;
             }
             else
@@ -236,6 +264,8 @@
     {
         try
         {
+            // Log current step as completed when user clicks X
+            await SaveOnboardingStepAsync(stepIndex);
             await CompleteCurrentAsync();
         }
         catch (Exception ex)

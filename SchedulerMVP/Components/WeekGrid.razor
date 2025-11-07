@@ -336,13 +336,16 @@
                 var viewModeChanged = _lastLoadedCalendarMode != UI.IsCalendarViewMode;
                 var weekChanged = _lastLoadedWeekStart != UI.CurrentWeekStart;
                 
-                if (areaChanged || templateChanged || viewModeChanged || weekChanged)
+                // Always reload if state changed OR if force refresh is requested
+                // This ensures new bookings appear immediately
+                if (areaChanged || templateChanged || viewModeChanged || weekChanged || UI.ForceRefresh)
                 {
                     await LoadDataAsync();
                     _lastLoadedAreaId = UI.SelectedAreaId;
                     _lastLoadedTemplateId = UI.SelectedTemplateId;
                     _lastLoadedCalendarMode = UI.IsCalendarViewMode;
                     _lastLoadedWeekStart = UI.CurrentWeekStart;
+                    UI.ForceRefresh = false; // Reset flag after reload
                     await InvokeAsync(StateHasChanged);
                 }
             }

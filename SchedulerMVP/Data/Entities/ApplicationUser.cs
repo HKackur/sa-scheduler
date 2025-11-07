@@ -7,8 +7,7 @@ public class ApplicationUser : IdentityUser
     // Last successful login timestamp (UTC)
     public DateTimeOffset? LastLoginAt { get; set; }
     
-    // Onboarding completion status: null = not started, 0 = intro shown, 1-3 = steps completed, 4 = fully completed
-    // TEMPORARILY DISABLED: Removed to fix login issue - will be re-added when migrations are fixed
-    // public int? OnboardingCompletedStep { get; set; }
+    // Onboarding completion status: null = not started, 0 = intro completed, 1 = step 1 completed, 2 = step 2 completed, 3 = step 3 completed, 4 = fully completed
+    public int? OnboardingCompletedStep { get; set; }
 }
 
