@@ -100,8 +100,8 @@ builder.Services.AddSignalR(options =>
 
 builder.Services.AddServerSideBlazor(options =>
 {
-    // Disable circuit disconnect timeout for better reliability
-    options.DetailedErrors = builder.Environment.IsDevelopment();
+    // Enable detailed errors to debug Azure issues
+    options.DetailedErrors = true; // Enable in production to see what's causing crashes
     options.DisconnectedCircuitMaxRetained = 100;
     options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
