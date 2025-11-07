@@ -208,7 +208,7 @@
         @* Action Buttons *@
         <div class="bm-actions" @onclick:stopPropagation="true">
             <button type="button" @onclick="CloseModal" @onclick:stopPropagation="true" class="btn-outline">Avbryt</button>
-            <button type="button" @onclick="SaveBookingTemplate" @onclick:stopPropagation="true" class="btn-primary" disabled="@hasConflicts">Spara</button>
+            <button type="button" @onclick="SaveBookingTemplate" @onclick:stopPropagation="true" class="btn-primary" disabled="@(hasConflicts || saveInProgress)">Spara</button>
         </div>
     </div>
     
@@ -301,6 +301,7 @@
     private bool isUpdatingTime = false; // Prevent recursive updates
     private bool hasConflicts = false;
     private List<string> conflictMessages = new();
+    private bool saveInProgress = false;
     private string? Notes;
     private string? ContactName;
     private string? ContactPhone;
@@ -748,13 +749,20 @@
     
     private async Task SaveBookingTemplate()
     {
-        // CRITICAL: Disable button immediately to prevent double-clicks
-        var wasDisabled = hasConflicts;
-        if (!wasDisabled)
+        // CRITICAL: Check conflicts FIRST before doing anything
+        await RecheckConflictsAsync();
+        
+        // Don't save if there are conflicts - show them to user
+        if (hasConflicts)
         {
-            hasConflicts = true; // Temporarily disable
+            Console.WriteLine("[BookingModal] Cannot save - conflicts detected");
             StateHasChanged();
+            return;
         }
+
+        // Disable button to prevent double-clicks during save
+        var saveInProgress = true;
+        StateHasChanged();
 
         try
         {
@@ -769,25 +777,25 @@
                 }
             }
             
-            // Validate inputs and show errors
+            // Validate inputs
             if (!SelectedPlaceId.HasValue)
             {
                 Console.WriteLine("[BookingModal] Error: No place selected");
-                hasConflicts = false;
+                saveInProgress = false;
                 StateHasChanged();
                 return;
             }
             if (targetArea == null)
             {
                 Console.WriteLine("[BookingModal] Error: No area selected");
-                hasConflicts = false;
+                saveInProgress = false;
                 StateHasChanged();
                 return;
             }
             if (!SelectedGroupId.HasValue)
             {
                 Console.WriteLine("[BookingModal] Error: No group selected");
-                hasConflicts = false;
+                saveInProgress = false;
                 StateHasChanged();
                 return;
             }
@@ -798,7 +806,7 @@
                 if (SelectedDate == default)
                 {
                     Console.WriteLine("[BookingModal] Error: No date selected");
-                    hasConflicts = false;
+                    saveInProgress = false;
                     StateHasChanged();
                     return;
                 }
@@ -808,38 +816,25 @@
                 if (!UI.SelectedTemplateId.HasValue)
                 {
                     Console.WriteLine("[BookingModal] Error: No template selected");
-                    hasConflicts = false;
+                    saveInProgress = false;
                     StateHasChanged();
                     return;
                 }
                 if (SelectedDays.Count == 0)
                 {
                     Console.WriteLine("[BookingModal] Error: No days selected");
-                    hasConflicts = false;
+                    saveInProgress = false;
                     StateHasChanged();
                     return;
                 }
             }
 
-            
             await using var db = await DbFactory.CreateDbContextAsync();
             
             var startParts = StartTime.Split(':');
             var endParts = EndTime.Split(':');
             var startMin = int.Parse(startParts[0]) * 60 + int.Parse(startParts[1]);
             var endMin = int.Parse(endParts[0]) * 60 + int.Parse(endParts[1]);
-
-            // Check conflicts one more time before saving (in case something changed)
-            await RecheckConflictsAsync();
-            
-            // Don't save if there are conflicts
-            if (hasConflicts)
-            {
-                Console.WriteLine("[BookingModal] Cannot save - conflicts detected");
-                hasConflicts = false; // Re-enable button so user can try again after fixing
-                StateHasChanged();
-                return;
-            }
             
             if (UI.IsCalendarViewMode)
             {
@@ -894,6 +889,7 @@
             }
 
             var result = await db.SaveChangesAsync();
+            Console.WriteLine($"[BookingModal] Saved {result} booking(s) successfully");
             
             // Navigate to the selected place and area if different from current
             if (SelectedPlaceId.HasValue && SelectedPlaceId.Value != SelectedPlace?.Id)
@@ -905,36 +901,31 @@
                 UI.SelectedAreaId = targetArea.Id;
             }
             
-            // Close modal FIRST to avoid glitch
-            await OnClose.InvokeAsync();
-            
             // Force WeekGrid to reload data to show new booking immediately
             UI.ForceRefresh = true;
             
-            // Trigger save callback and refresh AFTER modal is closed
+            // Close modal
+            await OnClose.InvokeAsync();
+            
+            // Trigger save callback
             await OnSave.InvokeAsync();
             
-            // Refresh immediately - no delay needed
+            // Refresh UI immediately - this will trigger WeekGrid to reload
             UI.RaiseChanged();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[BookingModal] Error saving booking: {ex.Message}");
+            Console.WriteLine($"[BookingModal] ERROR saving booking: {ex.Message}");
             Console.WriteLine($"[BookingModal] Stack trace: {ex.StackTrace}");
-            // Re-enable button on error (but keep conflict state if conflicts exist)
-            if (!wasDisabled)
-            {
-                // Only reset hasConflicts if it was false before (i.e., not a real conflict)
-                // If there are real conflicts, they should remain
-                await RecheckConflictsAsync(); // Re-check to restore actual conflict state
-            }
-            // Re-throw to see error in browser console
-            throw;
+            saveInProgress = false;
+            // Re-check conflicts in case something changed
+            await RecheckConflictsAsync();
+            StateHasChanged();
+            // Don't re-throw - just show error and let user try again
         }
         finally
         {
-            // Don't reset hasConflicts here - it should reflect actual conflict state
-            // Only reset if we successfully saved (which happens before this)
+            saveInProgress = false;
             StateHasChanged();
         }
     }
