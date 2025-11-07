@@ -599,53 +599,25 @@ app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<Applica
 
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
             return Results.Redirect("/login?error=missing");
+        logger.LogInformation("Login attempt for email: {Email}", email);
         
-        logger.LogInformation("Login attempt for email: {Email}, Password length: {Length}", email, password?.Length ?? 0);
-        
-        // Find user first to verify they exist
-        var user = await userManager.FindByEmailAsync(email);
-        if (user == null)
-        {
-            logger.LogWarning("Login failed - user not found for email: {Email}", email);
-            return Results.Redirect("/login?error=invalid");
-        }
-        
-        logger.LogInformation("User found: {Email}, UserName: {UserName}, HasPassword: {HasPassword}", 
-            user.Email, user.UserName, !string.IsNullOrEmpty(user.PasswordHash));
-        
-        // Test password directly
-        var passwordValid = await userManager.CheckPasswordAsync(user, password);
-        logger.LogInformation("Password check result: {Valid}", passwordValid);
-        
-        if (!passwordValid)
-        {
-            logger.LogWarning("Password check failed for email: {Email}", email);
-            return Results.Redirect("/login?error=invalid");
-        }
-        
-        // Use email directly for sign in - we found user by email, so email is the reliable identifier
-        // Identity can use email as username when UserName matches email (which we set in seeding)
-        var signInName = user.Email!; // Use email directly since we found user by email
-        logger.LogInformation("Attempting sign in with email: {SignInName} (UserName: {UserName})", signInName, user.UserName);
-        var result = await signInManager.PasswordSignInAsync(signInName, password, isPersistent: true, lockoutOnFailure: false);
-        
-        // If sign in fails with email, try with UserName as fallback
-        if (!result.Succeeded && !string.IsNullOrEmpty(user.UserName) && user.UserName != user.Email)
-        {
-            logger.LogInformation("Sign in with email failed, trying with UserName: {UserName}", user.UserName);
-            result = await signInManager.PasswordSignInAsync(user.UserName, password, isPersistent: true, lockoutOnFailure: false);
-        }
+        // PasswordSignInAsync can use email directly (Identity supports this)
+        // But we also need to find the user to update LastLoginAt
+        var result = await signInManager.PasswordSignInAsync(email, password, isPersistent: true, lockoutOnFailure: false);
         
         if (result.Succeeded)
         {
             logger.LogInformation("Login successful for email: {Email}", email);
-            user.LastLoginAt = DateTimeOffset.UtcNow;
-            await userManager.UpdateAsync(user);
+            var user = await userManager.FindByEmailAsync(email);
+            if (user != null)
+            {
+                user.LastLoginAt = DateTimeOffset.UtcNow;
+                await userManager.UpdateAsync(user);
+            }
             return Results.Redirect("/");
         }
         
-        logger.LogWarning("Login failed for email: {Email}, Result: {Result}, IsLockedOut: {Locked}, RequiresVerification: {Verify}", 
-            email, result, result.IsLockedOut, result.RequiresTwoFactor);
+        logger.LogWarning("Login failed for email: {Email}, Result: {Result}", email, result);
         return Results.Redirect("/login?error=invalid");
     }
     catch (Exception ex)
