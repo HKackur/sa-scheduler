@@ -667,6 +667,28 @@ try
         await identityContext.Database.MigrateAsync();
         Console.WriteLine("[MIGRATION] Identity database migration completed");
         logger.LogInformation("=== Identity database migration completed ===");
+        
+        // CRITICAL FIX: Ensure OnboardingCompletedStep column exists (manual fix if migration failed)
+        try
+        {
+            var provider = identityContext.Database.ProviderName ?? string.Empty;
+            if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+            {
+                // Try to add column if it doesn't exist (PostgreSQL IF NOT EXISTS will handle duplicates)
+                await identityContext.Database.ExecuteSqlRawAsync(@"
+                    ALTER TABLE ""AspNetUsers"" 
+                    ADD COLUMN IF NOT EXISTS ""OnboardingCompletedStep"" integer;
+                ");
+                Console.WriteLine("[MIGRATION] OnboardingCompletedStep column ensured");
+                logger.LogInformation("OnboardingCompletedStep column ensured");
+            }
+        }
+        catch (Exception colEx)
+        {
+            // Non-critical - just log (column might already exist)
+            Console.WriteLine($"[MIGRATION] Column ensure check: {colEx.Message}");
+            logger.LogInformation("Column ensure check: {Message}", colEx.Message);
+        }
     }
     catch (Exception ex)
     {
@@ -675,6 +697,26 @@ try
         Console.WriteLine($"[MIGRATION] Stack: {ex.StackTrace}");
         logger.LogError(ex, "=== FAILED to migrate Identity database: {Message} ===", ex.Message);
         logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
+        
+        // CRITICAL: Try to add column manually even if migration failed
+        try
+        {
+            var provider = identityContext.Database.ProviderName ?? string.Empty;
+            if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+            {
+                await identityContext.Database.ExecuteSqlRawAsync(@"
+                    ALTER TABLE ""AspNetUsers"" 
+                    ADD COLUMN IF NOT EXISTS ""OnboardingCompletedStep"" integer;
+                ");
+                Console.WriteLine("[MIGRATION] OnboardingCompletedStep column added manually after migration failure");
+                logger.LogInformation("OnboardingCompletedStep column added manually after migration failure");
+            }
+        }
+        catch (Exception manualEx)
+        {
+            Console.WriteLine($"[MIGRATION] Failed to add column manually: {manualEx.Message}");
+            logger.LogError(manualEx, "Failed to add column manually");
+        }
     }
     
     // Ensure application database is up-to-date
