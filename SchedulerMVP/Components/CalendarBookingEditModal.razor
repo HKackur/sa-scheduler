@@ -449,6 +449,10 @@
                 UI.SelectedAreaId = targetAreaId;
             }
             
+            // Force WeekGrid to reload so updates are visible immediately
+            UI.ForceRefresh = true;
+            UI.RaiseChanged();
+            
             await OnSave.InvokeAsync();
             await OnClose.InvokeAsync();
             // Console.WriteLine("=== SAVE CALENDAR BOOKING SUCCESS ===");
