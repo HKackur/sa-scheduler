@@ -918,21 +918,20 @@
         {
             Console.WriteLine($"[BookingModal] Error saving booking: {ex.Message}");
             Console.WriteLine($"[BookingModal] Stack trace: {ex.StackTrace}");
-            // Re-enable button on error
+            // Re-enable button on error (but keep conflict state if conflicts exist)
             if (!wasDisabled)
             {
-                hasConflicts = false;
-                StateHasChanged();
+                // Only reset hasConflicts if it was false before (i.e., not a real conflict)
+                // If there are real conflicts, they should remain
+                await RecheckConflictsAsync(); // Re-check to restore actual conflict state
             }
             // Re-throw to see error in browser console
             throw;
         }
         finally
         {
-            if (!wasDisabled)
-            {
-                hasConflicts = false; // Re-enable button
-            }
+            // Don't reset hasConflicts here - it should reflect actual conflict state
+            // Only reset if we successfully saved (which happens before this)
             StateHasChanged();
         }
     }
