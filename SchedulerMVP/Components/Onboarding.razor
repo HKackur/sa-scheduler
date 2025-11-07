@@ -60,8 +60,8 @@
             }
             catch { }
             
-            // Check if user has already completed onboarding
-            if (lastDone.HasValue && lastDone >= totalSteps)
+            // Check if user has already completed onboarding (step 3 or 4 = fully completed)
+            if (lastDone.HasValue && lastDone >= 3)
             {
                 // User has completed all steps - don't show onboarding
                 isOpen = false;
