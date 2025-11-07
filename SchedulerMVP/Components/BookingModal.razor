@@ -529,7 +529,11 @@
             var s = int.Parse(sp[0]) * 60 + int.Parse(sp[1]);
             var e = int.Parse(ep[0]) * 60 + int.Parse(ep[1]);
             
-            foreach (var area in AvailableAreas)
+            // CRITICAL: Create copies to avoid "Collection was modified" errors during iteration
+            var areasCopy = AvailableAreas.ToList(); // Create a snapshot
+            var selectedDaysCopy = SelectedDays.ToList(); // Create a snapshot
+            
+            foreach (var area in areasCopy)
             {
                 bool isAvailable = true;
                 
@@ -543,7 +547,8 @@
                 {
                     // Check template conflicts for selected days
                     // We already verified SelectedTemplateId and SelectedDays.Count > 0 above
-                    foreach (var day in SelectedDays)
+                    // Use copy to avoid "Collection was modified" errors
+                    foreach (var day in selectedDaysCopy)
                     {
                         var conflicts = await ConflictService.CheckAreaConflictsAsync(area.Id, day, s, e, null, UI.SelectedTemplateId!.Value);
                         if (conflicts.Count > 0)
@@ -861,7 +866,9 @@
             {
                 // Weekplanner mode: Create template bookings
                 // Conflicts already checked above
-                foreach (var day in SelectedDays)
+                // CRITICAL: Create a copy to avoid "Collection was modified" errors during iteration
+                var selectedDaysCopy = SelectedDays.ToList();
+                foreach (var day in selectedDaysCopy)
                 {
                     // Normalize weekday into 1-7 (Mon-Sun)
                     var normalizedDay = day;
@@ -971,7 +978,9 @@
         {
             // Weekplanner: check per selected day within the current template only
             if (!UI.SelectedTemplateId.HasValue || SelectedDays.Count == 0) { StateHasChanged(); return; }
-            foreach (var d in SelectedDays.OrderBy(d => d))
+            // CRITICAL: Create a copy to avoid "Collection was modified" errors during iteration
+            var selectedDaysCopy = SelectedDays.ToList();
+            foreach (var d in selectedDaysCopy.OrderBy(d => d))
             {
                 var conflicts = await ConflictService.CheckAreaConflictsAsync(currentAreaId.Value, d, s, e, null, UI.SelectedTemplateId.Value);
                 if (conflicts.Count > 0)
