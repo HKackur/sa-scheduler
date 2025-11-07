@@ -21,17 +21,19 @@
     protected override async Task OnInitializedAsync()
     {
         // CRITICAL: Onboarding must NEVER crash the app - if anything fails, just hide onboarding
+        // CRITICAL: Onboarding is COMPLETELY SEPARATE from login - it only runs AFTER user is logged in
+        isOpen = false; // Default to closed - only open if everything succeeds
+        
         try
         {
             // First check if user is logged in - if not, don't show onboarding
             var userId = await UserContext.GetCurrentUserIdAsync();
             if (string.IsNullOrEmpty(userId))
             {
-                isOpen = false;
-                return;
+                return; // User not logged in - onboarding should never run
             }
             
-            // Get onboarding status from database FIRST (simplest check)
+            // Get onboarding status from database - if this fails, just don't show onboarding
             int? lastDone = null;
             try
             {
@@ -39,13 +41,15 @@
                 var user = await UserManager.FindByIdAsync(userId);
                 if (user != null)
                 {
+                    // CRITICAL: OnboardingCompletedStep might not exist in DB - handle gracefully
+                    // If column doesn't exist, EF Core will throw - catch and ignore
                     lastDone = user.OnboardingCompletedStep;
                 }
             }
             catch 
             { 
-                // If we can't read from DB, don't show onboarding
-                isOpen = false;
+                // If we can't read from DB (e.g., column doesn't exist), don't show onboarding
+                // This is NOT an error - onboarding is optional and should never block login
                 return;
             }
             
@@ -185,6 +189,7 @@
     private async Task SaveOnboardingStepAsync(int step)
     {
         // CRITICAL: Never throw exceptions - if save fails, just continue
+        // CRITICAL: Onboarding save is OPTIONAL and should NEVER affect login or app functionality
         try
         {
             var userId = await UserContext.GetCurrentUserIdAsync();
@@ -194,13 +199,16 @@
             var user = await UserManager.FindByIdAsync(userId);
             if (user != null)
             {
+                // CRITICAL: OnboardingCompletedStep might not exist in DB - handle gracefully
+                // If column doesn't exist, this will fail silently - that's OK
                 user.OnboardingCompletedStep = step;
                 await UserManager.UpdateAsync(user);
             }
         }
         catch 
         { 
-            // Silently fail - onboarding save is not critical
+            // Silently fail - onboarding save is not critical and should NEVER affect login
+            // If column doesn't exist or update fails, just continue - onboarding is optional
         }
     }
     
