@@ -617,8 +617,24 @@ app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<Applica
         var passwordValid = await userManager.CheckPasswordAsync(user, password);
         logger.LogInformation("Password check result: {Valid}", passwordValid);
         
-        // Try sign in with username (Identity needs username, not email)
-        var result = await signInManager.PasswordSignInAsync(user.UserName!, password, isPersistent: true, lockoutOnFailure: false);
+        if (!passwordValid)
+        {
+            logger.LogWarning("Password check failed for email: {Email}", email);
+            return Results.Redirect("/login?error=invalid");
+        }
+        
+        // Use email directly for sign in - we found user by email, so email is the reliable identifier
+        // Identity can use email as username when UserName matches email (which we set in seeding)
+        var signInName = user.Email!; // Use email directly since we found user by email
+        logger.LogInformation("Attempting sign in with email: {SignInName} (UserName: {UserName})", signInName, user.UserName);
+        var result = await signInManager.PasswordSignInAsync(signInName, password, isPersistent: true, lockoutOnFailure: false);
+        
+        // If sign in fails with email, try with UserName as fallback
+        if (!result.Succeeded && !string.IsNullOrEmpty(user.UserName) && user.UserName != user.Email)
+        {
+            logger.LogInformation("Sign in with email failed, trying with UserName: {UserName}", user.UserName);
+            result = await signInManager.PasswordSignInAsync(user.UserName, password, isPersistent: true, lockoutOnFailure: false);
+        }
         
         if (result.Succeeded)
         {
