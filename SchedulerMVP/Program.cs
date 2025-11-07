@@ -279,19 +279,18 @@ app.UseExceptionHandler("/Error");
 // HSTS: Only enable if we're sure we're on HTTPS
 // UseForwardedHeaders should have already set the scheme correctly
 app.UseHsts();
-    
-    // Additional HTTPS scheme detection for Fly.io (UseForwardedHeaders handles Azure)
-    // Fly.io uses Fly-Forwarded-Proto instead of X-Forwarded-Proto
-    app.Use((ctx, next) =>
+
+// Additional HTTPS scheme detection for Fly.io (UseForwardedHeaders handles Azure)
+// Fly.io uses Fly-Forwarded-Proto instead of X-Forwarded-Proto
+app.Use((ctx, next) =>
+{
+    // Fly.io specific header
+    if (ctx.Request.Headers.TryGetValue("Fly-Forwarded-Proto", out var flyProto) && flyProto == "https")
     {
-        // Fly.io specific header
-        if (ctx.Request.Headers.TryGetValue("Fly-Forwarded-Proto", out var flyProto) && flyProto == "https")
-        {
-            ctx.Request.Scheme = "https";
-        }
-        return next();
-    });
-}
+        ctx.Request.Scheme = "https";
+    }
+    return next();
+});
 
 app.UseStaticFiles();
 app.UseRouting();
