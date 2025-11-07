@@ -423,7 +423,10 @@
             
             await using var db = await DbFactory.CreateDbContextAsync();
             // Reload the entity in the new context to update it
-            var bookingToUpdate = await db.CalendarBookings.FindAsync(Booking.Id);
+            var bookingToUpdate = await db.CalendarBookings
+                .Include(b => b.Group)
+                .Include(b => b.Area)
+                .FirstOrDefaultAsync(b => b.Id == Booking.Id);
             
             if (bookingToUpdate == null) return;
             
@@ -441,6 +444,20 @@
             
             var result = await db.SaveChangesAsync();
             // Console.WriteLine($"Database save result: {result} rows affected");
+            
+            // Update the local booking instance so WeekGrid sees the new values immediately
+            Booking.Date = DateOnly.FromDateTime(SelectedDate);
+            Booking.AreaId = targetAreaId;
+            Booking.GroupId = SelectedGroupId.Value;
+            Booking.StartMin = startMin;
+            Booking.EndMin = endMin;
+            Booking.Notes = bookingToUpdate.Notes;
+            Booking.ContactName = bookingToUpdate.ContactName;
+            Booking.ContactPhone = bookingToUpdate.ContactPhone;
+            Booking.ContactEmail = bookingToUpdate.ContactEmail;
+            Booking.UpdatedAt = bookingToUpdate.UpdatedAt;
+            Booking.Area = bookingToUpdate.Area;
+            Booking.Group = bookingToUpdate.Group;
             
             // Navigate to the selected area if different from current
             if (targetAreaId != Booking.AreaId)
