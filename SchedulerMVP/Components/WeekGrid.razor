@@ -77,11 +77,11 @@
                                     {
                                         <div class="booking-group">@template.Group?.Name</div>
                                         <div class="booking-time">@FormatTime(template.StartMin) - @FormatTime(template.EndMin)</div>
-                                        @if (UI.IsGroupFilterActive)
-                                        {
-                                            <div class="ghost-source">@template.SourceAreaName</div>
-                                        }
-                                        else if (positioned.IsGhost)
+                                if (UI.IsGroupFilterActive)
+                                {
+                                    <div class="ghost-source">@template.SourceAreaName</div>
+                                }
+                                else if (positioned.IsGhost)
                                         {
                                             <div class="ghost-source">@template.SourceAreaName</div>
                                         }
@@ -111,11 +111,11 @@
                                     {
                                         <div class="booking-group">@template.Group?.Name</div>
                                         <div class="booking-time">@FormatTime(template.StartMin) - @FormatTime(template.EndMin)</div>
-                                        @if (UI.IsGroupFilterActive)
-                                        {
-                                            <div class="ghost-source">@template.SourceAreaName</div>
-                                        }
-                                        else if (positioned.IsGhost)
+                                if (UI.IsGroupFilterActive)
+                                {
+                                    <div class="ghost-source">@template.SourceAreaName</div>
+                                }
+                                else if (positioned.IsGhost)
                                         {
                                             <div class="ghost-source">@template.SourceAreaName</div>
                                         }
@@ -171,11 +171,11 @@
                                     {
                                         <div class="booking-group">@template.Group?.Name</div>
                                         <div class="booking-time">@FormatTime(template.StartMin) - @FormatTime(template.EndMin)</div>
-                                        @if (UI.IsGroupFilterActive)
-                                        {
-                                            <div class="ghost-source">@template.SourceAreaName</div>
-                                        }
-                                        else if (positioned.IsGhost)
+                                if (UI.IsGroupFilterActive)
+                                {
+                                    <div class="ghost-source">@template.SourceAreaName</div>
+                                }
+                                else if (positioned.IsGhost)
                                         {
                                             <div class="ghost-source">@template.SourceAreaName</div>
                                         }
