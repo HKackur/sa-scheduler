@@ -858,6 +858,13 @@
         var ghosts = GetGhostsForDay(dayOfWeek);
         var allBookings = templates.Concat(ghosts).ToList();
         
+        if (UI.IsGroupFilterActive && UI.FilteredGroupId.HasValue)
+        {
+            allBookings = allBookings
+                .Where(t => t.GroupId == UI.FilteredGroupId.Value)
+                .ToList();
+        }
+        
         return CalculatePositions(allBookings);
     }
     
@@ -865,6 +872,13 @@
     {
         // Get all bookings for this day from allTemplates (which contains calendar bookings as TemplateView in calendar mode)
         var allBookings = allTemplates.Where(t => t.Date.HasValue && t.Date.Value == date).ToList();
+        
+        if (UI.IsGroupFilterActive && UI.FilteredGroupId.HasValue)
+        {
+            allBookings = allBookings
+                .Where(t => t.GroupId == UI.FilteredGroupId.Value)
+                .ToList();
+        }
         
         return CalculatePositions(allBookings);
     }
