@@ -456,40 +456,73 @@
             // Removed Console.WriteLine for performance
             if (UI.IsGroupFilterActive && UI.FilteredGroupId.HasValue)
             {
-                // Gruppfiltrering: visa samtliga bokningar för den valda gruppen, oberoende av plats/yta
-                // Ignorera vald plats/yta – användaren vill se hela gruppens schema
                 selectedArea = null;
                 selectedPlace = null;
 
-                var groupTemplates = await db.BookingTemplates
-                    .Where(bt => bt.GroupId == UI.FilteredGroupId.Value)
-                    .Include(bt => bt.Group)
-                    .Include(bt => bt.Area)
-                    .ThenInclude(a => a.Place)
-                    .AsNoTracking()
-                    .ToListAsync();
-
-                var templateViews = new List<TemplateView>();
-                foreach (var bt in groupTemplates)
+                // Bestäm vilken veckomall som gäller
+                Guid? templateId = UI.SelectedTemplateId;
+                if (!templateId.HasValue)
                 {
-                    templateViews.Add(new TemplateView
-                    {
-                        Id = bt.Id,
-                        AreaId = bt.AreaId,
-                        GroupId = bt.GroupId,
-                        DayOfWeek = bt.DayOfWeek,
-                        StartMin = bt.StartMin,
-                        EndMin = bt.EndMin,
-                        Notes = bt.Notes,
-                        Group = bt.Group,
-                        Area = bt.Area,
-                        IsGhost = false,
-                        SourceAreaName = $"{bt.Area?.Place?.Name ?? "Okänd plats"} - {bt.Area?.Name ?? "Okänd yta"}"
-                    });
+                    var myTemplates = await TemplateService.GetTemplatesAsync();
+                    var first = myTemplates.FirstOrDefault();
+                    if (first != null) templateId = first.Id;
                 }
 
-                allTemplates = templateViews;
-                weekBookings = new List<CalendarBooking>();
+                if (!templateId.HasValue)
+                {
+                    allTemplates = new List<TemplateView>();
+                    weekBookings = new List<CalendarBooking>();
+                }
+                else
+                {
+                    var filteredGroupId = UI.FilteredGroupId.Value;
+
+                    var groupTemplates = await db.BookingTemplates
+                        .Where(bt => bt.GroupId == filteredGroupId && bt.ScheduleTemplateId == templateId.Value)
+                        .Include(bt => bt.Group)
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                    var areaIds = groupTemplates.Select(bt => bt.AreaId).Distinct().ToList();
+                    var areaLookup = await db.Areas
+                        .Where(a => areaIds.Contains(a.Id))
+                        .Include(a => a.Place)
+                        .AsNoTracking()
+                        .ToDictionaryAsync(a => a.Id, a => a);
+
+                    // Uppdatera areaCache så positioneringslogiken känner till alla ytor
+                    areaCache.Clear();
+                    foreach (var area in areaLookup.Values)
+                    {
+                        areaCache[area.Id] = area;
+                    }
+
+                    var templateViews = new List<TemplateView>();
+                    foreach (var bt in groupTemplates)
+                    {
+                        areaLookup.TryGetValue(bt.AreaId, out var area);
+
+                        templateViews.Add(new TemplateView
+                        {
+                            Id = bt.Id,
+                            AreaId = bt.AreaId,
+                            GroupId = bt.GroupId,
+                            DayOfWeek = bt.DayOfWeek,
+                            StartMin = bt.StartMin,
+                            EndMin = bt.EndMin,
+                            Notes = bt.Notes,
+                            Group = bt.Group,
+                            Area = area,
+                            IsGhost = false,
+                            SourceAreaName = area != null && area.Place != null
+                                ? $"{area.Place.Name} - {area.Name}"
+                                : area != null ? area.Name ?? "Okänd yta" : "Okänd plats"
+                        });
+                    }
+
+                    allTemplates = templateViews;
+                    weekBookings = new List<CalendarBooking>();
+                }
             }
                 else if (UI.SelectedTemplateId.HasValue)
                 {
@@ -756,16 +789,26 @@
             foreach (var template in allTemplates)
             {
                 template.IsGhost = false;
-                if (string.IsNullOrWhiteSpace(template.SourceAreaName))
+                if (template.Area != null && template.Area.Place == null && areaCache.TryGetValue(template.AreaId, out var cachedArea))
                 {
-                    if (template.Area?.Place != null && template.Area != null)
-                    {
-                        template.SourceAreaName = $"{template.Area.Place.Name} - {template.Area.Name}";
-                    }
-                    else if (template.Area != null)
-                    {
-                        template.SourceAreaName = template.Area.Name;
-                    }
+                    template.Area = cachedArea;
+                }
+
+                if (template.Area?.Place != null)
+                {
+                    template.SourceAreaName = $"{template.Area.Place.Name} - {template.Area.Name}";
+                }
+                else if (!string.IsNullOrWhiteSpace(template.SourceAreaName))
+                {
+                    // Keep existing
+                }
+                else if (template.Area != null)
+                {
+                    template.SourceAreaName = template.Area.Name ?? "Okänd yta";
+                }
+                else
+                {
+                    template.SourceAreaName = "Okänd plats";
                 }
             }
 
