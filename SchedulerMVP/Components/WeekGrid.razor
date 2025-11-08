@@ -389,12 +389,21 @@
     {
         try
         {
-            // PERF: Only load areas for selected place, not ALL areas
-            await using var db = await DbFactory.CreateDbContextAsync();
-            
-            // Check if we need to refresh area cache
-            var cacheExpired = DateTime.UtcNow > _areasCacheExpiry;
-            
+        // PERF: Only load areas for selected place, not ALL areas (unless group filter overrides)
+        await using var db = await DbFactory.CreateDbContextAsync();
+        
+        var skipPlacePrefetch = UI.IsGroupFilterActive && !UI.IsCalendarViewMode;
+        var cacheExpired = DateTime.UtcNow > _areasCacheExpiry;
+        
+        if (skipPlacePrefetch)
+        {
+            // Gruppfilter: vi hanterar areaCache senare baserat på gruppens bokningar
+            areaCache.Clear();
+            selectedArea = null;
+            selectedPlace = null;
+        }
+        else
+        {
             if (UI.SelectedPlaceId.HasValue)
             {
                 // Load areas for selected place only (much faster)
@@ -445,6 +454,7 @@
                 selectedArea = null;
                 selectedPlace = null;
             }
+        }
 
             // CRITICAL: Use async version to avoid blocking and improve performance
             var currentUserId = await UserContext.GetCurrentUserIdAsync();
@@ -453,74 +463,73 @@
         if (!UI.IsCalendarViewMode)
         {
             // Veckoschema: load templates for selected schedule template with ghost logic
-            // Removed Console.WriteLine for performance
             if (UI.IsGroupFilterActive && UI.FilteredGroupId.HasValue)
             {
                 selectedArea = null;
                 selectedPlace = null;
 
-                // Bestäm vilken veckomall som gäller
-                Guid? templateId = UI.SelectedTemplateId;
-                if (!templateId.HasValue)
+                var filteredGroupId = UI.FilteredGroupId.Value;
+
+                Guid templateId = UI.SelectedTemplateId ?? Guid.Empty;
+                if (templateId == Guid.Empty)
                 {
-                    var myTemplates = await TemplateService.GetTemplatesAsync();
-                    var first = myTemplates.FirstOrDefault();
-                    if (first != null) templateId = first.Id;
+                    templateId = await db.ScheduleTemplates
+                        .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId))
+                        .Select(t => t.Id)
+                        .FirstOrDefaultAsync();
+
+                    if (templateId != Guid.Empty)
+                    {
+                        UI.SelectedTemplateId = templateId;
+                    }
                 }
 
-                if (!templateId.HasValue)
+                if (templateId == Guid.Empty)
                 {
                     allTemplates = new List<TemplateView>();
                     weekBookings = new List<CalendarBooking>();
                 }
                 else
                 {
-                    var filteredGroupId = UI.FilteredGroupId.Value;
-
-                    var groupTemplates = await db.BookingTemplates
-                        .Where(bt => bt.GroupId == filteredGroupId && bt.ScheduleTemplateId == templateId.Value)
-                        .Include(bt => bt.Group)
+                    var templateEntity = await db.ScheduleTemplates
                         .AsNoTracking()
-                        .ToListAsync();
+                        .Include(t => t.Bookings)
+                            .ThenInclude(bt => bt.Area)
+                                .ThenInclude(a => a.Place)
+                        .Include(t => t.Bookings)
+                            .ThenInclude(bt => bt.Group)
+                        .FirstOrDefaultAsync(t => t.Id == templateId);
 
-                    var areaIds = groupTemplates.Select(bt => bt.AreaId).Distinct().ToList();
-                    var areaLookup = await db.Areas
-                        .Where(a => areaIds.Contains(a.Id))
-                        .Include(a => a.Place)
-                        .AsNoTracking()
-                        .ToDictionaryAsync(a => a.Id, a => a);
+                    var groupTemplates = templateEntity?.Bookings
+                        .Where(bt => bt.GroupId == filteredGroupId)
+                        .ToList() ?? new List<BookingTemplate>();
 
-                    // Uppdatera areaCache så positioneringslogiken känner till alla ytor
                     areaCache.Clear();
-                    foreach (var area in areaLookup.Values)
-                    {
-                        areaCache[area.Id] = area;
-                    }
-
-                    var templateViews = new List<TemplateView>();
                     foreach (var bt in groupTemplates)
                     {
-                        areaLookup.TryGetValue(bt.AreaId, out var area);
-
-                        templateViews.Add(new TemplateView
+                        if (bt.Area != null)
                         {
-                            Id = bt.Id,
-                            AreaId = bt.AreaId,
-                            GroupId = bt.GroupId,
-                            DayOfWeek = bt.DayOfWeek,
-                            StartMin = bt.StartMin,
-                            EndMin = bt.EndMin,
-                            Notes = bt.Notes,
-                            Group = bt.Group,
-                            Area = area,
-                            IsGhost = false,
-                            SourceAreaName = area != null && area.Place != null
-                                ? $"{area.Place.Name} - {area.Name}"
-                                : area != null ? area.Name ?? "Okänd yta" : "Okänd plats"
-                        });
+                            areaCache[bt.Area.Id] = bt.Area;
+                        }
                     }
 
-                    allTemplates = templateViews;
+                    allTemplates = groupTemplates.Select(bt => new TemplateView
+                    {
+                        Id = bt.Id,
+                        AreaId = bt.AreaId,
+                        GroupId = bt.GroupId,
+                        DayOfWeek = bt.DayOfWeek,
+                        StartMin = bt.StartMin,
+                        EndMin = bt.EndMin,
+                        Notes = bt.Notes,
+                        Group = bt.Group,
+                        Area = bt.Area,
+                        IsGhost = false,
+                        SourceAreaName = bt.Area?.Place != null
+                            ? $"{bt.Area.Place.Name} - {bt.Area.Name}"
+                            : bt.Area != null ? bt.Area.Name ?? "Okänd yta" : "Okänd plats"
+                    }).ToList();
+
                     weekBookings = new List<CalendarBooking>();
                 }
             }
