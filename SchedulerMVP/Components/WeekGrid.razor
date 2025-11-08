@@ -470,17 +470,25 @@
 
                 var filteredGroupId = UI.FilteredGroupId.Value;
 
-                Guid templateId = UI.SelectedTemplateId ?? Guid.Empty;
+                var currentTemplateId = UI.SelectedTemplateId;
+                Guid templateId = currentTemplateId ?? Guid.Empty;
                 if (templateId == Guid.Empty)
                 {
-                    templateId = await db.ScheduleTemplates
+                    var newTemplateId = await db.ScheduleTemplates
                         .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId))
                         .Select(t => t.Id)
                         .FirstOrDefaultAsync();
 
-                    if (templateId != Guid.Empty)
+                    if (newTemplateId != Guid.Empty)
                     {
-                        UI.SelectedTemplateId = templateId;
+                        UI.SelectedTemplateId = newTemplateId;
+                        return;
+                    }
+                    else
+                    {
+                        allTemplates = new List<TemplateView>();
+                        weekBookings = new List<CalendarBooking>();
+                        return;
                     }
                 }
                 else
@@ -490,15 +498,25 @@
 
                     if (!templateContainsGroup)
                     {
-                        templateId = await db.ScheduleTemplates
+                        var newTemplateId = await db.ScheduleTemplates
                             .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId))
                             .Select(t => t.Id)
                             .FirstOrDefaultAsync();
 
-                        if (templateId != Guid.Empty)
+                        if (newTemplateId != Guid.Empty && (!currentTemplateId.HasValue || newTemplateId != currentTemplateId.Value))
                         {
-                            UI.SelectedTemplateId = templateId;
+                            UI.SelectedTemplateId = newTemplateId;
+                            return;
                         }
+
+                        if (newTemplateId == Guid.Empty)
+                        {
+                            allTemplates = new List<TemplateView>();
+                            weekBookings = new List<CalendarBooking>();
+                            return;
+                        }
+
+                        templateId = newTemplateId;
                     }
                 }
 
