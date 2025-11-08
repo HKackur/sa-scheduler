@@ -82,6 +82,8 @@ public class UIState
     private string _pageTitle = "Veckoschema";
     private Guid? _filteredGroupId = null;
     private bool _isAdminPage = false;
+    private Guid? _savedPlaceIdForGroupFilter;
+    private Guid? _savedAreaIdForGroupFilter;
     
     public bool IsGroupViewMode
     {
@@ -197,7 +199,42 @@ public class UIState
         {
             if (_filteredGroupId != value)
             {
+                var enteringGroupFilter = !_filteredGroupId.HasValue && value.HasValue;
+                var exitingGroupFilter = _filteredGroupId.HasValue && !value.HasValue;
+
                 _filteredGroupId = value;
+
+                if (enteringGroupFilter)
+                {
+                    _savedPlaceIdForGroupFilter = SelectedPlaceId;
+                    _savedAreaIdForGroupFilter = SelectedAreaId;
+
+                    if (SelectedAreaId.HasValue)
+                    {
+                        SelectedAreaId = null;
+                    }
+
+                    if (SelectedPlaceId.HasValue)
+                    {
+                        SelectedPlaceId = null;
+                    }
+                }
+                else if (exitingGroupFilter)
+                {
+                    if (_savedPlaceIdForGroupFilter.HasValue)
+                    {
+                        SelectedPlaceId = _savedPlaceIdForGroupFilter;
+                    }
+
+                    if (_savedAreaIdForGroupFilter.HasValue)
+                    {
+                        SelectedAreaId = _savedAreaIdForGroupFilter;
+                    }
+
+                    _savedPlaceIdForGroupFilter = null;
+                    _savedAreaIdForGroupFilter = null;
+                }
+
                 OnChanged?.Invoke();
             }
         }
