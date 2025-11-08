@@ -79,7 +79,7 @@
                                         <div class="booking-time">@FormatTime(template.StartMin) - @FormatTime(template.EndMin)</div>
                                 if (UI.IsGroupFilterActive)
                                 {
-                                    <div class="ghost-source">@template.SourceAreaName</div>
+                                    <div class="ghost-source">@GetPlaceAreaLabel(template)</div>
                                 }
                                 else if (positioned.IsGhost)
                                         {
@@ -111,11 +111,11 @@
                                     {
                                         <div class="booking-group">@template.Group?.Name</div>
                                         <div class="booking-time">@FormatTime(template.StartMin) - @FormatTime(template.EndMin)</div>
-                                if (UI.IsGroupFilterActive)
-                                {
-                                    <div class="ghost-source">@template.SourceAreaName</div>
-                                }
-                                else if (positioned.IsGhost)
+                                        @if (UI.IsGroupFilterActive)
+                                        {
+                                            <div class="ghost-source">@GetPlaceAreaLabel(template)</div>
+                                        }
+                                        else if (positioned.IsGhost)
                                         {
                                             <div class="ghost-source">@template.SourceAreaName</div>
                                         }
@@ -173,7 +173,7 @@
                                         <div class="booking-time">@FormatTime(template.StartMin) - @FormatTime(template.EndMin)</div>
                                 if (UI.IsGroupFilterActive)
                                 {
-                                    <div class="ghost-source">@template.SourceAreaName</div>
+                                    <div class="ghost-source">@GetPlaceAreaLabel(template)</div>
                                 }
                                 else if (positioned.IsGhost)
                                         {
@@ -207,7 +207,7 @@
                                         <div class="booking-time">@FormatTime(template.StartMin) - @FormatTime(template.EndMin)</div>
                                         @if (UI.IsGroupFilterActive)
                                         {
-                                            <div class="ghost-source">@template.SourceAreaName</div>
+                                            <div class="ghost-source">@GetPlaceAreaLabel(template)</div>
                                         }
                                         else if (positioned.IsGhost)
                                         {
@@ -1574,5 +1574,44 @@
                 Console.WriteLine($"Error deleting template: {ex.Message}");
             }
         }
+    }
+
+    private string GetPlaceAreaLabel(TemplateView template)
+    {
+        string? placeName = template.Area?.Place?.Name;
+        string? areaName = template.Area?.Name;
+
+        if ((string.IsNullOrWhiteSpace(placeName) || string.IsNullOrWhiteSpace(areaName)) && template.AreaId != Guid.Empty)
+        {
+            if (areaCache.TryGetValue(template.AreaId, out var cachedArea))
+            {
+                placeName ??= cachedArea.Place?.Name;
+                areaName ??= cachedArea.Name;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(placeName) || string.IsNullOrWhiteSpace(areaName))
+        {
+            var bookingMatch = weekBookings.FirstOrDefault(b => b.Id == template.Id);
+            if (bookingMatch?.Area != null)
+            {
+                placeName ??= bookingMatch.Area.Place?.Name;
+                areaName ??= bookingMatch.Area.Name;
+            }
+        }
+
+        if ((string.IsNullOrWhiteSpace(placeName) || string.IsNullOrWhiteSpace(areaName)) && !string.IsNullOrWhiteSpace(template.SourceAreaName))
+        {
+            if (template.SourceAreaName.Contains(" - ", System.StringComparison.Ordinal))
+            {
+                return template.SourceAreaName;
+            }
+            areaName ??= template.SourceAreaName;
+        }
+
+        placeName = string.IsNullOrWhiteSpace(placeName) ? "Okänd plats" : placeName;
+        areaName = string.IsNullOrWhiteSpace(areaName) ? "Okänd yta" : areaName;
+
+        return $"{placeName} - {areaName}";
     }
 }
