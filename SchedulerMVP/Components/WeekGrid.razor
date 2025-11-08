@@ -483,6 +483,24 @@
                         UI.SelectedTemplateId = templateId;
                     }
                 }
+                else
+                {
+                    var templateContainsGroup = await db.BookingTemplates
+                        .AnyAsync(bt => bt.ScheduleTemplateId == templateId && bt.GroupId == filteredGroupId);
+
+                    if (!templateContainsGroup)
+                    {
+                        templateId = await db.ScheduleTemplates
+                            .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId))
+                            .Select(t => t.Id)
+                            .FirstOrDefaultAsync();
+
+                        if (templateId != Guid.Empty)
+                        {
+                            UI.SelectedTemplateId = templateId;
+                        }
+                    }
+                }
 
                 if (templateId == Guid.Empty)
                 {
