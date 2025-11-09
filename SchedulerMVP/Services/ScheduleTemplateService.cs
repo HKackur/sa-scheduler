@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
+using System;
 
 namespace SchedulerMVP.Services;
 
@@ -17,6 +18,12 @@ public class ScheduleTemplateService : IScheduleTemplateService
         _logger = logger;
         _userContext = userContext;
     }
+
+    private static bool HasOwnerConflict(string? resourceOwnerId, string? currentUserId, bool isAdmin)
+        => !isAdmin
+           && !string.IsNullOrEmpty(currentUserId)
+           && !string.IsNullOrEmpty(resourceOwnerId)
+           && !string.Equals(resourceOwnerId, currentUserId, StringComparison.Ordinal);
 
     public async Task<List<ScheduleTemplate>> GetTemplatesForPlaceAsync(Guid placeId)
     {
@@ -68,7 +75,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var isAdmin = await _userContext.IsAdminAsync();
 
         // Check access rights
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && template.UserId != userId)
+        if (HasOwnerConflict(template.UserId, userId, isAdmin))
         {
             return null; // User doesn't have access
         }
@@ -143,7 +150,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var userId = _userContext.GetCurrentUserId();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && src.UserId != userId && src.UserId != null)
+        if (HasOwnerConflict(src.UserId, userId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to copy this template");
         }
@@ -178,7 +185,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var userId = _userContext.GetCurrentUserId();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && t.UserId != userId)
+        if (HasOwnerConflict(t.UserId, userId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to update this template");
         }
@@ -197,7 +204,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var userId = _userContext.GetCurrentUserId();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && t.UserId != userId)
+        if (HasOwnerConflict(t.UserId, userId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to delete this template");
         }
@@ -255,7 +262,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var userId = _userContext.GetCurrentUserId();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && b.ScheduleTemplate?.UserId != userId)
+        if (HasOwnerConflict(b.ScheduleTemplate?.UserId, userId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to update this booking");
         }
@@ -278,7 +285,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var userId = _userContext.GetCurrentUserId();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && b.ScheduleTemplate?.UserId != userId)
+        if (HasOwnerConflict(b.ScheduleTemplate?.UserId, userId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to delete this booking");
         }
@@ -305,7 +312,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var userId = _userContext.GetCurrentUserId();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && src.ScheduleTemplate?.UserId != userId)
+        if (HasOwnerConflict(src.ScheduleTemplate?.UserId, userId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to duplicate this booking");
         }
