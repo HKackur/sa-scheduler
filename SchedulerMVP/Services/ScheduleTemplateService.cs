@@ -213,14 +213,25 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var bookingIds = t.Bookings.Select(b => b.Id).ToList();
         if (bookingIds.Any())
         {
+            // Some older calendar bookings might lack SourceTemplateId
             var calendarBookings = await db.CalendarBookings
-                .Where(cb => cb.SourceTemplateId.HasValue && bookingIds.Contains(cb.SourceTemplateId.Value))
+                .Where(cb => cb.SourceTemplateId.HasValue && bookingIds.Contains(cb.SourceTemplateId.Value)
+                            || (!cb.SourceTemplateId.HasValue && cb.ScheduleTemplateId == templateId))
                 .ToListAsync();
             
             if (calendarBookings.Any())
             {
                 db.CalendarBookings.RemoveRange(calendarBookings);
             }
+        }
+        
+        // Handle pre-linked calendar bookings without SourceTemplateId
+        var orphanCalendarBookings = await db.CalendarBookings
+            .Where(cb => !cb.SourceTemplateId.HasValue && cb.ScheduleTemplateId == templateId)
+            .ToListAsync();
+        if (orphanCalendarBookings.Any())
+        {
+            db.CalendarBookings.RemoveRange(orphanCalendarBookings);
         }
         
         // Then remove the BookingTemplates
