@@ -5,20 +5,20 @@
 {
     <div class="modal-container" @onclick="OnBackdrop">
         <div class="bm-modal" @onclick:stopPropagation="true">
-        <div class="bm-header">
-            <h2 class="bm-title">Ändra veckomall</h2>
-        </div>
-        <div class="bm-field">
-            <label class="bm-label">Mallnamn</label>
-            <input class="bm-input" value="@name" @oninput="OnNameInput" />
-        </div>
-        <div class="bm-actions">
-            <button type="button" @onclick="OnDelete" class="btn-danger-left">Radera mall</button>
-            <div style="margin-left:auto;display:flex;gap:12px;">
-                <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
-                <button type="button" @onclick="OnSave" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Spara</button>
+            <div class="bm-header">
+                <h2 class="bm-title">Ändra veckomall</h2>
             </div>
-        </div>
+            <div class="bm-field">
+                <label class="bm-label">Mallnamn</label>
+                <input class="bm-input" value="@name" @oninput="OnNameInput" />
+            </div>
+            <div class="bm-actions">
+                <button type="button" @onclick="OnDelete" class="btn-danger-left">Radera mall</button>
+                <div style="margin-left:auto;display:flex;gap:12px;">
+                    <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+                    <button type="button" @onclick="OnSave" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Spara</button>
+                </div>
+            </div>
         </div>
     </div>
     <style>
@@ -29,11 +29,17 @@
         .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
         .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
         .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;padding-top:12px;padding-bottom:24px;z-index:10}
-        .btn-outline,.btn-primary,.btn-danger-left{padding:8px 16px;border-radius:10px;font-size:13px;line-height:20px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+        .btn-outline,.btn-primary,.btn-danger-left{padding:8px 16px;border-radius:10px;font-size:13px;line-height:20px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;transition:background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease}
         .btn-outline{border:1px solid #d1d5db;background:#fff;color:#0f1720}
+        .btn-outline:hover{background:#f1f5f9;box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
+        .btn-outline:active{transform:translateY(1px);}
         .btn-primary{border:none;background:#1761a5;color:#fff}
-        .btn-primary:disabled{opacity:0.6;cursor:not-allowed}
+        .btn-primary:hover:not(:disabled){background:#0f4a7a;box-shadow:0 0 0 2px rgba(23,97,165,0.2)}
+        .btn-primary:active:not(:disabled){transform:translateY(1px);}
+        .btn-primary:disabled{opacity:0.6;cursor:not-allowed;box-shadow:none}
         .btn-danger-left{border:none;background:#dc3545;color:#fff}
+        .btn-danger-left:hover{background:#b91c1c;box-shadow:0 0 0 2px rgba(220,53,69,0.2)}
+        .btn-danger-left:active{transform:translateY(1px);}
     </style>
 }
 
@@ -41,6 +47,7 @@
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnDeleteRequested { get; set; }
 
     private string name = string.Empty;
 
@@ -72,12 +79,10 @@
 
     private async Task OnDelete()
     {
-        if (UI.SelectedTemplateId is Guid id)
+        await CloseAsync();
+        if (OnDeleteRequested.HasDelegate)
         {
-            await TemplateService.DeleteTemplateAsync(id);
-            await OnSaved.InvokeAsync();
-            UI.SelectedTemplateId = null; // will be repopulated from list by caller refresh
-            await CloseAsync();
+            await OnDeleteRequested.InvokeAsync();
         }
     }
 
