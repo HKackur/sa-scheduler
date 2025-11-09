@@ -5,23 +5,26 @@
 {
     <div class="modal-container" @onclick="OnBackdrop">
         <div class="bm-modal" @onclick:stopPropagation="true">
-        <h3 class="bm-title">Radera veckomall</h3>
-        <div class="bm-field">
-            <p class="bm-text">Vill du radera mallen <strong>@currentName</strong>@(bookingCount > 0 ? $" med {bookingCount} bokningar" : "")?</p>
-        </div>
-        <div class="bm-actions">
-            <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
-            <button type="button" @onclick="OnDelete" class="btn-danger">Radera mallen</button>
-        </div>
+            <div class="bm-header">
+                <h2 class="bm-title">Radera veckomall</h2>
+            </div>
+            <div class="bm-body">
+                <p class="bm-text">Vill du radera mallen <strong>@currentName</strong>@(bookingCount > 0 ? $" med {bookingCount} bokningar" : "")?</p>
+            </div>
+            <div class="bm-actions">
+                <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+                <button type="button" @onclick="OnDelete" class="btn-danger">Radera mallen</button>
+            </div>
         </div>
     </div>
     <style>
         .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
-        .bm-modal{background:#fff;color:#0f1720;padding:28px;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
-        .bm-title{margin:0 0 20px 0;font-size:28px;font-weight:800;letter-spacing:-.02em}
-        .bm-text{margin:0;font-size:16px}
-        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
-        .btn-outline,.btn-danger{padding:8px 16px;border-radius:10px;font-size:13px;line-height:20px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;transition:background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:0}
+        .bm-title{margin:0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+        .bm-text{margin:0;font-size:14px;line-height:1.5;color:#0f1720}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;background:#fff;padding-top:12px;padding-bottom:12px}
+        .btn-outline,.btn-danger{padding:8px 16px;border-radius:10px;font-size:14px;line-height:20px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;transition:background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease}
         .btn-outline{border:1px solid #d1d5db;background:#fff;color:#0f1720}
         .btn-outline:hover{background:#f1f5f9;box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
         .btn-outline:active{transform:translateY(1px);}
