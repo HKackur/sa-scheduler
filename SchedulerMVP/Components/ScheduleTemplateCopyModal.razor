@@ -3,8 +3,8 @@
 
 @if (IsOpen)
 {
-    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="OnBackdrop"></div>
-    <div class="bm-modal">
+    <div class="modal-container" @onclick="OnBackdrop">
+        <div class="bm-modal" @onclick:stopPropagation="true">
         <h3 class="bm-title">Skapa kopia</h3>
         <div class="bm-field">
             <label class="bm-label">Mallnamn</label>
@@ -14,13 +14,17 @@
             <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
             <button type="button" @onclick="OnCopy" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Spara</button>
         </div>
+        </div>
     </div>
     <style>
-        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
         .bm-title{margin:0 0 20px 0;font-size:28px;font-weight:800;letter-spacing:-.02em}
         .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
-        .btn-outline{padding:10px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720}
-        .btn-primary{padding:10px 16px;border:none;border-radius:10px;background:#0b1e34;color:#fff}
+        .btn-outline,.btn-primary{padding:8px 16px;border-radius:10px;font-size:13px;line-height:20px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+        .btn-outline{border:1px solid #d1d5db;background:#fff;color:#0f1720}
+        .btn-primary{border:none;background:#0b1e34;color:#fff}
+        .btn-primary:disabled{opacity:0.6;cursor:not-allowed}
     </style>
 }
 
