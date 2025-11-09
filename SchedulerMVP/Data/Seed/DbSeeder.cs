@@ -23,9 +23,12 @@ public class DbSeeder
     {
         // Seed admin user and role (if not exists)
         await SeedAdminUserAsync();
-        
+
         // Seed henrik user (if not exists)
         await SeedHenrikUserAsync();
+
+        // Ensure existing schedule templates have an owner (default to admin)
+        await EnsureTemplatesHaveOwnerAsync();
 
         // Note: Demo data seeding removed - users create their own data from scratch
         // No demo Places, Groups, or ScheduleTemplates are seeded
@@ -46,7 +49,7 @@ public class DbSeeder
         var adminUser = await _userManager.FindByEmailAsync(adminEmail);
 
         const string adminPassword = "vårloggaärgrön";
-        
+
         if (adminUser == null)
         {
             adminUser = new ApplicationUser
@@ -114,6 +117,34 @@ public class DbSeeder
             // User exists - don't reset password, let user keep their own password
             _logger.LogInformation("Henrik user already exists - password not changed.");
         }
+    }
+
+    private async Task EnsureTemplatesHaveOwnerAsync()
+    {
+        const string adminEmail = "admin@sportadmin.se";
+        var adminUser = await _userManager.FindByEmailAsync(adminEmail);
+        if (adminUser == null)
+        {
+            _logger.LogWarning("Cannot assign templates to admin because admin user was not found.");
+            return;
+        }
+
+        var templatesWithoutOwner = await _db.ScheduleTemplates
+            .Where(t => string.IsNullOrEmpty(t.UserId))
+            .ToListAsync();
+
+        if (templatesWithoutOwner.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var template in templatesWithoutOwner)
+        {
+            template.UserId = adminUser.Id;
+        }
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Assigned {Count} schedule templates to admin user {Email}.", templatesWithoutOwner.Count, adminEmail);
     }
 }
 
