@@ -196,9 +196,9 @@
                         {
                             <a href="/admin" class="tb-item" style="text-decoration:none;" @onclick="NavigateToAdminLink">Admin</a>
                         }
-                        <a href="/grupper" class="tb-item" style="text-decoration:none; width:fit-content;" @onclick="NavigateToGroupsLink">Hantera grupper</a>
+                        <a href="/grupper" class="tb-item" style="text-decoration:none;" @onclick="NavigateToGroupsLink">Hantera grupper</a>
                         <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
-                        <button class="tb-item danger" @onclick="PerformLogout" style="width:fit-content;">Logga ut</button>
+                        <button class="tb-item danger" @onclick="PerformLogout">Logga ut</button>
                     </div>
                 }
             </div>
@@ -677,6 +677,10 @@
             overflow-wrap: anywhere;
             word-break: break-all;
             cursor: default;
+        }
+        
+        .tb-item.user-email:hover {
+            background: transparent;
         }
         
     </style>
