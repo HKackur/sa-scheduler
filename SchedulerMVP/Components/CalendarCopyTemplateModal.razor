@@ -4,52 +4,60 @@
 
 @if (IsOpen)
 {
-    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="OnBackdrop"></div>
-    <div class="bm-modal">
-        <h3 class="bm-title">Lägg till från mall</h3>
-        <div class="bm-field">
-            <label class="bm-label">Välj mall</label>
-            <select class="tb-select" @onchange="OnTemplateChanged">
-                <option value="">-- Välj mall --</option>
-                @foreach (var template in templates)
-                {
-                    <option value="@template.Id" selected="@(selectedTemplateId == template.Id)">@template.Name</option>
-                }
-            </select>
-        </div>
-        <div class="bm-field">
-            <label class="bm-label">Datumspann</label>
-            <div style="display:flex;gap:8px;align-items:center">
-                <input type="date" class="tb-select" style="flex:1" value="@startDateString" @onchange="OnStartDateChanged" />
-                <span style="color:#6b7280">till</span>
-                <input type="date" class="tb-select" style="flex:1" value="@endDateString" @onchange="OnEndDateChanged" />
+    <div class="modal-container" @onclick="OnBackdrop">
+        <div class="bm-modal" @onclick:stopPropagation="true">
+            <div class="bm-header">
+                <h3 class="bm-title">Lägg till från mall</h3>
             </div>
-            @if (endDate < startDate)
-            {
-                <div style="margin-top:6px;color:#dc2626;font-size:12px">Slutdatum måste vara samma eller efter startdatum.</div>
-            }
-        </div>
-        <div class="bm-actions">
-            <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
-            <button type="button" @onclick="OnCopy" class="btn-primary" disabled="@(!selectedTemplateId.HasValue || endDate < startDate)">Lägg till schema</button>
+            <div class="bm-field">
+                <label class="bm-label">Välj mall</label>
+                <select class="bm-input" @onchange="OnTemplateChanged">
+                    <option value="">-- Välj mall --</option>
+                    @foreach (var template in templates)
+                    {
+                        <option value="@template.Id" selected="@(selectedTemplateId == template.Id)">@template.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="bm-field">
+                <label class="bm-label">Datumspann</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <input type="date" class="bm-input" style="flex:1" value="@startDateString" @onchange="OnStartDateChanged" />
+                    <span style="color:#6b7280">till</span>
+                    <input type="date" class="bm-input" style="flex:1" value="@endDateString" @onchange="OnEndDateChanged" />
+                </div>
+                @if (endDate < startDate)
+                {
+                    <div style="margin-top:6px;color:#dc2626;font-size:12px">Slutdatum måste vara samma eller efter startdatum.</div>
+                }
+            </div>
+            <div class="bm-actions">
+                <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+                <button type="button" @onclick="OnCopy" class="btn-primary" disabled="@(!selectedTemplateId.HasValue || endDate < startDate)">Lägg till schema</button>
+            </div>
         </div>
     </div>
     <style>
-        .bm-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.15);padding:24px;min-width:400px;max-width:500px;z-index:2001}
-        .bm-title{margin:0 0 20px 0;font-size:18px;font-weight:600;color:#111827}
-        .bm-field{margin-bottom:16px}
-        .bm-label{display:block;margin-bottom:6px;font-size:14px;font-weight:500;color:#374151}
-        .bm-modal .tb-select{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-size:14px;color:#111827;box-sizing:border-box}
-        .bm-modal .tb-select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-        .bm-modal select.tb-select{overflow:visible;text-overflow:clip;white-space:normal;min-height:40px}
-        .bm-modal select.tb-select option{white-space:normal;word-wrap:break-word;padding:8px}
-        .week-display{padding:10px 12px;background:#f8f9fa;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;color:#6b7280;text-align:center}
-        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px}
-        .btn-outline{background:#fff;border:1px solid #d1d5db;color:#374151;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s}
-        .btn-outline:hover{background:#f9fafb;border-color:#9ca3af}
-        .btn-primary{background:#3b82f6;border:1px solid #3b82f6;color:#fff;padding:8px 18px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
-        .btn-primary:hover:not(:disabled){background:#2563eb;border-color:#2563eb}
-        .btn-primary:disabled{background:#9ca3af;border-color:#9ca3af;cursor:not-allowed}
+        /* Match ScheduleTemplateEditModal exact structure and styling */
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px 28px 0 28px;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:0}
+        .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+        .bm-field{display:flex;flex-direction:column;gap:8px}
+        .bm-label{font-size:14px;font-weight:500;color:#374151}
+        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
+        .bm-input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+        .bm-modal select.bm-input{overflow:visible;text-overflow:clip;white-space:normal}
+        .bm-modal select.bm-input option{white-space:normal;word-wrap:break-word;padding:8px}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;padding-top:12px;padding-bottom:24px;z-index:10}
+        .btn-outline,.btn-primary{padding:8px 16px;border-radius:10px;font-size:14px;line-height:20px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;transition:background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;cursor:pointer}
+        .btn-outline{border:1px solid #d1d5db;background:#fff;color:#0f1720}
+        .btn-outline:hover{background:#f1f5f9;box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
+        .btn-outline:active{transform:translateY(1px);}
+        .btn-primary{border:none;background:#1761a5;color:#fff}
+        .btn-primary:hover:not(:disabled){background:#0f4a7a;box-shadow:0 0 0 2px rgba(23,97,165,0.2)}
+        .btn-primary:active:not(:disabled){transform:translateY(1px);}
+        .btn-primary:disabled{opacity:0.6;cursor:not-allowed;box-shadow:none}
     </style>
 }
 
@@ -96,6 +104,8 @@
 
     private async Task OnCopy()
     {
+        Console.WriteLine("[CalendarCopyTemplateModal] OnCopy called");
+        
         if (!selectedTemplateId.HasValue)
         {
             Console.WriteLine("[CalendarCopyTemplateModal] No template selected");
@@ -125,13 +135,7 @@
             selectedTemplateId = null;
             
             // Close modal first
-            IsOpen = false;
-            StateHasChanged();
-            
-            if (OnClose.HasDelegate)
-            {
-                await OnClose.InvokeAsync();
-            }
+            await CloseAsync();
             
             // Then trigger refresh callback after a short delay to ensure modal is closed
             await Task.Delay(100);
@@ -147,28 +151,46 @@
             Console.WriteLine($"[CalendarCopyTemplateModal] Exception type: {ex.GetType().Name}");
             Console.WriteLine($"[CalendarCopyTemplateModal] Stack trace: {ex.StackTrace}");
             // Don't close modal on error - let user see the error and try again
+            StateHasChanged();
         }
     }
 
     private void OnStartDateChanged(ChangeEventArgs e)
     {
         if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
             startDate = d;
+            StateHasChanged();
+        }
     }
+    
     private void OnEndDateChanged(ChangeEventArgs e)
     {
         if (DateOnly.TryParse(e.Value?.ToString(), out var d))
+        {
             endDate = d;
+            StateHasChanged();
+        }
     }
 
     private async Task OnCancel()
     {
-        selectedTemplateId = null;
-        await OnClose.InvokeAsync();
+        await CloseAsync();
     }
 
-    private async Task OnBackdrop()
+    private async Task OnBackdrop(MouseEventArgs _)
     {
-        await OnCancel();
+        await CloseAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        IsOpen = false;
+        StateHasChanged();
+        
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
     }
 }
