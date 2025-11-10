@@ -54,4 +54,11 @@ jobs:
           package: ./publish
           slot-name: production
           clean: true
+        continue-on-error: false
+        timeout-minutes: 10
+      
+      - name: Verify deployment
+        run: |
+          echo "✅ Deployment completed successfully"
+          az webapp show --name scheduler-mvp-app-1762239380 --resource-group scheduler-mvp-rg --query "{state:state, defaultHostName:defaultHostName}" -o json
 
