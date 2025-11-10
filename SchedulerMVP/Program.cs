@@ -270,7 +270,7 @@ builder.Services.AddScoped<UIState>();
 builder.Services.AddScoped<DbSeeder>();
 builder.Services.AddScoped<UserContextService>();
 builder.Services.AddScoped<IGroupTypeService, GroupTypeService>();
-builder.Services.AddScoped<ToastService>();
+builder.Services.AddSingleton<ToastService>();
 builder.Services.AddScoped<RoleManager<IdentityRole>>();
 
 var app = builder.Build();

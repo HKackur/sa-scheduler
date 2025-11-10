@@ -2,48 +2,51 @@
 @inject ToastService ToastService
 @implements IDisposable
 
-<div class="toast-container">
-    @foreach (var toast in activeToasts)
-    {
-        <div class="toast toast-@toast.Type.ToString().ToLower()" data-toast-id="@toast.Id">
-            <div class="toast-icon">
-                @if (toast.Type == ToastType.Success)
-                {
+@if (activeToasts.Any())
+{
+    <div class="toast-container">
+        @foreach (var toast in activeToasts)
+        {
+            <div class="toast toast-@toast.Type.ToString().ToLower()" data-toast-id="@toast.Id">
+                <div class="toast-icon">
+                    @if (toast.Type == ToastType.Success)
+                    {
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="11" cy="11" r="11" fill="#2E8540"/>
+                            <path d="M8 11L10 13L14 9" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    }
+                    else if (toast.Type == ToastType.Error)
+                    {
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="11" cy="11" r="11" fill="#DC2626"/>
+                            <path d="M8 8L14 14M14 8L8 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="11" cy="11" r="11" fill="#1761A5"/>
+                            <path d="M11 7V11M11 15H11.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    }
+                </div>
+                <div class="toast-content">
+                    <div class="toast-title">@toast.Title</div>
+                    @if (!string.IsNullOrWhiteSpace(toast.Message))
+                    {
+                        <div class="toast-message">@toast.Message</div>
+                    }
+                </div>
+                <button class="toast-close" @onclick="() => DismissToast(toast.Id)" aria-label="Stäng">
                     <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="11" cy="11" r="11" fill="#2E8540"/>
-                        <path d="M8 11L10 13L14 9" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M16 6L6 16M6 6L16 16" stroke="#63768B" stroke-width="2" stroke-linecap="round"/>
                     </svg>
-                }
-                else if (toast.Type == ToastType.Error)
-                {
-                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="11" cy="11" r="11" fill="#DC2626"/>
-                        <path d="M8 8L14 14M14 8L8 14" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                }
-                else
-                {
-                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="11" cy="11" r="11" fill="#1761A5"/>
-                        <path d="M11 7V11M11 15H11.01" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                }
+                </button>
             </div>
-            <div class="toast-content">
-                <div class="toast-title">@toast.Title</div>
-                @if (!string.IsNullOrWhiteSpace(toast.Message))
-                {
-                    <div class="toast-message">@toast.Message</div>
-                }
-            </div>
-            <button class="toast-close" @onclick="() => DismissToast(toast.Id)" aria-label="Stäng">
-                <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M16 6L6 16M6 6L16 16" stroke="#63768B" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </button>
-        </div>
-    }
-</div>
+        }
+    </div>
+}
 
 <style>
     .toast-container {
@@ -147,55 +150,37 @@
 </style>
 
 @code {
-    private List<ToastMessage> activeToasts = new();
-    private Dictionary<Guid, Timer> toastTimers = new();
+    private IReadOnlyList<ToastMessage> activeToasts = new List<ToastMessage>();
     
     protected override void OnInitialized()
     {
-        ToastService.OnShowToast += ShowToast;
+        ToastService.OnToastsChanged += OnToastsChanged;
+        UpdateToasts();
     }
     
-    private void ShowToast(ToastMessage toast)
+    private void OnToastsChanged()
     {
-        activeToasts.Add(toast);
-        InvokeAsync(StateHasChanged);
-        
-        // Auto-dismiss after 5 seconds
-        var timer = new Timer(_ =>
+        // Use InvokeAsync to ensure we're on the UI thread
+        _ = InvokeAsync(() =>
         {
-            InvokeAsync(() =>
-            {
-                DismissToast(toast.Id);
-            });
-        }, null, 5000, Timeout.Infinite);
-        
-        toastTimers[toast.Id] = timer;
+            UpdateToasts();
+            StateHasChanged();
+        });
+    }
+    
+    private void UpdateToasts()
+    {
+        activeToasts = ToastService.GetToasts();
     }
     
     private void DismissToast(Guid toastId)
     {
-        activeToasts.RemoveAll(t => t.Id == toastId);
-        
-        // Clean up timer
-        if (toastTimers.TryGetValue(toastId, out var timer))
-        {
-            timer?.Dispose();
-            toastTimers.Remove(toastId);
-        }
-        
-        InvokeAsync(StateHasChanged);
+        ToastService.DismissToast(toastId);
     }
     
     public void Dispose()
     {
-        ToastService.OnShowToast -= ShowToast;
-        
-        // Clean up all timers
-        foreach (var timer in toastTimers.Values)
-        {
-            timer?.Dispose();
-        }
-        toastTimers.Clear();
+        ToastService.OnToastsChanged -= OnToastsChanged;
     }
 }
 
