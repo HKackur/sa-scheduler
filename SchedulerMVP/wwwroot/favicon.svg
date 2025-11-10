@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Mörkblå bakgrund (#0a2540 eller liknande marinblått) -->
+  <rect width="100" height="100" fill="#0a2540"/>
+  
+  <!-- Tre hexagoner arrangerade i triangulär formation med 3D-effekt -->
+  <!-- Hexagon 1 (vänster, ljusgrön #4ade80) -->
+  <path d="M 35 50 
+           L 40 42.68 
+           L 48 42.68 
+           L 53 50 
+           L 48 57.32 
+           L 40 57.32 Z" 
+        fill="#4ade80" 
+        stroke="#2E8540" 
+        stroke-width="0.5"/>
+  
+  <!-- Hexagon 2 (höger-upp, ljusgrön #4ade80) -->
+  <path d="M 53 42.68 
+           L 60.32 48 
+           L 60.32 56 
+           L 53 61.32 
+           L 45.68 56 
+           L 45.68 48 Z" 
+        fill="#4ade80" 
+        stroke="#2E8540" 
+        stroke-width="0.5"/>
+  
+  <!-- Hexagon 3 (höger-ner, ljusgrön #4ade80) -->
+  <path d="M 65 50 
+           L 60 57.32 
+           L 52 57.32 
+           L 47 50 
+           L 52 42.68 
+           L 60 42.68 Z" 
+        fill="#4ade80" 
+        stroke="#2E8540" 
+        stroke-width="0.5"/>
+  
+  <!-- Överlappningsområden - mörkare grönt (#22c55e) där hexagoner möts -->
+  <!-- Överlappning vänster-höger-upp -->
+  <path d="M 53 50 
+           L 48 42.68 
+           L 53 42.68 
+           L 60.32 48 
+           L 60.32 50 
+           L 53 50 Z" 
+        fill="#22c55e"/>
+  
+  <!-- Överlappning höger-upp-höger-ner -->
+  <path d="M 53 50 
+           L 60.32 48 
+           L 60.32 50 
+           L 65 50 
+           L 60 57.32 
+           L 60.32 56 
+           L 53 50 Z" 
+        fill="#22c55e"/>
+  
+  <!-- Överlappning vänster-höger-ner -->
+  <path d="M 53 50 
+           L 48 57.32 
+           L 53 57.32 
+           L 60 57.32 
+           L 60 50 
+           L 53 50 Z" 
+        fill="#22c55e"/>
+  
+  <!-- Central hexagon (mörkast grönt #16a34a där alla tre möts) -->
+  <path d="M 53 42.68 
+           L 60.32 48 
+           L 60.32 50 
+           L 60 57.32 
+           L 53 57.32 
+           L 48 57.32 
+           L 45.68 50 
+           L 45.68 48 
+           L 48 42.68 Z" 
+        fill="#16a34a"/>
+</svg>
