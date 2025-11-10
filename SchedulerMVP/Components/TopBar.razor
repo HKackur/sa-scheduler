@@ -44,16 +44,25 @@
             {
                 <div class="sa-header-content">
                     <h2 class="sa-page-title">@UI.PageTitle</h2>
-                    @if (!string.IsNullOrEmpty(currentUserEmail))
-                    {
-                        <span style="font-size: 12px; color: #6b7280; margin-left: 12px; font-weight: normal;">@currentUserEmail</span>
-                    }
                     @if (UI.SelectedAreaId.HasValue && selectedAreaCache != null && selectedAreaCache.Id == UI.SelectedAreaId.Value)
                     {
                         <div class="sa-breadcrumb">
-                            <span class="sa-breadcrumb-item">@selectedAreaCache.Place?.Name</span>
-                            <span class="sa-breadcrumb-separator">/</span>
-                            <span class="sa-breadcrumb-item sa-breadcrumb-current">@selectedAreaCache.Name</span>
+                            @{
+                                var breadcrumbItems = GetBreadcrumbPath(selectedAreaCache);
+                            }
+                            @for (int i = 0; i < breadcrumbItems.Count; i++)
+                            {
+                                var item = breadcrumbItems[i];
+                                var isLast = i == breadcrumbItems.Count - 1;
+                                <span class="sa-breadcrumb-item @(isLast ? "sa-breadcrumb-current" : "")" 
+                                      @onclick="@(() => NavigateBreadcrumb(item))">
+                                    @item.Name
+                                </span>
+                                @if (!isLast)
+                                {
+                                    <span class="sa-breadcrumb-separator">/</span>
+                                }
+                            }
                         </div>
                     }
                 </div>
@@ -228,6 +237,17 @@
 
         .sa-breadcrumb-item {
             font-weight: 500;
+        }
+        
+        .sa-breadcrumb-item:not(.sa-breadcrumb-current) {
+            cursor: pointer;
+            text-decoration: underline;
+            color: #4b5563;
+        }
+        
+        .sa-breadcrumb-item:not(.sa-breadcrumb-current):hover {
+            color: #1f2937;
+            text-decoration: underline;
         }
 
         .sa-breadcrumb-current {
@@ -711,9 +731,29 @@
             try
             {
                 await using var db = await DbFactory.CreateDbContextAsync();
-                selectedAreaCache = await db.Areas
+                var area = await db.Areas
                     .Include(a => a.Place)
+                    .Include(a => a.ParentArea)
                     .FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+                
+                if (area != null)
+                {
+                    // Load parent areas recursively
+                    var current = area.ParentArea;
+                    while (current != null)
+                    {
+                        await db.Entry(current)
+                            .Reference(a => a.ParentArea)
+                            .LoadAsync();
+                        current = current.ParentArea;
+                    }
+                    
+                    selectedAreaCache = area;
+                }
+                else
+                {
+                    selectedAreaCache = null;
+                }
             }
             catch
             {
@@ -723,6 +763,68 @@
         else
         {
             selectedAreaCache = null;
+        }
+    }
+    
+    private class BreadcrumbItem
+    {
+        public string Name { get; set; } = string.Empty;
+        public Guid? PlaceId { get; set; }
+        public Guid? AreaId { get; set; }
+    }
+    
+    private List<BreadcrumbItem> GetBreadcrumbPath(Area area)
+    {
+        var items = new List<BreadcrumbItem>();
+        
+        // Build path from root to current area
+        var path = new List<Area>();
+        var current = area;
+        while (current != null)
+        {
+            path.Insert(0, current);
+            current = current.ParentArea;
+        }
+        
+        // Add Place
+        if (area.Place != null)
+        {
+            items.Add(new BreadcrumbItem 
+            { 
+                Name = area.Place.Name, 
+                PlaceId = area.Place.Id 
+            });
+        }
+        
+        // Add all parent areas and current area
+        foreach (var a in path)
+        {
+            items.Add(new BreadcrumbItem 
+            { 
+                Name = a.Name, 
+                AreaId = a.Id 
+            });
+        }
+        
+        return items;
+    }
+    
+    private async Task NavigateBreadcrumb(BreadcrumbItem item)
+    {
+        if (item.PlaceId.HasValue)
+        {
+            // Navigate to place - select place and clear area
+            UI.SelectedPlaceId = item.PlaceId.Value;
+            UI.SelectedAreaId = null;
+            UI.RaiseChanged();
+            await InvokeAsync(StateHasChanged);
+        }
+        else if (item.AreaId.HasValue)
+        {
+            // Navigate to area
+            UI.SelectedAreaId = item.AreaId.Value;
+            UI.RaiseChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
     
