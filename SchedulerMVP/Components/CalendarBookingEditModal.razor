@@ -5,7 +5,7 @@
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IConflictService ConflictService
 
-@if (IsOpen && Booking != null)
+@if (IsOpen)
 {
     <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="CloseModal"></div>
     
@@ -13,6 +13,17 @@
         <div class="bm-header">
             <h2 class="bm-title">Redigera bokning</h2>
         </div>
+        
+        @* Loading indicator while data loads *@
+        @if (Booking == null)
+        {
+            <div style="padding: 20px; text-align: center; color: #6b7280;">
+                <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite;"></div>
+                <div style="margin-top: 8px; font-size: 14px;">Laddar...</div>
+            </div>
+        }
+        else
+        {
         
         @* Group Selection *@
         <div class="bm-field">
@@ -143,6 +154,7 @@
                 </div>
             </div>
         }
+        }
         
         @* Action Buttons *@
         <div class="bm-actions" @onclick:stopPropagation="true">
@@ -208,6 +220,10 @@
         .btn-primary{padding:8px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
         .btn-danger{padding:8px 16px;border:1px solid #dc2626;border-radius:10px;background:#fff;color:#dc2626;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
         .bm-option-unavailable{color:#9ca3af;background-color:#f9fafb}
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 }
 

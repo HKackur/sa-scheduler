@@ -154,71 +154,79 @@
         }
     }
     
+    private bool isOpeningBookingModal = false; // Prevent double-clicks
+    
     private async Task OpenBookingModal((int dayOfWeek, string startTime) data)
     {
-        Console.WriteLine("=== OPENBOOKINGMODAL START ===");
-        Console.WriteLine($"UI.SelectedAreaId: {UI.SelectedAreaId}");
-        Console.WriteLine($"DayOfWeek: {data.dayOfWeek}, StartTime: {data.startTime}");
+        // Prevent double-clicks
+        if (isOpeningBookingModal) return;
+        isOpeningBookingModal = true;
         
-        if (UI.SelectedAreaId.HasValue)
+        try
         {
-            try
-            {
-                // Load area and place data from database
-                await using var db = await DbFactory.CreateDbContextAsync();
-                selectedArea = await db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
-                // Console.WriteLine($"Loaded area: {selectedArea?.Name ?? "NULL"} (Id: {selectedArea?.Id})");
-                
-                if (selectedArea?.Place != null)
-                {
-                    selectedPlace = selectedArea.Place;
-                    
-                    // Store prefilled values for the modal
-                    prefilledDay = data.dayOfWeek;
-                    prefilledStartTime = data.startTime;
-                    
-                    // Calculate end time based on place's default duration
-                    if (selectedPlace.DefaultDurationMin > 0)
-                    {
-                        var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
-                        var endMinutes = startMinutes + selectedPlace.DefaultDurationMin;
-                        var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
-                        prefilledEndTime = endTime.ToString("HH:mm");
-                    }
-                    
-                    Console.WriteLine($"Prefilled values: day={prefilledDay}, start={prefilledStartTime}, end={prefilledEndTime}");
-                    
-                    UI.ShouldOpenBookingModal = true;
-                    StateHasChanged();
-                    Console.WriteLine("=== OPENBOOKINGMODAL SUCCESS ===");
-                }
-                else
-                {
-                    // Console.WriteLine("ERROR: Could not load area or place");
-                }
-            }
-            catch (Exception ex)
-            {
-                // Console.WriteLine($"Error opening modal: {ex.Message}");
-            }
-        }
-        else
-        {
-            // Group filter or no specific area selected: open modal with basic defaults
-            selectedArea = null;
-            selectedPlace = null;
-            
+            // Set prefilled values immediately (no DB query needed)
             prefilledDay = data.dayOfWeek;
             prefilledStartTime = data.startTime;
             
-            // Default duration 60 minutes when we don't have a place to derive from
-            var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
-            var endMinutes = startMinutes + 60;
-            var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
-            prefilledEndTime = endTime.ToString("HH:mm");
-            
+            // Open modal IMMEDIATELY - don't wait for database
             UI.ShouldOpenBookingModal = true;
             StateHasChanged();
+            
+            // Now load data asynchronously in background
+            if (UI.SelectedAreaId.HasValue)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await using var db = await DbFactory.CreateDbContextAsync();
+                        var area = await db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+                        
+                        if (area?.Place != null)
+                        {
+                            selectedArea = area;
+                            selectedPlace = area.Place;
+                            
+                            // Calculate end time based on place's default duration
+                            if (selectedPlace.DefaultDurationMin > 0)
+                            {
+                                var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
+                                var endMinutes = startMinutes + selectedPlace.DefaultDurationMin;
+                                var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
+                                prefilledEndTime = endTime.ToString("HH:mm");
+                            }
+                            
+                            await InvokeAsync(StateHasChanged);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error loading area data: {ex.Message}");
+                    }
+                    finally
+                    {
+                        isOpeningBookingModal = false;
+                    }
+                });
+            }
+            else
+            {
+                // Group filter or no specific area selected: use basic defaults
+                selectedArea = null;
+                selectedPlace = null;
+                
+                // Default duration 60 minutes when we don't have a place to derive from
+                var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
+                var endMinutes = startMinutes + 60;
+                var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
+                prefilledEndTime = endTime.ToString("HH:mm");
+                
+                isOpeningBookingModal = false;
+            }
+        }
+        catch
+        {
+            isOpeningBookingModal = false;
         }
     }
     
@@ -271,27 +279,60 @@
         UI.RaiseChanged();
     }
     
+    private bool isOpeningCalendarEdit = false; // Prevent double-clicks
+    
     private async Task OpenCalendarBookingEditModal(Guid bookingId)
     {
+        // Prevent double-clicks
+        if (isOpeningCalendarEdit) return;
+        isOpeningCalendarEdit = true;
+        
         try
         {
-            // Load the calendar booking with all related data
-            await using var db = await DbFactory.CreateDbContextAsync();
-            calendarEditBooking = await db.CalendarBookings
-                .Include(cb => cb.Area)
-                    .ThenInclude(a => a.Place)
-                .Include(cb => cb.Group)
-                .FirstOrDefaultAsync(cb => cb.Id == bookingId);
+            // Open modal IMMEDIATELY with a placeholder
+            calendarEditBooking = null; // Will be loaded async
+            calendarEditOpen = true;
+            StateHasChanged();
             
-            if (calendarEditBooking != null)
+            // Load data asynchronously in background
+            _ = Task.Run(async () =>
             {
-                calendarEditOpen = true;
-                StateHasChanged();
-            }
+                try
+                {
+                    await using var db = await DbFactory.CreateDbContextAsync();
+                    var booking = await db.CalendarBookings
+                        .Include(cb => cb.Area)
+                            .ThenInclude(a => a.Place)
+                        .Include(cb => cb.Group)
+                        .FirstOrDefaultAsync(cb => cb.Id == bookingId);
+                    
+                    if (booking != null)
+                    {
+                        calendarEditBooking = booking;
+                        await InvokeAsync(StateHasChanged);
+                    }
+                    else
+                    {
+                        // Booking not found, close modal
+                        calendarEditOpen = false;
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading calendar booking: {ex.Message}");
+                    calendarEditOpen = false;
+                    await InvokeAsync(StateHasChanged);
+                }
+                finally
+                {
+                    isOpeningCalendarEdit = false;
+                }
+            });
         }
-        catch (Exception ex)
+        catch
         {
-            Console.WriteLine($"Error opening calendar booking edit modal: {ex.Message}");
+            isOpeningCalendarEdit = false;
         }
     }
     

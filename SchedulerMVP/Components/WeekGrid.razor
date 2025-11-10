@@ -1633,3 +1633,30 @@
         return $"{placeName} - {areaName}";
     }
 }
+
+<style>
+    /* Visual feedback for clickable areas */
+    .day-content {
+        cursor: pointer;
+        transition: background-color 0.1s ease;
+    }
+    
+    .day-content:hover {
+        background-color: rgba(59, 130, 246, 0.05);
+    }
+    
+    .booking-block {
+        cursor: pointer;
+        transition: opacity 0.1s ease, transform 0.1s ease;
+    }
+    
+    .booking-block:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+    
+    .booking-block:active {
+        transform: translateY(0);
+        opacity: 0.8;
+    }
+</style>
