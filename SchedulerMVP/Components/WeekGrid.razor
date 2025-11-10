@@ -101,6 +101,8 @@
                                 var calBooking = weekBookings.FirstOrDefault(b => b.Id == template.Id);
                             var templateCapture = template; // Capture for onclick
                             var hideGhostText = positioned.IsGhost && positioned.WidthPercent < 35.0 && !UI.IsDayView; // always show text in day view
+                                // Show place/area info when no area is selected (to distinguish bookings from different areas/places)
+                                var showPlaceAreaInfo = !UI.SelectedAreaId.HasValue && !UI.SelectedPlaceId.HasValue && !UI.IsGroupFilterActive;
                                 <div class="@cls" 
                                      style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
                                      title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
@@ -115,7 +117,7 @@
                                         {
                                             <div class="ghost-source">@GetPlaceAreaLabel(template)</div>
                                         }
-                                        else if (positioned.IsGhost)
+                                        else if (positioned.IsGhost || showPlaceAreaInfo)
                                         {
                                             <div class="ghost-source">@template.SourceAreaName</div>
                                         }
