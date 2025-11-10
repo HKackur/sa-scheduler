@@ -1175,14 +1175,32 @@
         }
         
         clearWeekConfirmOpen = false;
+        
+        // Force WeekGrid to reload data to show updated calendar immediately
+        UI.ForceRefresh = true;
+        UI.RaiseChanged();
+        
+        // Wait a bit to ensure state propagation and database commit
+        await Task.Delay(100);
+        
+        // Trigger another refresh to ensure WeekGrid picks up the changes
+        UI.ForceRefresh = true;
         UI.RaiseChanged();
     }
     
     private async Task CopyWeekToClipboard()
     {
+        // Only allow copy in calendar view mode
+        if (!UI.IsCalendarViewMode)
+        {
+            moreMenuOpen = false;
+            return;
+        }
+        
         // Copy all calendar bookings for the currently shown week
         var sourceWeekStart = UI.CurrentWeekStart;
         var bookings = await CalendarBookingService.GetBookingsForWeekAsync(sourceWeekStart);
+        
         // Store a lightweight copy in UI clipboard (detach EF entities)
         UI.ClipboardWeek = bookings.Select(b => new SchedulerMVP.Data.Entities.CalendarBooking
         {
@@ -1199,6 +1217,9 @@
         }).ToList();
         UI.ClipboardWeekStart = sourceWeekStart;
         moreMenuOpen = false;
+        
+        Console.WriteLine($"[TopBar] CopyWeekToClipboard: Copied {UI.ClipboardWeek.Count} bookings from week starting {sourceWeekStart}");
+        
         UI.RaiseChanged();
     }
     
@@ -1209,15 +1230,55 @@
             moreMenuOpen = false;
             return;
         }
+        
+        // Only allow paste in calendar view mode
+        if (!UI.IsCalendarViewMode)
+        {
+            moreMenuOpen = false;
+            return;
+        }
+        
         var targetWeekStart = UI.CurrentWeekStart;
+        var targetWeekEnd = targetWeekStart.AddDays(6);
+        
+        // Get existing bookings for the target week to check for duplicates
+        var existingBookings = await CalendarBookingService.GetBookingsForWeekAsync(targetWeekStart);
+        
+        // Create a set of existing booking keys for duplicate checking
+        var existingBookingKeys = new HashSet<string>();
+        foreach (var eb in existingBookings)
+        {
+            var key = $"{eb.AreaId}|{eb.GroupId}|{eb.Date:yyyy-MM-dd}|{eb.StartMin}|{eb.EndMin}";
+            existingBookingKeys.Add(key);
+        }
+        
+        var createdCount = 0;
+        var skippedCount = 0;
+        
         foreach (var src in UI.ClipboardWeek)
         {
             // Map source booking's weekday to the target week's same weekday
             var dayIndex0 = (int)src.Date.DayOfWeek; // Sunday=0..Saturday=6
             var mondayBased = (dayIndex0 + 6) % 7;   // Monday=0..Sunday=6
             var targetDate = targetWeekStart.AddDays(mondayBased);
+            
+            // Skip if target date is outside the target week
+            if (targetDate < targetWeekStart || targetDate > targetWeekEnd)
+            {
+                continue;
+            }
+            
+            // Check for duplicate booking using a string key
+            var bookingKey = $"{src.AreaId}|{src.GroupId}|{targetDate:yyyy-MM-dd}|{src.StartMin}|{src.EndMin}";
+            if (existingBookingKeys.Contains(bookingKey))
+            {
+                skippedCount++;
+                continue;
+            }
+            
             var newBooking = new SchedulerMVP.Data.Entities.CalendarBooking
             {
+                Id = Guid.NewGuid(),
                 AreaId = src.AreaId,
                 GroupId = src.GroupId,
                 Date = targetDate,
@@ -1231,15 +1292,42 @@
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-            await CalendarBookingService.CreateBookingAsync(newBooking);
+            
+            try
+            {
+                await CalendarBookingService.CreateBookingAsync(newBooking);
+                createdCount++;
+                
+                // Add to existing set to prevent duplicates in the same paste operation
+                existingBookingKeys.Add(bookingKey);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TopBar] Error creating booking during paste: {ex.Message}");
+                // Continue with next booking even if one fails
+            }
         }
+        
         moreMenuOpen = false;
+        
+        Console.WriteLine($"[TopBar] PasteWeekFromClipboard: Created {createdCount} bookings, skipped {skippedCount} duplicates");
+        
+        // Force WeekGrid to reload data to show new bookings immediately
+        UI.ForceRefresh = true;
+        UI.RaiseChanged();
+        
+        // Wait a bit to ensure state propagation and database commit
+        await Task.Delay(100);
+        
+        // Trigger another refresh to ensure WeekGrid picks up the changes
+        UI.ForceRefresh = true;
         UI.RaiseChanged();
     }
     
     private bool CanPasteWeek()
     {
-        return UI.ClipboardWeek != null && UI.ClipboardWeek.Count > 0;
+        // Only allow paste in calendar view mode and when clipboard has data
+        return UI.IsCalendarViewMode && UI.ClipboardWeek != null && UI.ClipboardWeek.Count > 0;
     }
 
 
@@ -1283,16 +1371,42 @@
 
 @if (clearWeekConfirmOpen)
 {
-    <div @onclick="CloseClearWeekConfirm" style="position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:6000; display:flex; align-items:center; justify-content:center;">
-        <div @onclick:stopPropagation="true" style="background:#fff; border-radius:12px; padding:24px; max-width:400px; width:90%; box-shadow:0 20px 40px rgba(0,0,0,0.15);">
-            <h3 style="margin:0 0 16px 0; font-size:18px; font-weight:600; color:#0b1e34;">Rensa vecka</h3>
-            <p style="margin:0 0 20px 0; color:#64748b; line-height:1.5;">@clearWeekConfirmText</p>
-            <div style="display:flex; gap:12px; justify-content:flex-end;">
-                <button @onclick="CloseClearWeekConfirm" style="padding:8px 16px; border:1px solid #e5e7eb; background:#fff; color:#64748b; border-radius:6px; cursor:pointer; font-weight:500;">Avbryt</button>
-                <button @onclick="ConfirmClearWeek" style="padding:8px 16px; border:none; background:#dc2626; color:#fff; border-radius:6px; cursor:pointer; font-weight:500;">Rensa</button>
+    <div class="modal-container" @onclick="CloseClearWeekConfirm">
+        <div class="bm-modal" @onclick:stopPropagation="true">
+            <div class="bm-header">
+                <h3 class="bm-title">Rensa vecka</h3>
+            </div>
+            <div class="bm-field">
+                <p style="margin:0; color:#64748b; line-height:1.5;">@clearWeekConfirmText</p>
+            </div>
+            <div class="bm-actions">
+                <button type="button" @onclick="CloseClearWeekConfirm" class="btn-outline">Avbryt</button>
+                <button type="button" @onclick="ConfirmClearWeek" class="btn-primary" style="background:#dc2626;">Rensa</button>
             </div>
         </div>
     </div>
+    <style>
+        /* Match CalendarCopyTemplateModal exact structure and styling */
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px 28px 0 28px;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:0}
+        .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+        .bm-field{display:flex;flex-direction:column;gap:8px}
+        .bm-label{font-size:14px;font-weight:500;color:#374151}
+        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
+        .bm-input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+        .bm-modal select.bm-input{overflow:visible;text-overflow:clip;white-space:normal}
+        .bm-modal select.bm-input option{white-space:normal;word-wrap:break-word;padding:8px}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;padding-top:12px;padding-bottom:24px;z-index:10}
+        .btn-outline,.btn-primary{padding:8px 16px;border-radius:10px;font-size:14px;line-height:20px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;transition:background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;cursor:pointer}
+        .btn-outline{border:1px solid #d1d5db;background:#fff;color:#0f1720}
+        .btn-outline:hover{background:#f1f5f9;box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
+        .btn-outline:active{transform:translateY(1px);}
+        .btn-primary{border:none;background:#1761a5;color:#fff}
+        .btn-primary:hover:not(:disabled){background:#0f4a7a;box-shadow:0 0 0 2px rgba(23,97,165,0.2)}
+        .btn-primary:active:not(:disabled){transform:translateY(1px);}
+        .btn-primary:disabled{opacity:0.6;cursor:not-allowed;box-shadow:none}
+    </style>
 }
 
 
