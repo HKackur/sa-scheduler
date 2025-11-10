@@ -781,7 +781,8 @@
                 {
                     var placeAreaIds = db.Areas
                         .Where(a => a.PlaceId == UI.SelectedPlaceId.Value)
-                        .Select(a => a.Id);
+                        .Select(a => a.Id)
+                        .ToList();
 
                     var placeBookingsQuery = db.CalendarBookings
                         .Where(c => c.Date >= weekStart && c.Date <= weekEnd && placeAreaIds.Contains(c.AreaId))
@@ -795,17 +796,81 @@
                         placeBookingsQuery = placeBookingsQuery.Where(c => c.Group.UserId == currentUserId);
                     }
 
-                    weekBookings = await placeBookingsQuery
+                    var placeBookings = await placeBookingsQuery
                         .OrderBy(c => c.Date)
                         .ThenBy(c => c.StartMin)
                         .ToListAsync();
 
-                    allTemplates = new List<TemplateView>();
+                    // Convert calendar bookings to TemplateView format
+                    var templateViews = new List<TemplateView>();
+                    foreach (var cb in placeBookings)
+                    {
+                        templateViews.Add(new TemplateView
+                        {
+                            Id = cb.Id,
+                            ScheduleTemplateId = cb.SourceTemplateId ?? Guid.Empty,
+                            AreaId = cb.AreaId,
+                            GroupId = cb.GroupId,
+                            DayOfWeek = GetDayOfWeekFromDate(cb.Date),
+                            StartMin = cb.StartMin,
+                            EndMin = cb.EndMin,
+                            Notes = cb.Notes,
+                            Group = cb.Group,
+                            Area = cb.Area,
+                            IsGhost = false,
+                            SourceAreaName = $"{cb.Area?.Place?.Name ?? "Okänd plats"} - {cb.Area?.Name ?? "Okänd yta"}",
+                            Date = cb.Date
+                        });
+                    }
+
+                    allTemplates = templateViews;
+                    weekBookings = placeBookings;
                 }
                 else
                 {
-                    weekBookings = new List<CalendarBooking>();
-                    allTemplates = new List<TemplateView>();
+                    // Kalendervyn utan vald area/plats: visa ALLA bokningar för veckan
+                    // Detta är viktigt när man kopierar från mall eftersom mallen kan innehålla bokningar från olika areas
+                    var allBookingsQuery = db.CalendarBookings
+                        .Where(c => c.Date >= weekStart && c.Date <= weekEnd)
+                        .Include(c => c.Group)
+                        .Include(c => c.Area)
+                        .ThenInclude(a => a.Place)
+                        .AsNoTracking();
+
+                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    {
+                        allBookingsQuery = allBookingsQuery.Where(c => c.Group.UserId == currentUserId);
+                    }
+
+                    var allBookings = await allBookingsQuery
+                        .OrderBy(c => c.Date)
+                        .ThenBy(c => c.StartMin)
+                        .ToListAsync();
+
+                    // Convert calendar bookings to TemplateView format
+                    var templateViews = new List<TemplateView>();
+                    foreach (var cb in allBookings)
+                    {
+                        templateViews.Add(new TemplateView
+                        {
+                            Id = cb.Id,
+                            ScheduleTemplateId = cb.SourceTemplateId ?? Guid.Empty,
+                            AreaId = cb.AreaId,
+                            GroupId = cb.GroupId,
+                            DayOfWeek = GetDayOfWeekFromDate(cb.Date),
+                            StartMin = cb.StartMin,
+                            EndMin = cb.EndMin,
+                            Notes = cb.Notes,
+                            Group = cb.Group,
+                            Area = cb.Area,
+                            IsGhost = false,
+                            SourceAreaName = $"{cb.Area?.Place?.Name ?? "Okänd plats"} - {cb.Area?.Name ?? "Okänd yta"}",
+                            Date = cb.Date
+                        });
+                    }
+
+                    allTemplates = templateViews;
+                    weekBookings = allBookings;
                 }
             }
 
