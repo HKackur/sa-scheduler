@@ -25,7 +25,6 @@ namespace SchedulerMVP.Services
                 .Include(cb => cb.Area)
                     .ThenInclude(a => a.Place)
                 .Include(cb => cb.Group)
-                .Include(cb => cb.SourceTemplate)
                 .Where(cb => cb.Date >= weekStart && cb.Date <= weekEnd);
 
             if (!isAdmin && !string.IsNullOrEmpty(userId))
@@ -49,7 +48,6 @@ namespace SchedulerMVP.Services
                 .Include(cb => cb.Area)
                     .ThenInclude(a => a.Place)
                 .Include(cb => cb.Group)
-                .Include(cb => cb.SourceTemplate)
                 .Where(cb => cb.AreaId == areaId && cb.Date >= weekStart && cb.Date <= weekEnd);
 
             if (!isAdmin && !string.IsNullOrEmpty(userId))
