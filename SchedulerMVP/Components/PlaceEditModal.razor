@@ -19,11 +19,17 @@
                     <span class="bm-suffix">min</span>
                 </div>
             </div>
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div style="color: #dc2626; font-size: 12px; padding: 8px; background: #fee2e2; border-radius: 4px;">
+                    @errorMessage
+                </div>
+            }
             <div class="bm-actions">
                 <button type="button" @onclick="OnDelete" class="btn-danger-left">Ta bort</button>
                 <div style="margin-left:auto;display:flex;gap:12px;">
                     <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
-                    <button type="button" @onclick="OnSave" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Spara</button>
+                    <button type="button" @onclick="OnSave" class="btn-primary" disabled="@(string.IsNullOrWhiteSpace(name) || isLoading)">Spara</button>
                 </div>
             </div>
         </div>
@@ -66,6 +72,8 @@
     private string name = string.Empty;
     private string durationText = "90";
     private SchedulerMVP.Data.Entities.Place? place;
+    private bool isLoading = false;
+    private string? errorMessage;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -73,11 +81,28 @@
         {
             await LoadPlace();
         }
+        else if (!IsOpen)
+        {
+            // Reset state when modal closes
+            place = null;
+            name = string.Empty;
+            durationText = "90";
+            isLoading = false;
+            errorMessage = null;
+        }
     }
 
     private async Task LoadPlace()
     {
-        if (PlaceId.HasValue)
+        if (!PlaceId.HasValue)
+        {
+            return;
+        }
+        
+        isLoading = true;
+        StateHasChanged();
+        
+        try
         {
             place = await PlaceService.GetPlaceAsync(PlaceId.Value);
             if (place != null)
@@ -86,43 +111,112 @@
                 durationText = place.DefaultDurationMin.ToString();
             }
         }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PlaceEditModal] Error loading place: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
     }
 
     private void OnNameInput(ChangeEventArgs e)
     {
         name = e.Value?.ToString() ?? string.Empty;
+        StateHasChanged();
     }
     
     private void OnDurationInput(ChangeEventArgs e)
     {
         durationText = e.Value?.ToString() ?? "";
+        StateHasChanged();
     }
 
     private async Task OnSave()
     {
-        if (place == null || string.IsNullOrWhiteSpace(name))
-        {
-            return;
-        }
+        Console.WriteLine("[PlaceEditModal] OnSave called");
         
-        if (!int.TryParse(durationText, out var duration) || duration < 1)
+        await InvokeAsync(async () =>
         {
-            return;
-        }
-        
-        try
-        {
-            place.Name = name;
-            place.DefaultDurationMin = duration;
-            await PlaceService.UpdatePlaceAsync(place);
+            errorMessage = null;
+            StateHasChanged();
             
-            await CloseAsync();
-            await OnSaved.InvokeAsync();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[PlaceEditModal] Error saving place: {ex.Message}");
-        }
+            // Validate place is loaded
+            if (place == null || !PlaceId.HasValue)
+            {
+                errorMessage = "Platsen kunde inte laddas. Försök igen.";
+                Console.WriteLine("[PlaceEditModal] Place is null or PlaceId is null, cannot save");
+                StateHasChanged();
+                return;
+            }
+            
+            // Validate name
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                errorMessage = "Platsnamn får inte vara tomt.";
+                Console.WriteLine("[PlaceEditModal] Name is empty, cannot save");
+                StateHasChanged();
+                return;
+            }
+            
+            // Validate duration
+            if (!int.TryParse(durationText, out var duration) || duration < 1)
+            {
+                errorMessage = "Standard längd måste vara ett positivt heltal.";
+                Console.WriteLine($"[PlaceEditModal] Invalid duration: {durationText}");
+                StateHasChanged();
+                return;
+            }
+            
+            try
+            {
+                Console.WriteLine($"[PlaceEditModal] Attempting to save: Id={place.Id}, Name={name.Trim()}, Duration={duration}");
+                
+                // Update place properties
+                place.Name = name.Trim();
+                place.DefaultDurationMin = duration;
+                
+                // Save to database
+                var updatedPlace = await PlaceService.UpdatePlaceAsync(place);
+                
+                Console.WriteLine($"[PlaceEditModal] Place saved successfully: {updatedPlace.Name}");
+                
+                // Clear error message
+                errorMessage = null;
+                
+                // Close modal first
+                IsOpen = false;
+                StateHasChanged();
+                
+                // Trigger close callback
+                if (OnClose.HasDelegate)
+                {
+                    await OnClose.InvokeAsync();
+                }
+                
+                // Then trigger saved callback
+                if (OnSaved.HasDelegate)
+                {
+                    await OnSaved.InvokeAsync();
+                }
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                errorMessage = "Du har inte behörighet att uppdatera denna plats.";
+                Console.WriteLine($"[PlaceEditModal] Unauthorized: {ex.Message}");
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = $"Ett fel uppstod vid sparning: {ex.Message}";
+                Console.WriteLine($"[PlaceEditModal] Error saving place: {ex.Message}");
+                Console.WriteLine($"[PlaceEditModal] Exception type: {ex.GetType().Name}");
+                Console.WriteLine($"[PlaceEditModal] Stack trace: {ex.StackTrace}");
+                StateHasChanged();
+            }
+        });
     }
 
     private async Task OnDelete()
@@ -158,6 +252,11 @@
     private async Task CloseAsync()
     {
         IsOpen = false;
-        await OnClose.InvokeAsync();
+        StateHasChanged();
+        
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
     }
 }
