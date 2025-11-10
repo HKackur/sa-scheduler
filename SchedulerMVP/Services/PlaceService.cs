@@ -71,7 +71,7 @@ public class PlaceService : IPlaceService
     public async Task<Place> UpdatePlaceAsync(Place place)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        // Verify access
+        // Reload the entity in the new context to avoid tracking conflicts
         var existingPlace = await db.Places.FindAsync(place.Id);
         if (existingPlace == null) throw new InvalidOperationException("Place not found");
 
@@ -83,15 +83,22 @@ public class PlaceService : IPlaceService
             throw new UnauthorizedAccessException("You don't have permission to update this place");
         }
 
+        // Update properties on the tracked entity
+        existingPlace.Name = place.Name;
+        existingPlace.DefaultDurationMin = place.DefaultDurationMin;
+        
         // Ensure UserId is preserved or set
         if (string.IsNullOrEmpty(place.UserId))
         {
-            place.UserId = existingPlace.UserId ?? userId;
+            existingPlace.UserId = existingPlace.UserId ?? userId;
+        }
+        else
+        {
+            existingPlace.UserId = place.UserId;
         }
 
-        db.Places.Update(place);
         await db.SaveChangesAsync();
-        return place;
+        return existingPlace;
     }
 
     public async Task DeletePlaceAsync(Guid placeId)
