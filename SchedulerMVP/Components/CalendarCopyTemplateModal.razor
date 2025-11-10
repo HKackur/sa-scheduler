@@ -134,10 +134,7 @@
             // Reset selection
             selectedTemplateId = null;
             
-            // Close modal first
-            IsOpen = false;
-            StateHasChanged();
-            
+            // Close modal via callback (parent controls IsOpen)
             if (OnClose.HasDelegate)
             {
                 await OnClose.InvokeAsync();
@@ -191,9 +188,7 @@
 
     private async Task CloseAsync()
     {
-        IsOpen = false;
-        StateHasChanged();
-        
+        // Parent component controls IsOpen via OnClose callback
         if (OnClose.HasDelegate)
         {
             await OnClose.InvokeAsync();
