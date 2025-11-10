@@ -209,15 +209,18 @@ public class ScheduleTemplateService : IScheduleTemplateService
             throw new UnauthorizedAccessException("You don't have permission to delete this template");
         }
 
-        // Remove any CalendarBookings that were copied from this ScheduleTemplate
-        // SourceTemplateId now refers to ScheduleTemplate.Id, not BookingTemplate.Id
-        var calendarBookings = await db.CalendarBookings
-            .Where(cb => cb.SourceTemplateId.HasValue && cb.SourceTemplateId == templateId)
-            .ToListAsync();
-
-        if (calendarBookings.Any())
+        // First, remove any CalendarBookings that reference this template's BookingTemplates
+        var bookingIds = t.Bookings.Select(b => b.Id).ToList();
+        if (bookingIds.Any())
         {
-            db.CalendarBookings.RemoveRange(calendarBookings);
+            var calendarBookings = await db.CalendarBookings
+                .Where(cb => cb.SourceTemplateId.HasValue && bookingIds.Contains(cb.SourceTemplateId.Value))
+                .ToListAsync();
+
+            if (calendarBookings.Any())
+            {
+                db.CalendarBookings.RemoveRange(calendarBookings);
+            }
         }
         
         // Then remove the BookingTemplates
@@ -287,11 +290,14 @@ public class ScheduleTemplateService : IScheduleTemplateService
             throw new UnauthorizedAccessException("You don't have permission to delete this booking");
         }
 
-        // Note: SourceTemplateId now refers to ScheduleTemplate.Id, not BookingTemplate.Id
-        // Calendar bookings copied from a BookingTemplate will have SourceTemplateId pointing to the ScheduleTemplate
-        // So we cannot directly find calendar bookings for a specific BookingTemplate using SourceTemplateId
-        // Calendar bookings will remain until the ScheduleTemplate is deleted
-        // This is acceptable since calendar bookings are independent once created
+        // Remove any calendar bookings that reference this template booking first
+        var calendarRefs = await db.CalendarBookings
+            .Where(cb => cb.SourceTemplateId.HasValue && cb.SourceTemplateId == bookingId)
+            .ToListAsync();
+        if (calendarRefs.Any())
+        {
+            db.CalendarBookings.RemoveRange(calendarRefs);
+        }
 
         db.BookingTemplates.Remove(b);
         await db.SaveChangesAsync();

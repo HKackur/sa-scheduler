@@ -28,10 +28,9 @@ namespace SchedulerMVP.Data.Entities
         public string? ContactPhone { get; set; }
         public string? ContactEmail { get; set; }
         
-        // Reference to the ScheduleTemplate this was copied from (optional)
-        // Note: This refers to ScheduleTemplate.Id, not BookingTemplate.Id
+        // Reference to the BookingTemplate this was copied from (optional)
         public Guid? SourceTemplateId { get; set; }
-        public ScheduleTemplate? SourceTemplate { get; set; }
+        public BookingTemplate? SourceTemplate { get; set; }
 
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }

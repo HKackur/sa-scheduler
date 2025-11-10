@@ -69,14 +69,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(a => a.ParentAreaId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        // Configure CalendarBooking.SourceTemplate to refer to ScheduleTemplate
-        // This matches the database constraint FK_CalendarBookings_ScheduleTemplates_SourceTemplateId
-        modelBuilder.Entity<CalendarBooking>()
-            .HasOne(cb => cb.SourceTemplate)
-            .WithMany()
-            .HasForeignKey(cb => cb.SourceTemplateId)
-            .OnDelete(DeleteBehavior.SetNull);
     }
 }
 
