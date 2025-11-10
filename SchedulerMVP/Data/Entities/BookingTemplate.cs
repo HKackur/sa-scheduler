@@ -31,9 +31,6 @@ public class BookingTemplate
     public string? ContactEmail { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
-    
-    // Navigation property for calendar bookings copied from this template
-    public ICollection<CalendarBooking> CalendarBookings { get; set; } = new List<CalendarBooking>();
 }
 
 

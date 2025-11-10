@@ -18,6 +18,9 @@ public class ScheduleTemplate
     public string? UserId { get; set; }
 
     public ICollection<BookingTemplate> Bookings { get; set; } = new List<BookingTemplate>();
+    
+    // Navigation property for calendar bookings copied from this template
+    public ICollection<CalendarBooking> CalendarBookings { get; set; } = new List<CalendarBooking>();
 }
 
 

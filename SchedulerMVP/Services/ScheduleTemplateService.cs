@@ -209,18 +209,15 @@ public class ScheduleTemplateService : IScheduleTemplateService
             throw new UnauthorizedAccessException("You don't have permission to delete this template");
         }
 
-        // First, remove any CalendarBookings that reference this template's BookingTemplates
-        var bookingIds = t.Bookings.Select(b => b.Id).ToList();
-        if (bookingIds.Any())
-        {
-            var calendarBookings = await db.CalendarBookings
-                .Where(cb => cb.SourceTemplateId.HasValue && bookingIds.Contains(cb.SourceTemplateId.Value))
-                .ToListAsync();
+        // Remove any CalendarBookings that reference this ScheduleTemplate
+        // Note: SourceTemplateId now refers to ScheduleTemplate.Id, not BookingTemplate.Id
+        var calendarBookings = await db.CalendarBookings
+            .Where(cb => cb.SourceTemplateId.HasValue && cb.SourceTemplateId == templateId)
+            .ToListAsync();
 
-            if (calendarBookings.Any())
-            {
-                db.CalendarBookings.RemoveRange(calendarBookings);
-            }
+        if (calendarBookings.Any())
+        {
+            db.CalendarBookings.RemoveRange(calendarBookings);
         }
         
         // Then remove the BookingTemplates
@@ -290,14 +287,9 @@ public class ScheduleTemplateService : IScheduleTemplateService
             throw new UnauthorizedAccessException("You don't have permission to delete this booking");
         }
 
-        // Remove any calendar bookings that reference this template booking first
-        var calendarRefs = await db.CalendarBookings
-            .Where(cb => cb.SourceTemplateId.HasValue && cb.SourceTemplateId == bookingId)
-            .ToListAsync();
-        if (calendarRefs.Any())
-        {
-            db.CalendarBookings.RemoveRange(calendarRefs);
-        }
+        // Note: SourceTemplateId now refers to ScheduleTemplate.Id, not BookingTemplate.Id
+        // CalendarBookings are independent copies, so deleting a BookingTemplate doesn't affect them
+        // If you want to remove CalendarBookings when a ScheduleTemplate is deleted, use DeleteTemplateAsync
 
         db.BookingTemplates.Remove(b);
         await db.SaveChangesAsync();
