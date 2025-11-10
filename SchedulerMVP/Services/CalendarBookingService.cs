@@ -182,6 +182,46 @@ namespace SchedulerMVP.Services
 
             Console.WriteLine($"[CalendarBookingService] Found {bookingTemplates.Count} booking templates for template {templateId}");
 
+            if (bookingTemplates.Count == 0)
+            {
+                throw new InvalidOperationException($"No booking templates found for template {templateId}");
+            }
+
+            // Validate that all areas and groups exist
+            var areaIds = bookingTemplates.Select(bt => bt.AreaId).Distinct().ToList();
+            var groupIds = bookingTemplates.Select(bt => bt.GroupId).Distinct().ToList();
+
+            var existingAreas = await _context.Areas
+                .Where(a => areaIds.Contains(a.Id))
+                .Select(a => a.Id)
+                .ToListAsync();
+
+            var existingGroups = await _context.Groups
+                .Where(g => groupIds.Contains(g.Id))
+                .Select(g => g.Id)
+                .ToListAsync();
+
+            var missingAreas = areaIds.Except(existingAreas).ToList();
+            var missingGroups = groupIds.Except(existingGroups).ToList();
+
+            if (missingAreas.Any())
+            {
+                throw new InvalidOperationException($"Areas not found: {string.Join(", ", missingAreas)}");
+            }
+
+            if (missingGroups.Any())
+            {
+                throw new InvalidOperationException($"Groups not found: {string.Join(", ", missingGroups)}");
+            }
+
+            // Check for existing bookings to avoid duplicates
+            var existingBookings = await _context.CalendarBookings
+                .Where(cb => cb.Date >= startDateInclusive && cb.Date <= endDateInclusive)
+                .Select(cb => new { cb.AreaId, cb.GroupId, cb.Date, cb.StartMin, cb.EndMin })
+                .ToListAsync();
+
+            Console.WriteLine($"[CalendarBookingService] Found {existingBookings.Count} existing bookings in date range");
+
             var created = new List<CalendarBooking>();
 
             // Iterate each date in span
@@ -195,6 +235,33 @@ namespace SchedulerMVP.Services
                 {
                     if (t.DayOfWeek == dayOfWeek1to7)
                     {
+                        // Validate required fields
+                        if (t.AreaId == Guid.Empty)
+                        {
+                            Console.WriteLine($"[CalendarBookingService] WARNING: BookingTemplate {t.Id} has empty AreaId, skipping");
+                            continue;
+                        }
+
+                        if (t.GroupId == Guid.Empty)
+                        {
+                            Console.WriteLine($"[CalendarBookingService] WARNING: BookingTemplate {t.Id} has empty GroupId, skipping");
+                            continue;
+                        }
+
+                        // Check if a booking already exists for this Area, Group, Date, StartMin, EndMin
+                        var isDuplicate = existingBookings.Any(eb => 
+                            eb.AreaId == t.AreaId && 
+                            eb.GroupId == t.GroupId && 
+                            eb.Date == date && 
+                            eb.StartMin == t.StartMin && 
+                            eb.EndMin == t.EndMin);
+
+                        if (isDuplicate)
+                        {
+                            Console.WriteLine($"[CalendarBookingService] Skipping duplicate booking for {date}: Area={t.AreaId}, Group={t.GroupId}, Time={t.StartMin}-{t.EndMin}");
+                            continue;
+                        }
+
                         var booking = new CalendarBooking
                         {
                             Id = Guid.NewGuid(),
@@ -218,13 +285,38 @@ namespace SchedulerMVP.Services
 
             if (created.Count > 0)
             {
-                _context.CalendarBookings.AddRange(created);
-                var saved = await _context.SaveChangesAsync();
-                Console.WriteLine($"[CalendarBookingService] Saved {saved} changes to database");
+                try
+                {
+                    _context.CalendarBookings.AddRange(created);
+                    var saved = await _context.SaveChangesAsync();
+                    Console.WriteLine($"[CalendarBookingService] Saved {saved} changes to database");
+                }
+                catch (DbUpdateException dbEx)
+                {
+                    var innerMsg = dbEx.InnerException?.Message ?? "No inner exception";
+                    Console.WriteLine($"[CalendarBookingService] DbUpdateException: {dbEx.Message}");
+                    Console.WriteLine($"[CalendarBookingService] InnerException: {innerMsg}");
+                    Console.WriteLine($"[CalendarBookingService] StackTrace: {dbEx.StackTrace}");
+                    
+                    // Re-throw with more context
+                    throw new InvalidOperationException(
+                        $"Kunde inte spara bokningar: {dbEx.Message}. Detaljer: {innerMsg}", 
+                        dbEx);
+                }
+                catch (Exception ex)
+                {
+                    var innerMsg = ex.InnerException?.Message ?? "No inner exception";
+                    Console.WriteLine($"[CalendarBookingService] Exception: {ex.Message}");
+                    Console.WriteLine($"[CalendarBookingService] InnerException: {innerMsg}");
+                    Console.WriteLine($"[CalendarBookingService] StackTrace: {ex.StackTrace}");
+                    throw new InvalidOperationException(
+                        $"Kunde inte spara bokningar: {ex.Message}. Detaljer: {innerMsg}", 
+                        ex);
+                }
             }
             else
             {
-                Console.WriteLine($"[CalendarBookingService] WARNING: No bookings created. Template may not have bookings matching the date range.");
+                Console.WriteLine($"[CalendarBookingService] WARNING: No bookings created. Template may not have bookings matching the date range, or all bookings already exist.");
             }
 
             return created;

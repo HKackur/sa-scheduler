@@ -170,8 +170,18 @@
         }
         catch (Exception ex)
         {
-            errorMessage = $"Ett fel uppstod: {ex.Message}";
+            var innerMessage = ex.InnerException?.Message ?? "";
+            var fullMessage = !string.IsNullOrEmpty(innerMessage) && innerMessage != ex.Message 
+                ? $"{ex.Message} ({innerMessage})" 
+                : ex.Message;
+            
+            errorMessage = $"Ett fel uppstod: {fullMessage}";
             Console.WriteLine($"[CalendarCopyTemplateModal] Error copying template: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"[CalendarCopyTemplateModal] Inner exception: {ex.InnerException.Message}");
+                Console.WriteLine($"[CalendarCopyTemplateModal] Inner exception type: {ex.InnerException.GetType().Name}");
+            }
             Console.WriteLine($"[CalendarCopyTemplateModal] Exception type: {ex.GetType().Name}");
             Console.WriteLine($"[CalendarCopyTemplateModal] Stack trace: {ex.StackTrace}");
             // Don't close modal on error - let user see the error and try again
