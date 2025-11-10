@@ -191,16 +191,20 @@ namespace SchedulerMVP.Services
                 {
                     if (t.DayOfWeek == dayOfWeek1to7)
                     {
-                        created.Add(new CalendarBooking
+                        var booking = new CalendarBooking
                         {
+                            Id = Guid.NewGuid(),
                             AreaId = t.AreaId,
                             GroupId = t.GroupId,
                             Date = date,
                             StartMin = t.StartMin,
                             EndMin = t.EndMin,
                             Notes = t.Notes,
-                            SourceTemplateId = t.Id
-                        });
+                            SourceTemplateId = t.Id,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                        created.Add(booking);
                     }
                 }
             }

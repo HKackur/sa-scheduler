@@ -275,8 +275,13 @@
         UI.ShouldOpenCopyTemplateModal = false;
         StateHasChanged();
         
-        // Notify WeekGrid to refresh after template copy
+        // Force WeekGrid to reload data to show new bookings immediately
+        UI.ForceRefresh = true;
         UI.RaiseChanged();
+        
+        // Small delay to ensure state propagation
+        await Task.Delay(50);
+        StateHasChanged();
     }
     
     private bool isOpeningCalendarEdit = false; // Prevent double-clicks

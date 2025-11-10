@@ -37,8 +37,12 @@
     <style>
         .bm-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.15);padding:24px;min-width:400px;max-width:500px;z-index:2001}
         .bm-title{margin:0 0 20px 0;font-size:18px;font-weight:600;color:#111827}
-        .bm-select{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-size:14px;color:#111827}
-        .bm-select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+        .bm-field{margin-bottom:16px}
+        .bm-label{display:block;margin-bottom:6px;font-size:14px;font-weight:500;color:#374151}
+        .bm-modal .tb-select{width:100%;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;background:#fff;font-size:14px;color:#111827;box-sizing:border-box}
+        .bm-modal .tb-select:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+        .bm-modal select.tb-select{overflow:visible;text-overflow:clip;white-space:normal;min-height:40px}
+        .bm-modal select.tb-select option{white-space:normal;word-wrap:break-word;padding:8px}
         .week-display{padding:10px 12px;background:#f8f9fa;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;color:#6b7280;text-align:center}
         .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:24px}
         .btn-outline{background:#fff;border:1px solid #d1d5db;color:#374151;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s}
@@ -92,17 +96,27 @@
 
     private async Task OnCopy()
     {
-        if (selectedTemplateId.HasValue)
+        if (!selectedTemplateId.HasValue)
         {
-            try
-            {
-                await CalendarBookingService.CopyTemplateToDateRangeAsync(selectedTemplateId.Value, startDate, endDate);
-                await OnCopied.InvokeAsync();
-            }
-            catch (Exception ex)
-            {
-                // Console.WriteLine($"Error copying template: {ex.Message}");
-            }
+            return;
+        }
+        
+        try
+        {
+            var created = await CalendarBookingService.CopyTemplateToDateRangeAsync(selectedTemplateId.Value, startDate, endDate);
+            
+            // Close modal first
+            selectedTemplateId = null;
+            await OnClose.InvokeAsync();
+            
+            // Then trigger refresh callback
+            await OnCopied.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[CalendarCopyTemplateModal] Error copying template: {ex.Message}");
+            Console.WriteLine($"[CalendarCopyTemplateModal] Stack trace: {ex.StackTrace}");
+            // Don't close modal on error - let user try again
         }
     }
 
