@@ -3,41 +3,56 @@
 
 @if (IsOpen && PlaceId.HasValue)
 {
-    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="OnBackdrop"></div>
-    <div class="bm-modal">
-        <div class="bm-header">
-            <h2 class="bm-title">Redigera plats</h2>
-        </div>
-        <div class="bm-field">
-            <label class="bm-label">Platsnamn</label>
-            <input class="tb-select" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
-        </div>
-        <div class="bm-field">
-            <label class="bm-label">Standard längd på bokning</label>
-            <div class="bm-inline">
-                <input class="tb-select bm-w-full" value="@durationText" @oninput="OnDurationInput" />
-                <span class="bm-suffix">min</span>
+    <div class="modal-container" @onclick="OnBackdrop">
+        <div class="bm-modal" @onclick:stopPropagation="true">
+            <div class="bm-header">
+                <h2 class="bm-title">Redigera plats</h2>
             </div>
-        </div>
-        <div class="bm-actions">
-            <button type="button" @onclick="OnDelete" class="btn-danger-left">Ta bort</button>
-            <div style="margin-left:auto;display:flex;gap:12px;">
-                <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
-                <button type="button" @onclick="OnSave" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Spara</button>
+            <div class="bm-field">
+                <label class="bm-label">Platsnamn</label>
+                <input class="bm-input" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
+            </div>
+            <div class="bm-field">
+                <label class="bm-label">Standard längd på bokning</label>
+                <div class="bm-inline">
+                    <input class="bm-input bm-w-full" value="@durationText" @oninput="OnDurationInput" type="number" min="1" />
+                    <span class="bm-suffix">min</span>
+                </div>
+            </div>
+            <div class="bm-actions">
+                <button type="button" @onclick="OnDelete" class="btn-danger-left">Ta bort</button>
+                <div style="margin-left:auto;display:flex;gap:12px;">
+                    <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+                    <button type="button" @onclick="OnSave" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(name)">Spara</button>
+                </div>
             </div>
         </div>
     </div>
     <style>
-        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px 28px 0 28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
-        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:12px}
+        /* Match ScheduleTemplateEditModal exact structure and styling */
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px 28px 0 28px;border:1px solid #e6e7ea;border-radius:12px;min-width:560px;max-width:720px;width:90vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:0}
         .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
+        .bm-field{display:flex;flex-direction:column;gap:8px}
+        .bm-label{font-size:14px;font-weight:500;color:#374151}
+        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
+        .bm-input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
         .bm-w-full{width:100%}
         .bm-inline{display:flex;align-items:center;gap:8px}
-        .bm-suffix{font-size:14px;color:#6b7280}
-        .bm-actions{display:flex;align-items:center;margin-top:8px}
-        .btn-outline{padding:8px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
-        .btn-primary{padding:8px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
-        .btn-danger-left{padding:8px 16px;border:none;border-radius:10px;background:#dc3545;color:#fff;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
+        .bm-suffix{font-size:14px;color:#6b7280;white-space:nowrap}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;padding-top:12px;padding-bottom:24px;z-index:10}
+        .btn-outline,.btn-primary,.btn-danger-left{padding:8px 16px;border-radius:10px;font-size:14px;line-height:20px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;transition:background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease;cursor:pointer}
+        .btn-outline{border:1px solid #d1d5db;background:#fff;color:#0f1720}
+        .btn-outline:hover{background:#f1f5f9;box-shadow:0 0 0 2px rgba(99,102,241,0.1)}
+        .btn-outline:active{transform:translateY(1px);}
+        .btn-primary{border:none;background:#1761a5;color:#fff}
+        .btn-primary:hover:not(:disabled){background:#0f4a7a;box-shadow:0 0 0 2px rgba(23,97,165,0.2)}
+        .btn-primary:active:not(:disabled){transform:translateY(1px);}
+        .btn-primary:disabled{opacity:0.6;cursor:not-allowed;box-shadow:none}
+        .btn-danger-left{border:none;background:#dc3545;color:#fff}
+        .btn-danger-left:hover{background:#b91c1c;box-shadow:0 0 0 2px rgba(220,53,69,0.2)}
+        .btn-danger-left:active{transform:translateY(1px);}
     </style>
 }
 
@@ -73,37 +88,72 @@
         }
     }
 
-    private void OnNameInput(ChangeEventArgs e) => name = e.Value?.ToString() ?? string.Empty;
-    private void OnDurationInput(ChangeEventArgs e) => durationText = e.Value?.ToString() ?? "";
+    private void OnNameInput(ChangeEventArgs e)
+    {
+        name = e.Value?.ToString() ?? string.Empty;
+    }
+    
+    private void OnDurationInput(ChangeEventArgs e)
+    {
+        durationText = e.Value?.ToString() ?? "";
+    }
 
     private async Task OnSave()
     {
-        if (place != null && !string.IsNullOrWhiteSpace(name) && int.TryParse(durationText, out var duration))
+        if (place == null || string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+        
+        if (!int.TryParse(durationText, out var duration) || duration < 1)
+        {
+            return;
+        }
+        
+        try
         {
             place.Name = name;
             place.DefaultDurationMin = duration;
             await PlaceService.UpdatePlaceAsync(place);
             
-            IsOpen = false;
+            await CloseAsync();
             await OnSaved.InvokeAsync();
-            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PlaceEditModal] Error saving place: {ex.Message}");
         }
     }
 
     private async Task OnDelete()
     {
-        if (place != null)
+        if (place == null)
+        {
+            return;
+        }
+        
+        try
         {
             await PlaceService.DeletePlaceAsync(place.Id);
             
-            IsOpen = false;
+            await CloseAsync();
             await OnDeleted.InvokeAsync();
-            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[PlaceEditModal] Error deleting place: {ex.Message}");
         }
     }
 
-    private async Task OnCancel() => await CloseAsync();
-    private async Task OnBackdrop(MouseEventArgs _) => await CloseAsync();
+    private async Task OnCancel()
+    {
+        await CloseAsync();
+    }
+    
+    private async Task OnBackdrop(MouseEventArgs _)
+    {
+        await CloseAsync();
+    }
 
     private async Task CloseAsync()
     {
