@@ -4,6 +4,7 @@
 @inject SchedulerMVP.Services.UserContextService UserContext
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IConflictService ConflictService
+@inject SchedulerMVP.Services.ToastService ToastService
 
 @if (IsOpen)
 {
@@ -481,6 +482,9 @@
             // Force WeekGrid to reload so updates are visible immediately
             UI.ForceRefresh = true;
             UI.RaiseChanged();
+            
+            // Show success toast
+            ToastService.ShowSuccess("Bokning uppdaterad", "Bokningen har sparats");
             
             await OnSave.InvokeAsync();
             await OnClose.InvokeAsync();

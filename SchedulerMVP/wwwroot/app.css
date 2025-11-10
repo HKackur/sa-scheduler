@@ -67,3 +67,15 @@ h1:focus {
 @keyframes calendar-edit-modal-spin {
     to { transform: rotate(360deg); }
 }
+
+/* Toast animations */
+@keyframes toast-slide-in {
+    from {
+        transform: translateY(100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}

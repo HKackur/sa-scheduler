@@ -5,6 +5,7 @@
 @inject SchedulerMVP.Services.UserContextService UserContext
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IConflictService ConflictService
+@inject SchedulerMVP.Services.ToastService ToastService
 
 @if (IsOpen)
 {
@@ -961,6 +962,16 @@
             
             // Force WeekGrid to reload data to show new booking immediately
             UI.ForceRefresh = true;
+            
+            // Show success toast
+            if (UI.IsCalendarViewMode)
+            {
+                ToastService.ShowSuccess("Bokning sparad", "Bokningen har sparats i kalendern");
+            }
+            else
+            {
+                ToastService.ShowSuccess("Bokning sparad", "Bokningen har lagts till i veckoschemat");
+            }
             
             // Close modal
             await OnClose.InvokeAsync();
