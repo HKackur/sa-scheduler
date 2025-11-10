@@ -34,14 +34,14 @@ echo "✅ Aktiverar HTTP Logging..."
 az webapp log config \
   --name "$APP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
-  --http-logging filesystem
+  --web-server-logging filesystem
 
 # 4. Aktivera ARR Affinity (kritisk för Blazor Server)
 echo "✅ Aktiverar ARR Affinity (sticky sessions)..."
-az webapp config set \
+az webapp update \
   --name "$APP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
-  --generic-configurations '{"arrAffinityEnabled": true}'
+  --set clientAffinityEnabled=true
 
 # 5. Aktivera WebSockets (för SignalR)
 echo "✅ Aktiverar WebSockets..."
@@ -50,14 +50,7 @@ az webapp config set \
   --resource-group "$RESOURCE_GROUP" \
   --web-sockets-enabled true
 
-# 6. Sätt request timeout (förhindrar timeout vid långa operationer)
-echo "✅ Konfigurerar request timeout..."
-az webapp config set \
-  --name "$APP_NAME" \
-  --resource-group "$RESOURCE_GROUP" \
-  --generic-configurations '{"requestTracingEnabled": true, "httpLoggingEnabled": true}'
-
-# 7. Verifiera konfiguration
+# 6. Verifiera konfiguration
 echo ""
 echo "📋 Verifierar konfiguration..."
 echo ""
