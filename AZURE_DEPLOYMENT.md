@@ -200,3 +200,66 @@ az webapp config hostname add \
 - Sätt upp monitoring och alerts
 - Konfigurera backup-strategi för databas
 
+## Stabilitetskonfiguration (VIKTIGT!)
+
+För att förhindra blanka skärmar och instabilitet efter deploys, kör detta skript:
+
+```bash
+# Uppdatera APP_NAME och RESOURCE_GROUP i skriptet först
+./configure-azure-stability.sh
+```
+
+Detta skript konfigurerar:
+- ✅ **Always On** - Förhindrar att appen stängs av vid inaktivitet
+- ✅ **Application Logging** - Aktiverar loggning till filesystem
+- ✅ **HTTP Logging** - Aktiverar HTTP-request logging
+- ✅ **ARR Affinity** - Sticky sessions för Blazor Server (kritisk!)
+- ✅ **WebSockets** - Aktiverar WebSocket-support för SignalR
+
+**Alternativt - manuellt via CLI:**
+
+```bash
+# Always On
+az webapp config set \
+  --name scheduler-mvp-app-1762239380 \
+  --resource-group scheduler-mvp-rg \
+  --always-on true
+
+# Application Logging
+az webapp log config \
+  --name scheduler-mvp-app-1762239380 \
+  --resource-group scheduler-mvp-rg \
+  --application-logging filesystem \
+  --level information
+
+# HTTP Logging
+az webapp log config \
+  --name scheduler-mvp-app-1762239380 \
+  --resource-group scheduler-mvp-rg \
+  --http-logging filesystem
+
+# ARR Affinity (kritisk för Blazor Server)
+az webapp config set \
+  --name scheduler-mvp-app-1762239380 \
+  --resource-group scheduler-mvp-rg \
+  --generic-configurations '{"arrAffinityEnabled": true}'
+
+# WebSockets
+az webapp config set \
+  --name scheduler-mvp-app-1762239380 \
+  --resource-group scheduler-mvp-rg \
+  --web-sockets-enabled true
+```
+
+**Verifiera health endpoint:**
+```bash
+curl https://scheduler-mvp-app-1762239380.azurewebsites.net/health
+```
+
+**Öppna log stream:**
+```bash
+az webapp log tail \
+  --name scheduler-mvp-app-1762239380 \
+  --resource-group scheduler-mvp-rg
+```
+
