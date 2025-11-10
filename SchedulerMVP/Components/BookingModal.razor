@@ -19,7 +19,7 @@
         @if (IsOpen && SelectedPlace == null && SelectedArea == null)
         {
             <div style="padding: 20px; text-align: center; color: #6b7280;">
-                <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite;"></div>
+                <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: booking-modal-spin 0.6s linear infinite;"></div>
                 <div style="margin-top: 8px; font-size: 14px;">Laddar...</div>
             </div>
         }
@@ -288,10 +288,6 @@
         .btn-outline{padding:8px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
         .btn-primary{padding:8px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
         .bm-option-unavailable{color:#9ca3af;background-color:#f9fafb}
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
     </style>
 }
 
