@@ -209,22 +209,15 @@ public class ScheduleTemplateService : IScheduleTemplateService
             throw new UnauthorizedAccessException("You don't have permission to delete this template");
         }
 
-        // First, remove any CalendarBookings that reference this template's BookingTemplates
-        var bookingIds = t.Bookings.Select(b => b.Id).ToList();
-        if (bookingIds.Any())
+        // Remove any CalendarBookings that were copied from this ScheduleTemplate
+        // SourceTemplateId now refers to ScheduleTemplate.Id, not BookingTemplate.Id
+        var calendarBookings = await db.CalendarBookings
+            .Where(cb => cb.SourceTemplateId.HasValue && cb.SourceTemplateId == templateId)
+            .ToListAsync();
+
+        if (calendarBookings.Any())
         {
-            var calendarBookings = await db.CalendarBookings
-                .Where(cb => cb.SourceTemplateId.HasValue)
-                .ToListAsync();
-
-            var linkedBookings = calendarBookings
-                .Where(cb => bookingIds.Contains(cb.SourceTemplateId!.Value))
-                .ToList();
-
-            if (linkedBookings.Count > 0)
-            {
-                db.CalendarBookings.RemoveRange(linkedBookings);
-            }
+            db.CalendarBookings.RemoveRange(calendarBookings);
         }
         
         // Then remove the BookingTemplates
@@ -294,14 +287,11 @@ public class ScheduleTemplateService : IScheduleTemplateService
             throw new UnauthorizedAccessException("You don't have permission to delete this booking");
         }
 
-        // Remove any calendar bookings that reference this template booking first
-        var calendarRefs = await db.CalendarBookings
-            .Where(cb => cb.SourceTemplateId.HasValue && cb.SourceTemplateId == bookingId)
-            .ToListAsync();
-        if (calendarRefs.Count > 0)
-        {
-            db.CalendarBookings.RemoveRange(calendarRefs);
-        }
+        // Note: SourceTemplateId now refers to ScheduleTemplate.Id, not BookingTemplate.Id
+        // Calendar bookings copied from a BookingTemplate will have SourceTemplateId pointing to the ScheduleTemplate
+        // So we cannot directly find calendar bookings for a specific BookingTemplate using SourceTemplateId
+        // Calendar bookings will remain until the ScheduleTemplate is deleted
+        // This is acceptable since calendar bookings are independent once created
 
         db.BookingTemplates.Remove(b);
         await db.SaveChangesAsync();

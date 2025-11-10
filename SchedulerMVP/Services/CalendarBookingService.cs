@@ -111,7 +111,8 @@ namespace SchedulerMVP.Services
                     StartMin = template.StartMin,
                     EndMin = template.EndMin,
                     Notes = template.Notes,
-                    SourceTemplateId = template.Id
+                    // SourceTemplateId should refer to ScheduleTemplate, not BookingTemplate
+                    SourceTemplateId = templateId
                 };
 
                 calendarBookings.Add(calendarBooking);
@@ -155,7 +156,8 @@ namespace SchedulerMVP.Services
                         StartMin = template.StartMin,
                         EndMin = template.EndMin,
                         Notes = template.Notes,
-                        SourceTemplateId = template.Id
+                        // SourceTemplateId should refer to ScheduleTemplate, not BookingTemplate
+                        SourceTemplateId = templateId
                     });
                 }
             }
@@ -271,7 +273,9 @@ namespace SchedulerMVP.Services
                             StartMin = t.StartMin,
                             EndMin = t.EndMin,
                             Notes = t.Notes,
-                            SourceTemplateId = t.Id,
+                            // SourceTemplateId should refer to ScheduleTemplate, not BookingTemplate
+                            // The database constraint expects ScheduleTemplate.Id
+                            SourceTemplateId = templateId,
                             CreatedAt = DateTime.UtcNow,
                             UpdatedAt = DateTime.UtcNow
                         };
