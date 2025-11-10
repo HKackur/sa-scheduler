@@ -98,25 +98,55 @@
     {
         if (!selectedTemplateId.HasValue)
         {
+            Console.WriteLine("[CalendarCopyTemplateModal] No template selected");
+            return;
+        }
+        
+        if (endDate < startDate)
+        {
+            Console.WriteLine("[CalendarCopyTemplateModal] Invalid date range");
             return;
         }
         
         try
         {
+            Console.WriteLine($"[CalendarCopyTemplateModal] Copying template {selectedTemplateId.Value} from {startDate} to {endDate}");
+            
             var created = await CalendarBookingService.CopyTemplateToDateRangeAsync(selectedTemplateId.Value, startDate, endDate);
             
-            // Close modal first
-            selectedTemplateId = null;
-            await OnClose.InvokeAsync();
+            Console.WriteLine($"[CalendarCopyTemplateModal] Created {created.Count} calendar bookings");
             
-            // Then trigger refresh callback
-            await OnCopied.InvokeAsync();
+            if (created.Count == 0)
+            {
+                Console.WriteLine("[CalendarCopyTemplateModal] WARNING: No bookings were created. Template may not have bookings for the selected date range.");
+            }
+            
+            // Reset selection
+            selectedTemplateId = null;
+            
+            // Close modal first
+            IsOpen = false;
+            StateHasChanged();
+            
+            if (OnClose.HasDelegate)
+            {
+                await OnClose.InvokeAsync();
+            }
+            
+            // Then trigger refresh callback after a short delay to ensure modal is closed
+            await Task.Delay(100);
+            
+            if (OnCopied.HasDelegate)
+            {
+                await OnCopied.InvokeAsync();
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"[CalendarCopyTemplateModal] Error copying template: {ex.Message}");
+            Console.WriteLine($"[CalendarCopyTemplateModal] Exception type: {ex.GetType().Name}");
             Console.WriteLine($"[CalendarCopyTemplateModal] Stack trace: {ex.StackTrace}");
-            // Don't close modal on error - let user try again
+            // Don't close modal on error - let user see the error and try again
         }
     }
 

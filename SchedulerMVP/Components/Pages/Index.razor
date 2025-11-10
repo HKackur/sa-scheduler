@@ -272,16 +272,27 @@
     
     private async Task RefreshAfterTemplateCopy()
     {
+        Console.WriteLine("[Index] RefreshAfterTemplateCopy called");
+        
+        // Ensure modal is closed
         UI.ShouldOpenCopyTemplateModal = false;
-        StateHasChanged();
         
         // Force WeekGrid to reload data to show new bookings immediately
         UI.ForceRefresh = true;
+        
+        // Trigger state change
+        StateHasChanged();
         UI.RaiseChanged();
         
-        // Small delay to ensure state propagation
-        await Task.Delay(50);
+        // Wait a bit longer to ensure state propagation and database commit
+        await Task.Delay(200);
+        
+        // Trigger another refresh to ensure WeekGrid picks up the changes
+        UI.ForceRefresh = true;
+        UI.RaiseChanged();
         StateHasChanged();
+        
+        Console.WriteLine("[Index] RefreshAfterTemplateCopy completed");
     }
     
     private bool isOpeningCalendarEdit = false; // Prevent double-clicks

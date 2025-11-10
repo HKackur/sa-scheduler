@@ -172,15 +172,19 @@ namespace SchedulerMVP.Services
                 throw new ArgumentException("endDateInclusive must be >= startDateInclusive");
             }
 
+            Console.WriteLine($"[CalendarBookingService] CopyTemplateToDateRangeAsync: templateId={templateId}, start={startDateInclusive}, end={endDateInclusive}");
+
             var bookingTemplates = await _context.BookingTemplates
                 .Include(bt => bt.Area)
                 .Include(bt => bt.Group)
                 .Where(bt => bt.ScheduleTemplateId == templateId)
                 .ToListAsync();
 
+            Console.WriteLine($"[CalendarBookingService] Found {bookingTemplates.Count} booking templates for template {templateId}");
+
             var created = new List<CalendarBooking>();
 
-            // Iterate each date in span; for effektivitet, beräkna vecka-start för varje dag vi behöver
+            // Iterate each date in span
             for (var date = startDateInclusive; date <= endDateInclusive; date = date.AddDays(1))
             {
                 // Måndag = 1 enligt vår modell
@@ -205,12 +209,24 @@ namespace SchedulerMVP.Services
                             UpdatedAt = DateTime.UtcNow
                         };
                         created.Add(booking);
+                        Console.WriteLine($"[CalendarBookingService] Created booking for {date} (day {dayOfWeek1to7}): Area={t.AreaId}, Group={t.GroupId}, Time={t.StartMin}-{t.EndMin}");
                     }
                 }
             }
 
-            _context.CalendarBookings.AddRange(created);
-            await _context.SaveChangesAsync();
+            Console.WriteLine($"[CalendarBookingService] Total bookings to create: {created.Count}");
+
+            if (created.Count > 0)
+            {
+                _context.CalendarBookings.AddRange(created);
+                var saved = await _context.SaveChangesAsync();
+                Console.WriteLine($"[CalendarBookingService] Saved {saved} changes to database");
+            }
+            else
+            {
+                Console.WriteLine($"[CalendarBookingService] WARNING: No bookings created. Template may not have bookings matching the date range.");
+            }
+
             return created;
         }
 
