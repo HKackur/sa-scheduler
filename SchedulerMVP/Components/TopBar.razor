@@ -180,17 +180,16 @@
                 @if (userMenuOpen)
                 {
                     <div class="menu-overlay" @onclick="CloseUserMenu"></div>
-                    <div class="tb-menu" style="right:0; left:auto; min-width:200px;">
+                    <div class="tb-menu" style="right:0; left:auto; min-width:220px;">
+                        <div class="tb-item user-email">@currentUserEmail</div>
+                        <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
                         @if (isCurrentUserAdmin)
                         {
                             <a href="/admin" class="tb-item" style="text-decoration:none;" @onclick="NavigateToAdminLink">Admin</a>
-                            <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
                         }
                         <a href="/grupper" class="tb-item" style="text-decoration:none; width:fit-content;" @onclick="NavigateToGroupsLink">Hantera grupper</a>
                         <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
                         <button class="tb-item danger" @onclick="PerformLogout" style="width:fit-content;">Logga ut</button>
-                        <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
-                        <div class="tb-item" style="cursor: default; color:#6b7280; text-align:right; white-space: normal; overflow-wrap: anywhere; word-break: break-all; display:block; width:fit-content;">@currentUserEmail</div>
                     </div>
                 }
             </div>
@@ -571,9 +570,11 @@
         }
         
         .tb-item {
-            display: block;
-            width: fit-content;
-            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 10px 14px;
             border: none;
             background: transparent;
             text-align: right;
@@ -646,6 +647,16 @@
             background: #1761A5;
             border: none;
             outline: none;
+        }
+        
+        .tb-item.user-email {
+            color: #6b7280;
+            font-size: 13px;
+            justify-content: flex-start;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-all;
+            cursor: default;
         }
         
     </style>
