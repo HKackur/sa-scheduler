@@ -31,6 +31,12 @@
                     <div style="margin-top:6px;color:#dc2626;font-size:12px">Slutdatum måste vara samma eller efter startdatum.</div>
                 }
             </div>
+            @if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                <div style="color: #dc2626; font-size: 12px; padding: 8px; background: #fee2e2; border-radius: 4px;">
+                    @errorMessage
+                </div>
+            }
             <div class="bm-actions">
                 <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
                 <button type="button" @onclick="OnCopy" class="btn-primary" disabled="@(!selectedTemplateId.HasValue || endDate < startDate)">Lägg till schema</button>
@@ -70,6 +76,7 @@
     private Guid? selectedTemplateId;
     private DateOnly startDate;
     private DateOnly endDate;
+    private string? errorMessage;
     private string startDateString => startDate.ToString("yyyy-MM-dd");
     private string endDateString => endDate.ToString("yyyy-MM-dd");
 
@@ -104,17 +111,24 @@
 
     private async Task OnCopy()
     {
-        Console.WriteLine("[CalendarCopyTemplateModal] OnCopy called");
+        errorMessage = null;
+        StateHasChanged();
+        
+        Console.WriteLine($"[CalendarCopyTemplateModal] OnCopy called - selectedTemplateId: {selectedTemplateId}, startDate: {startDate}, endDate: {endDate}");
         
         if (!selectedTemplateId.HasValue)
         {
+            errorMessage = "Välj en mall att kopiera från.";
             Console.WriteLine("[CalendarCopyTemplateModal] No template selected");
+            StateHasChanged();
             return;
         }
         
         if (endDate < startDate)
         {
-            Console.WriteLine("[CalendarCopyTemplateModal] Invalid date range: {startDate} to {endDate}");
+            errorMessage = "Slutdatum måste vara samma eller efter startdatum.";
+            Console.WriteLine($"[CalendarCopyTemplateModal] Invalid date range: {startDate} to {endDate}");
+            StateHasChanged();
             return;
         }
         
@@ -128,8 +142,14 @@
             
             if (created.Count == 0)
             {
+                errorMessage = "Inga bokningar skapades. Mallen kan sakna bokningar för det valda datumspannet.";
                 Console.WriteLine("[CalendarCopyTemplateModal] WARNING: No bookings were created. Template may not have bookings for the selected date range.");
+                StateHasChanged();
+                return;
             }
+            
+            // Clear error message
+            errorMessage = null;
             
             // Reset selection
             selectedTemplateId = null;
@@ -150,6 +170,7 @@
         }
         catch (Exception ex)
         {
+            errorMessage = $"Ett fel uppstod: {ex.Message}";
             Console.WriteLine($"[CalendarCopyTemplateModal] Error copying template: {ex.Message}");
             Console.WriteLine($"[CalendarCopyTemplateModal] Exception type: {ex.GetType().Name}");
             Console.WriteLine($"[CalendarCopyTemplateModal] Stack trace: {ex.StackTrace}");
