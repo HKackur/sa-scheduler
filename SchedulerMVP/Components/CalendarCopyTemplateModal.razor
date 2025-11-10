@@ -11,11 +11,11 @@
             </div>
             <div class="bm-field">
                 <label class="bm-label">Välj mall</label>
-                <select class="bm-input" @onchange="OnTemplateChanged">
+                <select class="bm-input" value="@(selectedTemplateId?.ToString() ?? "")" @onchange="OnTemplateChanged">
                     <option value="">-- Välj mall --</option>
                     @foreach (var template in templates)
                     {
-                        <option value="@template.Id" selected="@(selectedTemplateId == template.Id)">@template.Name</option>
+                        <option value="@template.Id.ToString()">@template.Name</option>
                     }
                 </select>
             </div>
@@ -106,53 +106,56 @@
     {
         Console.WriteLine("[CalendarCopyTemplateModal] OnCopy called");
         
-        if (!selectedTemplateId.HasValue)
+        await InvokeAsync(async () =>
         {
-            Console.WriteLine("[CalendarCopyTemplateModal] No template selected");
-            return;
-        }
-        
-        if (endDate < startDate)
-        {
-            Console.WriteLine("[CalendarCopyTemplateModal] Invalid date range");
-            return;
-        }
-        
-        try
-        {
-            Console.WriteLine($"[CalendarCopyTemplateModal] Copying template {selectedTemplateId.Value} from {startDate} to {endDate}");
-            
-            var created = await CalendarBookingService.CopyTemplateToDateRangeAsync(selectedTemplateId.Value, startDate, endDate);
-            
-            Console.WriteLine($"[CalendarCopyTemplateModal] Created {created.Count} calendar bookings");
-            
-            if (created.Count == 0)
+            if (!selectedTemplateId.HasValue)
             {
-                Console.WriteLine("[CalendarCopyTemplateModal] WARNING: No bookings were created. Template may not have bookings for the selected date range.");
+                Console.WriteLine("[CalendarCopyTemplateModal] No template selected");
+                return;
             }
             
-            // Reset selection
-            selectedTemplateId = null;
-            
-            // Close modal first
-            await CloseAsync();
-            
-            // Then trigger refresh callback after a short delay to ensure modal is closed
-            await Task.Delay(100);
-            
-            if (OnCopied.HasDelegate)
+            if (endDate < startDate)
             {
-                await OnCopied.InvokeAsync();
+                Console.WriteLine("[CalendarCopyTemplateModal] Invalid date range");
+                return;
             }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[CalendarCopyTemplateModal] Error copying template: {ex.Message}");
-            Console.WriteLine($"[CalendarCopyTemplateModal] Exception type: {ex.GetType().Name}");
-            Console.WriteLine($"[CalendarCopyTemplateModal] Stack trace: {ex.StackTrace}");
-            // Don't close modal on error - let user see the error and try again
-            StateHasChanged();
-        }
+            
+            try
+            {
+                Console.WriteLine($"[CalendarCopyTemplateModal] Copying template {selectedTemplateId.Value} from {startDate} to {endDate}");
+                
+                var created = await CalendarBookingService.CopyTemplateToDateRangeAsync(selectedTemplateId.Value, startDate, endDate);
+                
+                Console.WriteLine($"[CalendarCopyTemplateModal] Created {created.Count} calendar bookings");
+                
+                if (created.Count == 0)
+                {
+                    Console.WriteLine("[CalendarCopyTemplateModal] WARNING: No bookings were created. Template may not have bookings for the selected date range.");
+                }
+                
+                // Reset selection
+                selectedTemplateId = null;
+                
+                // Close modal first
+                await CloseAsync();
+                
+                // Then trigger refresh callback after a short delay to ensure modal is closed
+                await Task.Delay(100);
+                
+                if (OnCopied.HasDelegate)
+                {
+                    await OnCopied.InvokeAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[CalendarCopyTemplateModal] Error copying template: {ex.Message}");
+                Console.WriteLine($"[CalendarCopyTemplateModal] Exception type: {ex.GetType().Name}");
+                Console.WriteLine($"[CalendarCopyTemplateModal] Stack trace: {ex.StackTrace}");
+                // Don't close modal on error - let user see the error and try again
+                StateHasChanged();
+            }
+        });
     }
 
     private void OnStartDateChanged(ChangeEventArgs e)
