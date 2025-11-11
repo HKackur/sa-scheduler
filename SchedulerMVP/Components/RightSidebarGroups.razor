@@ -64,6 +64,11 @@
     private List<string> groupTypes = new();
     private bool isTestFilterActive = false;
     
+    // Track previous state for count updates
+    private DateOnly? _lastWeekStart;
+    private Guid? _lastTemplateId;
+    private bool? _lastViewMode;
+    
     private IEnumerable<SchedulerMVP.Data.Entities.Group> filteredGroups => 
         (groups ?? new()).Where(g =>
             (string.IsNullOrEmpty(searchTerm) || g.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) &&
@@ -89,9 +94,23 @@
                                .OrderBy(t => t)
                                .ToList();
             await LoadCountsAsync();
+            
+            // Initialize tracking variables
+            _lastWeekStart = UI.CurrentWeekStart;
+            _lastTemplateId = UI.SelectedTemplateId;
+            _lastViewMode = UI.IsCalendarViewMode;
+            
             UI.OnChanged += async () =>
             {
+                // Always reload counts on UI change to catch booking create/delete
+                // This ensures counts are updated when bookings are created/deleted
                 await LoadCountsAsync();
+                
+                // Update tracking variables
+                _lastWeekStart = UI.CurrentWeekStart;
+                _lastTemplateId = UI.SelectedTemplateId;
+                _lastViewMode = UI.IsCalendarViewMode;
+                
                 StateHasChanged();
             };
         }

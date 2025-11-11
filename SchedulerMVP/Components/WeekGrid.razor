@@ -1634,6 +1634,10 @@
                     db.CalendarBookings.Remove(booking);
                     await db.SaveChangesAsync();
                     ClosePopover();
+                    
+                    // Force refresh to update counts in sidebar
+                    UI.ForceRefresh = true;
+                    UI.RaiseChanged();
                     await LoadDataAsync();
                 }
             }
@@ -1653,6 +1657,10 @@
                     db.BookingTemplates.Remove(template);
                     await db.SaveChangesAsync();
                     ClosePopover();
+                    
+                    // Force refresh to update counts in sidebar
+                    UI.ForceRefresh = true;
+                    UI.RaiseChanged();
                     await LoadDataAsync();
                 }
             }

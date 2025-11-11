@@ -517,6 +517,10 @@
                 // Console.WriteLine($"Database delete result: {result} rows affected");
             }
             
+            // Force refresh to update counts in sidebar
+            UI.ForceRefresh = true;
+            UI.RaiseChanged();
+            
             await OnSave.InvokeAsync();
             // Console.WriteLine("=== DELETE CALENDAR BOOKING SUCCESS ===");
         }

@@ -142,23 +142,21 @@
                                     <option value="@t.Id" selected="@(UI.SelectedTemplateId == t.Id)">@t.Name</option>
                                 }
                             </select>
-                            <button class="tb-action-btn" @onclick="OpenEdit" title="Ändra mallen">
-                                <span class="action-text">Ändra mallen</span>
-                                <span class="material-symbols-outlined">edit</span>
-                            </button>
-                            <div style="position: relative;">
-                                <button class="tb-action-btn" @onclick="ToggleMenu" title="Mallåtgärder">
-                                    <span class="action-text">Ny mall</span>
-                                    <span class="material-symbols-outlined">add</span>
-                                </button>
-                                @if (menuOpen)
-                                {
-                                    <div class="menu-overlay" @onclick="CloseMenu"></div>
-                                    <div class="tb-menu">
-                                        <button class="tb-item" @onclick="OpenCreate">Ny mall</button>
-                                        <button class="tb-item" @onclick="OpenCopy">Skapa kopia</button>
-                                    </div>
-                                }
+                            <div class="more-group">
+                                <div style="position: relative;">
+                                    <button class="tb-btn" @onclick="ToggleMoreMenu" title="Fler alternativ">
+                                        Fler alternativ <span class="material-symbols-outlined" style="font-size: 18px; margin-left: 4px;">more_vert</span>
+                                    </button>
+                                    @if (moreMenuOpen)
+                                    {
+                                        <div class="menu-overlay" @onclick="CloseMoreMenu"></div>
+                                        <div class="tb-menu" style="right: 0; left: auto;">
+                                            <button class="tb-item" @onclick="OpenEdit">Hantera mallen</button>
+                                            <button class="tb-item" @onclick="OpenCreate">Ny tom mall</button>
+                                            <button class="tb-item" @onclick="OpenCopy">Duplicera mallen</button>
+                                        </div>
+                                    }
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -336,7 +334,6 @@
             align-items: center;
             justify-content: flex-end;
             min-width: 0;
-            padding-right: 24px; /* Match left padding from .sa-topbar */
         }
         
         .view-controls-group {
@@ -1038,9 +1035,9 @@
         Navigation.NavigateTo("/grupper");
     }
 
-    private void OpenEdit() { menuOpen = false; editOpen = true; }
-    private void OpenCreate() { menuOpen = false; createOpen = true; }
-    private void OpenCopy() { menuOpen = false; copyOpen = true; }
+    private void OpenEdit() { menuOpen = false; moreMenuOpen = false; editOpen = true; }
+    private void OpenCreate() { menuOpen = false; moreMenuOpen = false; createOpen = true; }
+    private void OpenCopy() { menuOpen = false; moreMenuOpen = false; copyOpen = true; }
     private void OpenDelete() { menuOpen = false; deleteOpen = true; }
     private Task OpenDeleteFromEdit()
     {
