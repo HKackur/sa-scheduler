@@ -541,6 +541,181 @@ app.MapBlazorHub(options =>
 
 app.MapFallbackToPage("/_Host");
 
+// --- Run migrations and seeding in background (non-blocking) ---
+// This allows the app to start accepting requests immediately
+// Migrations/seeding will complete in the background
+_ = Task.Run(async () =>
+{
+    // Wait a bit for the app to fully start
+    await Task.Delay(TimeSpan.FromSeconds(2));
+    
+    var scope = app.Services.CreateScope();
+    try
+    {
+        var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        
+        Console.WriteLine("[MIGRATION] Starting Identity database migration (background)...");
+        logger.LogInformation("=== Starting Identity database migration (background) ===");
+        
+        try
+        {
+            var pendingMigrations = await identityContext.Database.GetPendingMigrationsAsync();
+            Console.WriteLine($"[MIGRATION] Pending Identity migrations: {pendingMigrations.Count()}");
+            logger.LogInformation("Pending Identity migrations: {Count}", pendingMigrations.Count());
+            foreach (var migration in pendingMigrations)
+            {
+                Console.WriteLine($"[MIGRATION]   - {migration}");
+                logger.LogInformation("  - {Migration}", migration);
+            }
+            
+            await identityContext.Database.MigrateAsync();
+            Console.WriteLine("[MIGRATION] Identity database migration completed");
+            logger.LogInformation("=== Identity database migration completed ===");
+            
+            // ONBOARDING REMOVED - Drop OnboardingCompletedStep column if it exists
+            try
+            {
+                var identityDbProvider = identityContext.Database.ProviderName ?? string.Empty;
+                if (identityDbProvider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+                {
+                    await identityContext.Database.ExecuteSqlRawAsync(@"
+                        DO $$
+                        BEGIN
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name = 'AspNetUsers' 
+                                AND column_name = 'OnboardingCompletedStep'
+                            ) THEN
+                                ALTER TABLE ""AspNetUsers"" 
+                                DROP COLUMN ""OnboardingCompletedStep"";
+                            END IF;
+                        END $$;
+                    ");
+                    Console.WriteLine("[MIGRATION] OnboardingCompletedStep column removed if it existed");
+                    logger.LogInformation("OnboardingCompletedStep column removed if it existed");
+                }
+            }
+            catch (Exception dropEx)
+            {
+                Console.WriteLine($"[MIGRATION] Column drop check (non-critical): {dropEx.Message}");
+                logger.LogInformation("Column drop check (non-critical): {Message}", dropEx.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MIGRATION] ERROR: Failed to migrate Identity database: {ex.Message}");
+            logger.LogError(ex, "=== FAILED to migrate Identity database: {Message} ===", ex.Message);
+        }
+        
+        // Ensure application database is up-to-date
+        var provider = context.Database.ProviderName ?? string.Empty;
+        Console.WriteLine($"[MIGRATION] Starting AppDbContext migration (provider: {provider})...");
+        logger.LogInformation("=== Starting AppDbContext migration (provider: {Provider}) ===", provider);
+        
+        try
+        {
+            if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+            {
+                var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
+                Console.WriteLine($"[MIGRATION] Pending AppDbContext migrations: {pendingMigrations.Count()}");
+                logger.LogInformation("Pending AppDbContext migrations: {Count}", pendingMigrations.Count());
+                foreach (var migration in pendingMigrations)
+                {
+                    Console.WriteLine($"[MIGRATION]   - {migration}");
+                    logger.LogInformation("  - {Migration}", migration);
+                }
+                
+                await context.Database.MigrateAsync();
+                Console.WriteLine("[MIGRATION] AppDbContext migration completed");
+                logger.LogInformation("=== AppDbContext migration completed ===");
+            }
+            else
+            {
+                Console.WriteLine("[MIGRATION] Using EnsureCreated (not Npgsql provider)");
+                logger.LogInformation("Using EnsureCreated (not Npgsql provider)");
+                await context.Database.EnsureCreatedAsync();
+                Console.WriteLine("[MIGRATION] AppDbContext EnsureCreated completed");
+                logger.LogInformation("=== AppDbContext EnsureCreated completed ===");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MIGRATION] ERROR: Failed to migrate AppDbContext: {ex.Message}");
+            logger.LogError(ex, "=== FAILED to migrate AppDbContext: {Message} ===", ex.Message);
+        }
+        
+        try
+        {
+            Console.WriteLine("[SEED] Starting database seed...");
+            logger.LogInformation("=== Starting database seed ===");
+            var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
+            await seeder.SeedAsync();
+            Console.WriteLine("[SEED] Database seed completed");
+            logger.LogInformation("=== Database seed completed ===");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SEED] ERROR: Failed to seed database: {ex.Message}");
+            logger.LogError(ex, "=== FAILED to seed database: {Message} ===", ex.Message);
+        }
+
+        // One-time data ownership fix: attach legacy data without UserId to admin account
+        try
+        {
+            const string adminEmail = "admin@sportadmin.se";
+            var adminUser = await identityContext.Users.FirstOrDefaultAsync(u => u.Email == adminEmail);
+            if (adminUser != null)
+            {
+                var adminId = adminUser.Id;
+                await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+                await context.Database.ExecuteSqlRawAsync("UPDATE ScheduleTemplates SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+                await context.Database.ExecuteSqlRawAsync("UPDATE Places SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+            }
+        }
+        catch { }
+
+        // One-time data fix: rename legacy group "Herr U" -> "P19" and set type to "Akademi"
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET Name = 'P19' WHERE LOWER(Name) = 'herr u';");
+            await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET GroupType = 'Akademi' WHERE LOWER(Name) = 'p19';");
+        }
+        catch { }
+
+        // One-time data fix: remove invalid DayOfWeek entries (e.g., 8) in template "Veckoschema HT2025"
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"DELETE FROM BookingTemplates 
+                WHERE ScheduleTemplateId = '25EB47F8-AC32-4656-B253-355F6806B4EB' 
+                  AND (DayOfWeek < 1 OR DayOfWeek > 7);");
+        }
+        catch { }
+
+        // Ensure GroupTypes table exists (lightweight bootstrap without full migration)
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"CREATE TABLE IF NOT EXISTS GroupTypes (
+                Id TEXT NOT NULL PRIMARY KEY,
+                Name TEXT NOT NULL,
+                UserId TEXT NULL
+            );");
+        }
+        catch { }
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        Console.WriteLine($"[BACKGROUND] ERROR: {ex.Message}");
+        logger.LogError(ex, "Background migration/seed error: {Message}", ex.Message);
+    }
+    finally
+    {
+        scope?.Dispose();
+    }
+});
+
 // --- Health check endpoint ---
 app.MapGet("/health", async (HttpContext context) =>
 {
@@ -651,182 +826,5 @@ app.MapGet("/auth/logout", async (SignInManager<ApplicationUser> signInManager) 
     await signInManager.SignOutAsync();
     return Results.Redirect("/login");
 });
-
-// --- DB migration & seed ---
-var scope = app.Services.CreateScope();
-try
-{
-    // Get contexts outside try-catch so they're available for later use
-    var identityContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    
-    Console.WriteLine("[MIGRATION] Starting Identity database migration...");
-    logger.LogInformation("=== Starting Identity database migration ===");
-    
-    try
-    {
-        // Migrate Identity database
-        var pendingMigrations = await identityContext.Database.GetPendingMigrationsAsync();
-        Console.WriteLine($"[MIGRATION] Pending Identity migrations: {pendingMigrations.Count()}");
-        logger.LogInformation("Pending Identity migrations: {Count}", pendingMigrations.Count());
-        foreach (var migration in pendingMigrations)
-        {
-            Console.WriteLine($"[MIGRATION]   - {migration}");
-            logger.LogInformation("  - {Migration}", migration);
-        }
-        
-        await identityContext.Database.MigrateAsync();
-        Console.WriteLine("[MIGRATION] Identity database migration completed");
-        logger.LogInformation("=== Identity database migration completed ===");
-        
-        // ONBOARDING REMOVED - Drop OnboardingCompletedStep column if it exists
-        try
-        {
-            var identityDbProvider = identityContext.Database.ProviderName ?? string.Empty;
-            if (identityDbProvider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
-            {
-                // Drop column if it exists (safe to run multiple times)
-                await identityContext.Database.ExecuteSqlRawAsync(@"
-                    DO $$
-                    BEGIN
-                        IF EXISTS (
-                            SELECT 1 FROM information_schema.columns 
-                            WHERE table_name = 'AspNetUsers' 
-                            AND column_name = 'OnboardingCompletedStep'
-                        ) THEN
-                            ALTER TABLE ""AspNetUsers"" 
-                            DROP COLUMN ""OnboardingCompletedStep"";
-                        END IF;
-                    END $$;
-                ");
-                Console.WriteLine("[MIGRATION] OnboardingCompletedStep column removed if it existed");
-                logger.LogInformation("OnboardingCompletedStep column removed if it existed");
-            }
-        }
-        catch (Exception dropEx)
-        {
-            // Non-critical - just log
-            Console.WriteLine($"[MIGRATION] Column drop check (non-critical): {dropEx.Message}");
-            logger.LogInformation("Column drop check (non-critical): {Message}", dropEx.Message);
-        }
-    }
-    catch (Exception ex)
-    {
-        // Log but don't crash - app should start even if migrations fail
-        Console.WriteLine($"[MIGRATION] ERROR: Failed to migrate Identity database: {ex.Message}");
-        Console.WriteLine($"[MIGRATION] Stack: {ex.StackTrace}");
-        logger.LogError(ex, "=== FAILED to migrate Identity database: {Message} ===", ex.Message);
-        logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
-        
-        // ONBOARDING DISABLED - All onboarding column creation code removed to ensure login works 100%
-    }
-    
-    // Ensure application database is up-to-date
-    var provider = context.Database.ProviderName ?? string.Empty;
-    Console.WriteLine($"[MIGRATION] Starting AppDbContext migration (provider: {provider})...");
-    logger.LogInformation("=== Starting AppDbContext migration (provider: {Provider}) ===", provider);
-    
-    try
-    {
-        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
-        {
-            var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
-            Console.WriteLine($"[MIGRATION] Pending AppDbContext migrations: {pendingMigrations.Count()}");
-            logger.LogInformation("Pending AppDbContext migrations: {Count}", pendingMigrations.Count());
-            foreach (var migration in pendingMigrations)
-            {
-                Console.WriteLine($"[MIGRATION]   - {migration}");
-                logger.LogInformation("  - {Migration}", migration);
-            }
-            
-            await context.Database.MigrateAsync();
-            Console.WriteLine("[MIGRATION] AppDbContext migration completed");
-            logger.LogInformation("=== AppDbContext migration completed ===");
-        }
-        else
-        {
-            Console.WriteLine("[MIGRATION] Using EnsureCreated (not Npgsql provider)");
-            logger.LogInformation("Using EnsureCreated (not Npgsql provider)");
-            await context.Database.EnsureCreatedAsync();
-            Console.WriteLine("[MIGRATION] AppDbContext EnsureCreated completed");
-            logger.LogInformation("=== AppDbContext EnsureCreated completed ===");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"[MIGRATION] ERROR: Failed to migrate AppDbContext: {ex.Message}");
-        Console.WriteLine($"[MIGRATION] Stack: {ex.StackTrace}");
-        logger.LogError(ex, "=== FAILED to migrate AppDbContext: {Message} ===", ex.Message);
-        logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
-    }
-    
-    try
-    {
-        Console.WriteLine("[SEED] Starting database seed...");
-        logger.LogInformation("=== Starting database seed ===");
-        var seeder = scope.ServiceProvider.GetRequiredService<DbSeeder>();
-        await seeder.SeedAsync();
-        Console.WriteLine("[SEED] Database seed completed");
-        logger.LogInformation("=== Database seed completed ===");
-    }
-    catch (Exception ex)
-    {
-        // Log but don't crash - app should start even if seeding fails
-        Console.WriteLine($"[SEED] ERROR: Failed to seed database: {ex.Message}");
-        Console.WriteLine($"[SEED] Stack: {ex.StackTrace}");
-        logger.LogError(ex, "=== FAILED to seed database: {Message} ===", ex.Message);
-        logger.LogError(ex, "Stack trace: {StackTrace}", ex.StackTrace);
-        // Don't rethrow - let app start anyway
-    }
-
-    // One-time data ownership fix: attach legacy data without UserId to admin account
-    try
-    {
-        const string adminEmail = "admin@sportadmin.se";
-        var adminUser = await identityContext.Users.FirstOrDefaultAsync(u => u.Email == adminEmail);
-        if (adminUser != null)
-        {
-            var adminId = adminUser.Id;
-            await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
-            await context.Database.ExecuteSqlRawAsync("UPDATE ScheduleTemplates SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
-            await context.Database.ExecuteSqlRawAsync("UPDATE Places SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
-        }
-    }
-    catch { }
-
-    // One-time data fix: rename legacy group "Herr U" -> "P19" and set type to "Akademi"
-    try
-    {
-        await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET Name = 'P19' WHERE LOWER(Name) = 'herr u';");
-        await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET GroupType = 'Akademi' WHERE LOWER(Name) = 'p19';");
-    }
-    catch { }
-
-    // One-time data fix: remove invalid DayOfWeek entries (e.g., 8) in template "Veckoschema HT2025"
-    try
-    {
-        await context.Database.ExecuteSqlRawAsync(@"DELETE FROM BookingTemplates 
-            WHERE ScheduleTemplateId = '25EB47F8-AC32-4656-B253-355F6806B4EB' 
-              AND (DayOfWeek < 1 OR DayOfWeek > 7);");
-    }
-    catch { }
-
-    // Ensure GroupTypes table exists (lightweight bootstrap without full migration)
-    try
-    {
-        await context.Database.ExecuteSqlRawAsync(@"CREATE TABLE IF NOT EXISTS GroupTypes (
-            Id TEXT NOT NULL PRIMARY KEY,
-            Name TEXT NOT NULL,
-            UserId TEXT NULL
-        );");
-    }
-    catch { }
-}
-finally
-{
-    scope?.Dispose();
-}
 
 app.Run();
