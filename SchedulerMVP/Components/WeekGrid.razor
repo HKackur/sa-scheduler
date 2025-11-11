@@ -3,6 +3,7 @@
 @using SchedulerMVP.Services
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.EntityFrameworkCore.Infrastructure
+@using Microsoft.JSInterop
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject UIState UI
 @inject IJSRuntime JSRuntime
@@ -52,6 +53,7 @@
                     </div>
 
                     <div class="day-content" 
+                         data-day-index="@currentDayCapture"
                          @onclick="@((MouseEventArgs e) => OnDayContentClick(e, currentDayCapture))"
                          @onmousemove="@((MouseEventArgs e) => OnDayContentMouseMove(e, currentDayCapture))"
                          @onmouseleave="OnDayContentMouseLeave"
@@ -68,10 +70,18 @@
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
                             var hideGhostText = positioned.IsGhost && positioned.WidthPercent < 35.0 && !UI.IsDayView; // always show text in day view
                                 <div class="@clsT" 
+                                     data-booking-id="@template.Id"
+                                     data-booking-type="template"
+                                     data-day="@template.DayOfWeek"
+                                     data-start-min="@template.StartMin"
+                                     data-end-min="@template.EndMin"
                                      style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
                                      title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
+                                    @* Always render resize handles for ALL booking blocks *@
+                                    <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
+                                    <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
                                     <div class="@(positioned.IsGhost ? "ghost-content" : "booking-content")">
                                     @if (!hideGhostText)
                                     {
@@ -104,10 +114,18 @@
                                 // Show place/area info when no area is selected (to distinguish bookings from different areas/places)
                                 var showPlaceAreaInfo = !UI.SelectedAreaId.HasValue && !UI.SelectedPlaceId.HasValue && !UI.IsGroupFilterActive;
                                 <div class="@cls" 
+                                     data-booking-id="@template.Id"
+                                     data-booking-type="@(calBooking != null ? "calendar" : "template")"
+                                     data-day="@(calBooking != null && template.Date.HasValue ? template.Date.Value.ToString("yyyy-MM-dd") : template.DayOfWeek.ToString())"
+                                     data-start-min="@template.StartMin"
+                                     data-end-min="@template.EndMin"
                                      style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
                                      title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { if (isPrimary && calBooking != null) OnCalendarBookingClick(calBooking, e); else OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
+                                    @* Always render resize handles for ALL booking blocks *@
+                                    <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
+                                    <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
                                     <div class="@(positioned.IsGhost ? "ghost-content" : "booking-content")">
                                     @if (!hideGhostText)
                                     {
@@ -148,6 +166,7 @@
                     </div>
 
                     <div class="day-content" 
+                         data-day-index="@currentDayCapture"
                          @onclick="@((MouseEventArgs e) => OnDayContentClick(e, currentDayCapture))"
                          @onmousemove="@((MouseEventArgs e) => OnDayContentMouseMove(e, currentDayCapture))"
                          @onmouseleave="OnDayContentMouseLeave"
@@ -164,10 +183,18 @@
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
                             var hideGhostText = positioned.IsGhost && positioned.WidthPercent < 35.0 && !UI.IsDayView; // always show text in day view
                                 <div class="@clsT" 
+                                     data-booking-id="@template.Id"
+                                     data-booking-type="template"
+                                     data-day="@template.DayOfWeek"
+                                     data-start-min="@template.StartMin"
+                                     data-end-min="@template.EndMin"
                                      style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
                                      title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
+                                    @* Always render resize handles for ALL booking blocks *@
+                                    <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
+                                    <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
                                     <div class="@(positioned.IsGhost ? "ghost-content" : "booking-content")">
                                     @if (!hideGhostText)
                                     {
@@ -200,10 +227,18 @@
                                 // Show place/area info when no area is selected (to distinguish bookings from different areas/places)
                                 var showPlaceAreaInfo = !UI.SelectedAreaId.HasValue && !UI.SelectedPlaceId.HasValue && !UI.IsGroupFilterActive;
                                 <div class="@cls" 
+                                     data-booking-id="@template.Id"
+                                     data-booking-type="@(calBooking != null ? "calendar" : "template")"
+                                     data-day="@(calBooking != null && template.Date.HasValue ? template.Date.Value.ToString("yyyy-MM-dd") : template.DayOfWeek.ToString())"
+                                     data-start-min="@template.StartMin"
+                                     data-end-min="@template.EndMin"
                                      style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
                                      title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { if (isPrimary && calBooking != null) OnCalendarBookingClick(calBooking, e); else OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
+                                    @* Always render resize handles for ALL booking blocks *@
+                                    <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
+                                    <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
                                     <div class="@(positioned.IsGhost ? "ghost-content" : "booking-content")">
                                     @if (!hideGhostText)
                                     {
@@ -294,6 +329,10 @@
     private double _tooltipMouseY;
     private string _tooltipText = "";
     
+    // Drag and Drop
+    private DotNetObjectReference<WeekGrid>? _dotNetRef;
+    private bool _dragDropInitialized = false;
+    
     // Cache for all areas to avoid syncing DbContext calls
     private Dictionary<Guid, Area> areaCache = new();
     // Cache for leaf counts per area
@@ -381,6 +420,42 @@
             }
             catch { }
             _didInitialScroll = true;
+        }
+        
+        // Initialize drag and drop - reuse DotNetObjectReference to avoid disposal issues
+        try
+        {
+            // Only create new reference if it doesn't exist or was disposed
+            if (_dotNetRef == null)
+            {
+                _dotNetRef = DotNetObjectReference.Create(this);
+            }
+            
+            if (!_dragDropInitialized)
+            {
+                await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
+                _dragDropInitialized = true;
+            }
+            else
+            {
+                // Refresh drag and drop after DOM updates - reuse same reference
+                await JSRuntime.InvokeVoidAsync("SchedulerMVP.refreshDragDrop", _dotNetRef);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing/refreshing drag and drop: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            // If reference is invalid, create a new one
+            if (_dotNetRef != null)
+            {
+                try
+                {
+                    _dotNetRef.Dispose();
+                }
+                catch { }
+                _dotNetRef = null;
+            }
         }
     }
 
@@ -1425,8 +1500,22 @@
 
 
 
-    private void OnTemplateClick(TemplateView template, MouseEventArgs e)
+    private async Task OnTemplateClick(TemplateView template, MouseEventArgs e)
     {
+        // Check if a resize operation just finished - if so, don't open popover
+        try
+        {
+            var justFinishedResize = await JSRuntime.InvokeAsync<bool>("SchedulerMVP.checkJustFinishedResize");
+            if (justFinishedResize)
+            {
+                return; // Don't open popover if resize just finished
+            }
+        }
+        catch
+        {
+            // If JavaScript call fails, continue normally (allow popover to open)
+        }
+        
         // Open popover for template in Veckoschema mode
         popoverTemplate = template;
         popoverX = e.ClientX;
@@ -1577,9 +1666,134 @@
     [Parameter] public EventCallback<Guid> OnOpenTemplateEdit { get; set; }
     
 
+    [JSInvokable]
+    public async Task HandleBookingDrop(DropData data)
+    {
+        try
+        {
+            if (!Guid.TryParse(data.BookingId, out var bookingId))
+            {
+                Console.WriteLine($"Invalid booking ID: {data.BookingId}");
+                return;
+            }
+
+            if (data.BookingType == "calendar")
+            {
+                // Update calendar booking
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var booking = await db.CalendarBookings
+                    .Include(b => b.Group)
+                    .Include(b => b.Area)
+                    .FirstOrDefaultAsync(b => b.Id == bookingId);
+
+                if (booking == null)
+                {
+                    Console.WriteLine($"Calendar booking not found: {bookingId}");
+                    return;
+                }
+
+                // Calculate new date for calendar booking
+                // newDay is day index (1-7) for week view, or date string for calendar view
+                DateOnly newDate;
+                if (UI.IsCalendarViewMode)
+                {
+                    // For calendar view, calculate date from week start + day index
+                    newDate = UI.CurrentWeekStart.AddDays(data.NewDay - 1);
+                }
+                else
+                {
+                    // For template view, convert day of week to date
+                    newDate = UI.CurrentWeekStart.AddDays(data.NewDay - 1);
+                }
+
+                // Update booking
+                booking.Date = newDate;
+                booking.StartMin = data.NewStartMin;
+                booking.EndMin = data.NewEndMin;
+                booking.UpdatedAt = DateTime.UtcNow;
+
+                await db.SaveChangesAsync();
+
+                // Force refresh
+                UI.ForceRefresh = true;
+                UI.RaiseChanged();
+                await LoadDataAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+            else if (data.BookingType == "template")
+            {
+                // Update booking template
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var template = await db.BookingTemplates
+                    .Include(bt => bt.ScheduleTemplate)
+                    .FirstOrDefaultAsync(bt => bt.Id == bookingId);
+
+                if (template == null)
+                {
+                    Console.WriteLine($"Template booking not found: {bookingId}");
+                    return;
+                }
+
+                // Update template (only day, start, end - not area/group)
+                template.DayOfWeek = data.NewDay;
+                template.StartMin = data.NewStartMin;
+                template.EndMin = data.NewEndMin;
+                template.UpdatedAt = DateTime.UtcNow;
+
+                await db.SaveChangesAsync();
+
+                // Force refresh
+                UI.ForceRefresh = true;
+                UI.RaiseChanged();
+                await LoadDataAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling booking drop: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+    }
+
+    // CheckBookingConflict method moved to WeekGrid.razor.cs
+
+
+    public class ConflictCheckData
+    {
+        public string BookingId { get; set; } = string.Empty;
+        public string BookingType { get; set; } = string.Empty; // "template" or "calendar"
+        public int NewDay { get; set; }
+        public int NewStartMin { get; set; }
+        public int NewEndMin { get; set; }
+        // For calendar bookings: the date as string (yyyy-MM-dd) or null
+        public string? Date { get; set; }
+    }
+
+    public class DropData
+    {
+        public string BookingId { get; set; } = string.Empty;
+        public string BookingType { get; set; } = string.Empty; // "template" or "calendar"
+        public int NewDay { get; set; }
+        public int NewStartMin { get; set; }
+        public int NewEndMin { get; set; }
+    }
+
     public void Dispose()
     {
         UI.OnChanged -= StateHasChanged;
+        if (_dotNetRef != null)
+        {
+            try
+            {
+                _dotNetRef.Dispose();
+            }
+            catch
+            {
+                // Ignore disposal errors - reference might already be disposed
+            }
+            _dotNetRef = null;
+        }
     }
     
     private bool popoverOpen = false;
@@ -1588,8 +1802,22 @@
     private double popoverX = 0;
     private double popoverY = 0;
     
-    private void OnCalendarBookingClick(CalendarBooking booking, MouseEventArgs e)
+    private async Task OnCalendarBookingClick(CalendarBooking booking, MouseEventArgs e)
     {
+        // Check if a resize operation just finished - if so, don't open popover
+        try
+        {
+            var justFinishedResize = await JSRuntime.InvokeAsync<bool>("SchedulerMVP.checkJustFinishedResize");
+            if (justFinishedResize)
+            {
+                return; // Don't open popover if resize just finished
+            }
+        }
+        catch
+        {
+            // If JavaScript call fails, continue normally (allow popover to open)
+        }
+        
         popoverBooking = booking;
         popoverX = e.ClientX;
         popoverY = e.ClientY;

@@ -349,9 +349,143 @@ body .app-root .sa-topbar,
     border-radius: 6px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.08);
     color: #0b0b0b;
-    overflow: hidden;
+    overflow: visible; /* Changed from hidden to allow resize handles to be visible */
     z-index: 2;
-    cursor: pointer;
+    cursor: move; /* Change cursor to indicate draggable */
+    user-select: none; /* Prevent text selection while dragging */
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Ensure resize handles are not blocked by booking block */
+.booking-block .resize-handle {
+    position: absolute;
+    z-index: 20; /* Higher than booking-block z-index */
+}
+
+/* Drag and Drop visual feedback */
+/* Original block becomes transparent when dragging (like Google Calendar) */
+.booking-block.dragging {
+    opacity: 0.3; /* Very transparent when dragging - like Google Calendar */
+    transition: opacity 0.2s ease;
+    z-index: 999; /* Keep behind preview but visible */
+    cursor: grabbing;
+}
+
+/* Day content drag over styling removed - using preview block instead */
+
+/* Conflict styling - only on preview block, not on day column */
+.drop-preview.drop-preview-conflict {
+    background-color: rgba(239, 68, 68, 0.45) !important; /* More visible red preview background */
+    border: 2px dashed #DC2626 !important; /* Darker red dashed border for better visibility */
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.7) !important; /* Stronger shadow for visibility */
+}
+
+/* Drop preview block - shows where booking will be placed (no text, just visual indicator) */
+/* This is the DROPZONE - the dashed blue rectangle showing drop target */
+.drop-preview {
+    background-color: rgba(37, 151, 243, 0.15) !important; /* Subtle blue background - clearly a dropzone */
+    border: 2px dashed #2597F3 !important; /* Blue dashed border - clearly indicates dropzone */
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(37, 151, 243, 0.2);
+    pointer-events: none;
+    transition: none; /* No transition for smooth following */
+    transform: none !important; /* NO rotation, NO skew, NO transforms */
+    transform-origin: top left !important;
+    rotate: 0deg !important; /* Explicitly no rotation */
+    scale: 1 !important; /* Explicitly no scaling */
+    translate: none !important; /* Explicitly no translation */
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 10000; /* Below drag element but above original */
+    /* Ensure crisp, straight borders */
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Preview block has no content - just visual indicator */
+
+/* Floating drag element - follows mouse cursor and shows updated time */
+/* This is the PREVIEW - the solid block that follows the mouse */
+.drag-floating-element {
+    position: fixed !important;
+    opacity: 1 !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+    z-index: 99999 !important; /* Very high z-index - above everything including browser drag image */
+    pointer-events: none !important;
+    cursor: grabbing !important;
+    transform: none !important;
+    border-radius: 6px;
+    /* Ensure it's always visible and on top */
+    will-change: transform, left, top;
+}
+
+/* Resize handles for booking blocks - completely transparent but functional */
+.resize-handle {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 16px; /* Increased for better clickability */
+    cursor: ns-resize; /* Vertical resize cursor */
+    z-index: 25 !important; /* Higher z-index to ensure it's above booking content */
+    background: transparent !important; /* Completely transparent */
+    pointer-events: auto !important; /* Ensure handles are clickable */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    border: none !important; /* No border */
+    opacity: 0 !important; /* Always transparent */
+    /* Extend clickable area beyond visual bounds */
+    margin: -4px 0;
+    padding: 4px 0;
+}
+
+.resize-handle-top {
+    top: -8px; /* Adjusted to match new height */
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+.resize-handle-bottom {
+    bottom: -8px; /* Adjusted to match new height */
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+/* Resize handles are always transparent - cursor change indicates they're draggable */
+.resize-handle:hover {
+    /* Show a subtle indicator when hovering for debugging */
+    background: rgba(37, 151, 243, 0.1) !important;
+    opacity: 0.3 !important;
+}
+
+/* Cursor changes when hovering over handles (even though they're transparent) */
+
+/* Change cursor when hovering over resize handles */
+.booking-block .resize-handle-top {
+    cursor: n-resize !important;
+}
+
+.booking-block .resize-handle-bottom {
+    cursor: s-resize !important;
+}
+
+.resize-handle.resizing {
+    background-color: rgba(37, 151, 243, 0.5);
+}
+
+.booking-block.resizing {
+    opacity: 0.8;
+    z-index: 1001;
+}
+
+/* Resize conflict styling - show red when resize would create conflict */
+.booking-block.resize-conflict {
+    background-color: rgba(239, 68, 68, 0.3) !important;
+    border: 2px solid #DC2626 !important;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5) !important;
 }
 
 /* primary booking on selected area/place */
@@ -373,7 +507,11 @@ body .app-root .sa-topbar,
     padding: 2px 4px;
     font-weight: 400;
     line-height: 1.2;
-    pointer-events: none;
+    pointer-events: none; /* Content doesn't block resize handles */
+    height: 100%;
+    position: relative;
+    z-index: 1; /* Below resize handles */
+    overflow: hidden; /* Hide overflow in content, but allow resize handles outside */
 }
 
 .ghost-content {
