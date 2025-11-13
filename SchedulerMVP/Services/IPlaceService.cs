@@ -18,6 +18,7 @@ public interface IPlaceService
     Task GenerateFootballTemplateAsync(Guid placeId, string helplanName, string halvAName, string halvBName, List<string> leafsA, List<string> leafsB);
     Task GenerateFootballTemplateAsync(Guid placeId, string helplanName, List<string> halvplanNames, List<List<string>> kvartsplanNames);
     Task GeneratePoolTemplateAsync(Guid placeId, List<string> laneNames, bool splitInTwo, string poolName, string? halfAName, string? halfBName);
+    Task GeneratePoolTemplateAsync(Guid placeId, string poolName, List<string> halfNames, List<List<string>> laneNamesPerHalf);
     Task GenerateCustomTemplateAsync(Guid placeId, string topAreaName, List<string> leafNames);
     Task GenerateCustomTemplateAsync(Guid placeId, string topAreaName, List<string> zoneNames, List<List<string>> ytaNames);
     Task GenerateFromBlueprintAsync(Models.PlaceBlueprint blueprint);

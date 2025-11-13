@@ -502,6 +502,116 @@ public class PlaceService : IPlaceService
         await db.SaveChangesAsync();
     }
 
+    // Pool template generation with hierarchical structure (like football template)
+    public async Task GeneratePoolTemplateAsync(Guid placeId, string poolName, List<string> halfNames, List<List<string>> laneNamesPerHalf)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        
+        // Create all leafs first
+        var leafs = new List<Leaf>();
+        var sort = 1;
+        foreach (var laneGroup in laneNamesPerHalf)
+        {
+            foreach (var laneName in laneGroup)
+            {
+                leafs.Add(new Leaf { Id = Guid.NewGuid(), PlaceId = placeId, Name = laneName, SortOrder = sort++ });
+            }
+        }
+        await db.Leafs.AddRangeAsync(leafs);
+
+        // Create areas
+        var areas = new List<Area>();
+        var pool = new Area 
+        { 
+            Id = Guid.NewGuid(), 
+            PlaceId = placeId, 
+            Name = poolName, 
+            Path = $"/{poolName}",
+            Level1WidthPercent = 100, // Pool shows itself at 100%
+            Level2WidthPercent = 50,  // Pool shows halves at 50%
+            Level3WidthPercent = 25   // Pool shows lanes at 25%
+        };
+        areas.Add(pool);
+
+        // Create half areas
+        var halfAreas = new List<Area>();
+        for (var i = 0; i < halfNames.Count; i++)
+        {
+            var halfArea = new Area 
+            { 
+                Id = Guid.NewGuid(), 
+                PlaceId = placeId, 
+                Name = halfNames[i], 
+                ParentAreaId = pool.Id, 
+                Path = $"/{poolName}/{halfNames[i]}",
+                Level1WidthPercent = 100, // Half shows pool at 100%
+                Level2WidthPercent = 100, // Half shows itself at 100%
+                Level3WidthPercent = 50   // Half shows lanes at 50%
+            };
+            halfAreas.Add(halfArea);
+            areas.Add(halfArea);
+        }
+
+        // Create lane areas (as children of their respective halves)
+        var laneAreas = new List<Area>();
+        for (var i = 0; i < halfNames.Count; i++)
+        {
+            foreach (var laneName in laneNamesPerHalf[i])
+            {
+                var laneArea = new Area 
+                { 
+                    Id = Guid.NewGuid(), 
+                    PlaceId = placeId, 
+                    Name = laneName, 
+                    ParentAreaId = halfAreas[i].Id, 
+                    Path = $"/{poolName}/{halfNames[i]}/{laneName}",
+                    Level1WidthPercent = 100, // Lane shows pool at 100%
+                    Level2WidthPercent = 100, // Lane shows half at 100%
+                    Level3WidthPercent = 100  // Lane shows itself at 100%
+                };
+                laneAreas.Add(laneArea);
+                areas.Add(laneArea);
+            }
+        }
+
+        await db.Areas.AddRangeAsync(areas);
+
+        // Create AreaLeaf coverage
+        var areaLeafs = new List<AreaLeaf>();
+
+        // Pool covers all leafs
+        foreach (var leaf in leafs)
+        {
+            areaLeafs.Add(new AreaLeaf { AreaId = pool.Id, LeafId = leaf.Id });
+        }
+
+        // Each half covers its lane leafs
+        var leafIndex = 0;
+        for (var i = 0; i < halfNames.Count; i++)
+        {
+            foreach (var laneName in laneNamesPerHalf[i])
+            {
+                var leaf = leafs[leafIndex++];
+                areaLeafs.Add(new AreaLeaf { AreaId = halfAreas[i].Id, LeafId = leaf.Id });
+            }
+        }
+
+        // Each lane covers its own leaf
+        leafIndex = 0;
+        for (var i = 0; i < halfNames.Count; i++)
+        {
+            foreach (var laneName in laneNamesPerHalf[i])
+            {
+                var leaf = leafs[leafIndex++];
+                var laneArea = laneAreas.First(a => a.Name == laneName && a.ParentAreaId == halfAreas[i].Id);
+                areaLeafs.Add(new AreaLeaf { AreaId = laneArea.Id, LeafId = leaf.Id });
+            }
+        }
+
+        await db.AreaLeafs.AddRangeAsync(areaLeafs);
+        await db.SaveChangesAsync();
+    }
+
     public async Task GenerateCustomTemplateAsync(Guid placeId, string topAreaName, List<string> leafNames)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();

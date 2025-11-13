@@ -14,18 +14,18 @@
             <div class="bm-column-left">
                 <div class="bm-field">
                     <label class="bm-label">Platsnamn</label>
-                    <input type="text" class="sa-input-field" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
+                    <input type="text" class="bm-input" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
                 </div>
                 <div class="bm-field">
                     <label class="bm-label">Standard längd på bokning</label>
-                    <div class="bm-inline">
-                        <input class="tb-select bm-w-full" value="@durationText" @oninput="OnDurationInput" />
-                        <span class="bm-suffix">min</span>
+                    <div class="bm-input-with-suffix">
+                        <input type="text" class="bm-input" value="@durationText" @oninput="OnDurationInput" />
+                        <span class="bm-input-suffix">min</span>
                     </div>
                 </div>
                 <div class="bm-field">
                     <label class="bm-label">Typ av plats</label>
-                    <select class="tb-select" value="@type" @onchange="OnTypeChange">
+                    <select class="bm-input" value="@type" @onchange="OnTypeChange">
                         <option value="Plan">Plan</option>
                         <option value="Hall">Hall</option>
                         <option value="Simhall">Simhall</option>
@@ -34,26 +34,25 @@
                 </div>
                 @if (type == "Simhall")
                 {
-                    <div class="bm-field">
-                        <label class="bm-label">Dela bassäng i två halvor</label>
-                        <input type="checkbox" checked="@split" @onchange="OnSplitChange" />
+                    <div class="bm-checkbox-group">
+                        <input type="checkbox" class="bm-checkbox-custom" id="split-pool" checked="@split" @onchange="OnSplitChange" />
+                        <label for="split-pool" class="bm-checkbox-label">Dela bassäng i två halvor</label>
                     </div>
                 }
             </div>
             
             <div class="bm-column-right">
                 @* Editable hierarchy preview/editor *@
-                <div class="bm-field">
-                    <label class="bm-label">Ytindelning</label>
-                    <div class="bm-description" style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">Definiera hur platsen delas upp och vilka bokningsbara ytor den har.</div>
-                    <div class="bm-hierarchy">
+                <div class="bm-header">
+                    <h2 class="bm-title">Ytindelning</h2>
+                </div>
+                <div class="bm-description" style="font-size: 14px; color: #6b7280; margin-bottom: 12px;">Definiera hur platsen delas upp och vilka bokningsbara ytor den har.</div>
+                <div class="bm-hierarchy">
                         @if (type == "Plan")
                         {
                             @* Helplan as a chip *@
                             <div class="bm-level-1">
-                                <div class="bm-chip bm-chip-level-1">
-                                    <input class="bm-chip-input" value="@helplanName" @oninput="(e)=> helplanName = e.Value?.ToString() ?? helplanName" />
-                                </div>
+                                <input class="bm-input" value="@helplanName" @oninput="(e)=> helplanName = e.Value?.ToString() ?? helplanName" />
                             </div>
                             
                             @* Halvplan level with +/- controls *@
@@ -80,7 +79,7 @@
                                 var halvplanIdx = i;
                                 <div class="bm-level-3">
                                     <div class="bm-level-header">
-                                        <span class="bm-level-title">Kvartsplaner för @halvplanNames[i]</span>
+                                        <span class="bm-level-title">Delytor för @halvplanNames[i]</span>
                                         <button type="button" class="bm-step" @onclick="() => AddKvartsplan(halvplanIdx)">+</button>
                                     </div>
                                     <div class="bm-chips">
@@ -100,9 +99,7 @@
                         {
                             @* Hel bassäng as a chip *@
                             <div class="bm-level-1">
-                                <div class="bm-chip bm-chip-level-1">
-                                    <input class="bm-chip-input" value="@poolName" @oninput="(e)=> poolName = e.Value?.ToString() ?? poolName" />
-                                </div>
+                                <input class="bm-input" value="@poolName" @oninput="(e)=> poolName = e.Value?.ToString() ?? poolName" />
                             </div>
                             
                             @* Halvor level with +/- controls *@
@@ -129,32 +126,58 @@
                             }
                             
                             @* Banor level with +/- controls *@
-                            <div class="bm-level-3">
-                                <div class="bm-level-header">
-                                    <span class="bm-level-title">Banor</span>
-                                    <div class="bm-inline">
-                                        <button type="button" class="bm-step" @onclick="AddLane" title="Lägg till ny yta">+</button>
+                            @if (split)
+                            {
+                                @* Banor per halva (liknande kvartsplaner per halvplan) *@
+                                @for (var i = 0; i < halfNames.Count; i++)
+                                {
+                                    var halfIdx = i;
+                                    <div class="bm-level-3">
+                                        <div class="bm-level-header">
+                                            <span class="bm-level-title">Banor på @halfNames[i]</span>
+                                            <button type="button" class="bm-step" @onclick="() => AddLane(halfIdx)" title="Lägg till ny yta">+</button>
+                                        </div>
+                                        <div class="bm-chips">
+                                            @for (var j = 0; j < laneNamesPerHalf[i].Count; j++)
+                                            {
+                                                var laneIdx = j;
+                                                <div class="bm-chip bm-chip-level-3">
+                                                    <input class="bm-chip-input" value="@laneNamesPerHalf[i][j]" @oninput="(e)=> laneNamesPerHalf[halfIdx][laneIdx] = e.Value?.ToString() ?? laneNamesPerHalf[halfIdx][laneIdx]" />
+                                                    <button type="button" class="bm-chip-remove" @onclick="() => RemoveLane(halfIdx, laneIdx)" disabled="@(laneNamesPerHalf[halfIdx].Count <= 1)">×</button>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                @* Banor när split är false (original struktur) *@
+                                <div class="bm-level-3">
+                                    <div class="bm-level-header">
+                                        <span class="bm-level-title">Banor</span>
+                                        <div class="bm-inline">
+                                            <button type="button" class="bm-step" @onclick="() => AddLane()" title="Lägg till ny yta">+</button>
+                                        </div>
+                                    </div>
+                                    <div class="bm-chips">
+                                        @for (var i = 0; i < laneNames.Count; i++)
+                                        {
+                                            var laneIdx = i;
+                                            <div class="bm-chip bm-chip-level-3">
+                                                <input class="bm-chip-input" value="@laneNames[i]" @oninput="(e)=> laneNames[laneIdx] = e.Value?.ToString() ?? laneNames[laneIdx]" />
+                                                <button type="button" class="bm-chip-remove" @onclick="() => RemoveLane(laneIdx)" disabled="@(laneNames.Count <= 1)">×</button>
+                                            </div>
+                                        }
                                     </div>
                                 </div>
-                                <div class="bm-chips">
-                                    @for (var i = 0; i < laneNames.Count; i++)
-                                    {
-                                        var laneIdx = i;
-                                        <div class="bm-chip bm-chip-level-3">
-                                            <input class="bm-chip-input" value="@laneNames[i]" @oninput="(e)=> laneNames[laneIdx] = e.Value?.ToString() ?? laneNames[laneIdx]" />
-                                            <button type="button" class="bm-chip-remove" @onclick="() => RemoveLane(laneIdx)" disabled="@(laneNames.Count <= 1)">×</button>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
+                            }
                         }
                         else if (type == "Hall")
                         {
                             @* Hela hallen as a chip *@
                             <div class="bm-level-1">
-                                <div class="bm-chip bm-chip-level-1">
-                                    <input class="bm-chip-input" value="@hallName" @oninput="(e)=> hallName = e.Value?.ToString() ?? hallName" />
-                                </div>
+                                <input class="bm-input" value="@hallName" @oninput="(e)=> hallName = e.Value?.ToString() ?? hallName" />
                             </div>
                             
                             @* Bokningsbara ytor level with +/- controls *@
@@ -179,19 +202,20 @@
                         {
                             @* Hela platsen as a chip *@
                             <div class="bm-level-1">
-                                <div class="bm-chip bm-chip-level-1">
-                                    <input class="bm-chip-input" value="@customTopName" @oninput="(e)=> customTopName = e.Value?.ToString() ?? customTopName" />
-                                </div>
+                                <input class="bm-input" value="@customTopName" @oninput="(e)=> customTopName = e.Value?.ToString() ?? customTopName" />
                             </div>
                             
                             @* Zoner level with toggle and +/- controls *@
                             <div class="bm-level-2">
                                 <div class="bm-level-header">
-                                    <span class="bm-level-title">Zoner</span>
-                                    <div class="bm-inline">
-                                        <input type="checkbox" checked="@useZones" @onchange="OnZonesToggle" />
-                                        <button type="button" class="bm-step" @onclick="AddZone" disabled="@(!useZones)" title="Lägg till ny yta">+</button>
+                                    <div class="bm-zone-toggle">
+                                        <input type="checkbox" class="bm-checkbox-zone" id="use-zones" checked="@useZones" @onchange="OnZonesToggle" />
+                                        <label for="use-zones" class="bm-level-title">Zoner</label>
                                     </div>
+                                    @if (useZones)
+                                    {
+                                        <button type="button" class="bm-step" @onclick="AddZone" title="Lägg till ny yta">+</button>
+                                    }
                                 </div>
                                 @if (useZones)
                                 {
@@ -253,7 +277,6 @@
                             }
                         }
                     </div>
-                </div>
             </div>
         </div>
         
@@ -263,38 +286,49 @@
         </div>
     </div>
     <style>
-        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;min-width:1000px;max-width:1200px;width:95vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;width:75vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
         .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:12px}
-        .bm-title{margin:0 0 12px 0;font-size:20px;font-weight:800;letter-spacing:-.02em}
-        .bm-w-full{width:100%}
+        .bm-field{margin-bottom:16px}
+        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
+        .bm-input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+        select.bm-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;cursor:pointer;padding-right:40px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 24 24' width='20'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:20px 20px}
+        .bm-input-with-suffix{position:relative;width:100%}
+        .bm-input-with-suffix .bm-input{padding-right:50px}
+        .bm-input-suffix{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:12px;color:#6b7280;pointer-events:none}
         .bm-inline{display:flex;align-items:center;gap:8px;margin-bottom:8px}
         .bm-stepper{display:flex;align-items:center;gap:8px}
-        .bm-step{width:20px;height:20px;border:none;border-radius:50%;background:#000;color:#fff;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;position:relative}
+        .bm-step{width:20px;height:20px;border:none;border-radius:50%;background:#293C51;color:#fff;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;position:relative}
         .bm-step:hover::after{content:"Lägg till ny yta";position:absolute;top:-35px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;white-space:nowrap;z-index:1000;pointer-events:none}
         .bm-step:hover::before{content:"";position:absolute;top:-5px;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#333;z-index:1000;pointer-events:none}
         .bm-step-value{min-width:56px;text-align:center;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;background:#f8fafc}
         .bm-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-        .bm-chip{display:flex;align-items:center;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:4px 8px;gap:6px}
-        .bm-chip-input{border:none;background:transparent;padding:4px 6px;font-size:14px;min-width:60px;outline:none}
-        .bm-chip-remove{width:20px;height:20px;border:none;background:#ef4444;color:#fff;border-radius:50%;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center}
+        .bm-chip{display:flex;align-items:center;gap:8px;position:relative;min-width:120px;flex:0 1 auto}
+        .bm-chip-input{width:100%;padding:10px 12px;padding-right:40px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;height:40px;outline:none;position:relative}
+        .bm-chip-input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
+        .bm-chip-remove{width:20px;height:20px;border:none;background:#FFD9D2;color:#000;border-radius:50%;cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;position:absolute;right:10px;top:50%;transform:translateY(-50%);flex-shrink:0;z-index:1}
         .bm-columns{display:flex;gap:32px;margin-top:20px;position:relative}
         .bm-column-left{flex:1;min-width:0;padding-right:24px;border-right:1px solid #e5e7eb}
         .bm-column-right{flex:2;min-width:0;padding-left:24px}
-        .bm-chip-remove:disabled{background:#9ca3af;cursor:not-allowed}
-        .bm-suffix{font-size:14px;color:#6b7280}
+        .bm-chip-remove:disabled{background:#9ca3af;color:#fff;cursor:not-allowed}
         .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
         .bm-hierarchy{display:flex;flex-direction:column;gap:16px}
         .bm-row{display:flex;gap:8px}
         .bm-level-1{margin-left:0}
+        .bm-level-1 .bm-input{max-width:300px}
         .bm-level-2{margin-left:20px;border-left:2px solid #e5e7eb;padding-left:12px}
         .bm-level-3{margin-left:40px;border-left:2px solid #d1d5db;padding-left:12px}
         .bm-level-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-        .bm-level-title{font-size:13px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px}
-        .bm-chip-level-1{background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:6px 10px}
-        .bm-chip-level-2{background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:6px 10px}
-        .bm-chip-level-3{background:#f1f5f9;border:1px solid #94a3b8;border-radius:4px;padding:4px 8px}
-        .btn-outline{padding:8px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
-        .btn-primary{padding:8px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
+        .bm-level-title{font-size:13px;font-weight:600;color:#6b7280;text-transform:none;letter-spacing:0.5px}
+        .bm-zone-toggle{display:flex;align-items:center;gap:8px}
+        .bm-checkbox-zone{appearance:none;-webkit-appearance:none;-moz-appearance:none;width:20px;height:20px;border:1px solid #dcdee2;border-radius:2px;background:#fff;cursor:pointer;position:relative;display:inline-block;flex-shrink:0;margin:0;padding:0;box-sizing:border-box}
+        .bm-checkbox-zone:checked{background:#1761a5;border-color:#1761a5}
+        .bm-checkbox-zone:checked::after{content:"";position:absolute;left:6px;top:2px;width:4px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);box-sizing:border-box}
+        .bm-zone-toggle label{font-size:13px;font-weight:600;color:#6b7280;text-transform:none;letter-spacing:0.5px;cursor:pointer;margin:0;padding:0;user-select:none}
+        .bm-checkbox-group{display:flex;align-items:center;gap:8px;padding:0;margin:0;margin-top:8px}
+        .bm-checkbox-custom{appearance:none;-webkit-appearance:none;-moz-appearance:none;width:20px;height:20px;border:1px solid #dcdee2;border-radius:2px;background:#fff;cursor:pointer;position:relative;display:inline-block;flex-shrink:0;margin:0;padding:0;box-sizing:border-box}
+        .bm-checkbox-custom:checked{background:#1761a5;border-color:#1761a5}
+        .bm-checkbox-custom:checked::after{content:"";position:absolute;left:6px;top:2px;width:4px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg);box-sizing:border-box}
+        .bm-checkbox-label{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;font-size:13px;font-weight:400;line-height:20px;color:#000;cursor:pointer;margin:0;padding:0;user-select:none}
     </style>
 }
 
@@ -313,10 +347,11 @@
     private string hallName = "Hela hallen";
     private List<string> hallYtaNames = new() { "Halvplan A", "Halvplan B" };
     private string poolName = "Hel bassäng";
-    private List<string> halfNames = new() { "Halv A", "Halv B" };
+    private List<string> halfNames = new() { "Halva A", "Halva B" };
     private List<string> laneNames = Enumerable.Range(1,8).Select(i => $"Bana {i}").ToList();
+    private List<List<string>> laneNamesPerHalf = new() { Enumerable.Range(1,8).Select(i => $"A{i}").ToList(), Enumerable.Range(1,8).Select(i => $"B{i}").ToList() };
     private string customTopName = "Hela platsen";
-    private List<string> customLeafs = new() { "Yta 1", "Yta 2", "Yta 3", "Yta 4" };
+    private List<string> customLeafs = new() { "Yta 1", "Yta 2", "Yta 3" };
     
     // Dynamic controls for Plan type
     private List<string> halvplanNames = new() { "Halvplan A", "Halvplan B" };
@@ -325,7 +360,7 @@
     // Dynamic controls for Annat type
     private bool useZones = false;
     private List<string> zoneNames = new() { "Zon A", "Zon B" };
-    private List<List<string>> ytaNames = new() { new() { "Yta 1", "Yta 2" }, new() { "Yta 3", "Yta 4" } };
+    private List<List<string>> ytaNames = new() { new() { "Yta 1", "Yta 2" }, new() { "Yta 3" } };
 
     private void OnNameInput(ChangeEventArgs e) => name = e.Value?.ToString() ?? string.Empty;
     private void OnDurationInput(ChangeEventArgs e) => durationText = e.Value?.ToString() ?? "";
@@ -334,7 +369,25 @@
         type = e.Value?.ToString() ?? "Plan";
         ResetToDefaults();
     }
-    private void OnSplitChange(ChangeEventArgs e) => split = e.Value is bool b ? b : !split;
+    private void OnSplitChange(ChangeEventArgs e)
+    {
+        var newSplit = e.Value is bool b ? b : !split;
+        if (newSplit && !split)
+        {
+            // När split aktiveras, initiera banor per halva om de inte redan finns
+            if (laneNamesPerHalf.Count != halfNames.Count)
+            {
+                laneNamesPerHalf = new List<List<string>>();
+                foreach (var halfName in halfNames)
+                {
+                    var letter = halfName.Last(); // Get the letter (A, B, etc.)
+                    laneNamesPerHalf.Add(Enumerable.Range(1, 8).Select(i => $"{letter}{i}").ToList());
+                }
+            }
+        }
+        split = newSplit;
+        StateHasChanged();
+    }
 
     private void ResetToDefaults()
     {
@@ -343,10 +396,11 @@
         hallName = "Hela hallen";
         hallYtaNames = new() { "Halvplan A", "Halvplan B" };
         poolName = "Hel bassäng";
-        halfNames = new() { "Halv A", "Halv B" };
+        halfNames = new() { "Halva A", "Halva B" };
         laneNames = Enumerable.Range(1, 8).Select(i => $"Bana {i}").ToList();
+        laneNamesPerHalf = new() { Enumerable.Range(1, 8).Select(i => $"A{i}").ToList(), Enumerable.Range(1, 8).Select(i => $"B{i}").ToList() };
         customTopName = "Hela platsen";
-        customLeafs = new() { "Yta 1", "Yta 2", "Yta 3", "Yta 4" };
+        customLeafs = new() { "Yta 1", "Yta 2", "Yta 3" };
         
         // Reset dynamic controls for Plan type
         halvplanNames = new() { "Halvplan A", "Halvplan B" };
@@ -355,7 +409,7 @@
         // Reset dynamic controls for Annat type
         useZones = false;
         zoneNames = new() { "Zon A", "Zon B" };
-        ytaNames = new() { new() { "Yta 1", "Yta 2" }, new() { "Yta 3", "Yta 4" } };
+        ytaNames = new() { new() { "Yta 1", "Yta 2" }, new() { "Yta 3" } };
         
         StateHasChanged();
     }
@@ -378,11 +432,32 @@
     }
 
     // Dynamic controls for Simhall type
-    private void AddLane()
+    private void AddLane(int? halfIndex = null)
     {
-        var nextNumber = laneNames.Count + 1;
-        laneNames.Add($"Bana {nextNumber}");
+        if (split && halfIndex.HasValue && halfIndex.Value >= 0 && halfIndex.Value < laneNamesPerHalf.Count)
+        {
+            // Lägg till bana för specifik halva
+            var halfName = halfNames[halfIndex.Value];
+            var letter = halfName.Last(); // Get the letter (A, B, C, etc.)
+            var nextNumber = laneNamesPerHalf[halfIndex.Value].Count + 1;
+            laneNamesPerHalf[halfIndex.Value].Add($"{letter}{nextNumber}");
+        }
+        else
+        {
+            // Lägg till bana när split är false
+            var nextNumber = laneNames.Count + 1;
+            laneNames.Add($"Bana {nextNumber}");
+        }
         StateHasChanged();
+    }
+
+    private void RemoveLane(int halfIndex, int laneIndex)
+    {
+        if (halfIndex >= 0 && halfIndex < laneNamesPerHalf.Count && laneNamesPerHalf[halfIndex].Count > 1)
+        {
+            laneNamesPerHalf[halfIndex].RemoveAt(laneIndex);
+            StateHasChanged();
+        }
     }
 
     private void RemoveLane(int index)
@@ -397,7 +472,10 @@
     private void AddHalf()
     {
         var nextLetter = (char)('A' + halfNames.Count);
-        halfNames.Add($"Halv {nextLetter}");
+        halfNames.Add($"Halva {nextLetter}");
+        // Lägg till en ny lista med banor för den nya halvan
+        var letter = nextLetter.ToString();
+        laneNamesPerHalf.Add(Enumerable.Range(1, 8).Select(i => $"{letter}{i}").ToList());
         StateHasChanged();
     }
 
@@ -406,6 +484,10 @@
         if (halfNames.Count > 1) // Keep at least one
         {
             halfNames.RemoveAt(index);
+            if (split && index < laneNamesPerHalf.Count)
+            {
+                laneNamesPerHalf.RemoveAt(index);
+            }
             StateHasChanged();
         }
     }
@@ -489,8 +571,8 @@
             }
             else
             {
-                // Default names when no existing names - use zone name format
-                ytaNames = new() { new() { "Zon A 1", "Zon A 2" }, new() { "Zon B 1", "Zon B 2" } };
+                // Default names when no existing names - use zone name format (2+1 = 3 total)
+                ytaNames = new() { new() { "Zon A 1", "Zon A 2" }, new() { "Zon B 1" } };
             }
         }
         StateHasChanged();
@@ -580,7 +662,31 @@
             }
             else if (type == "Simhall")
             {
-                await PlaceService.GeneratePoolTemplateAsync(place.Id, laneNames, split, poolName, halfNames.Count > 0 ? halfNames[0] : null, halfNames.Count > 1 ? halfNames[1] : null);
+                if (split)
+                {
+                    // Säkerställ att laneNamesPerHalf är korrekt initialiserad
+                    if (laneNamesPerHalf == null || laneNamesPerHalf.Count != halfNames.Count)
+                    {
+                        laneNamesPerHalf = new List<List<string>>();
+                        foreach (var halfName in halfNames)
+                        {
+                            var letter = halfName.Last(); // Get the letter (A, B, etc.)
+                            laneNamesPerHalf.Add(Enumerable.Range(1, 8).Select(i => $"{letter}{i}").ToList());
+                        }
+                    }
+                    // Använd hierarkisk struktur (liknande Plan-typen)
+                    await PlaceService.GeneratePoolTemplateAsync(place.Id, poolName, halfNames, laneNamesPerHalf);
+                }
+                else
+                {
+                    // Använd flat struktur när split är false
+                    if (laneNames == null || laneNames.Count == 0)
+                    {
+                        Console.WriteLine("Error: No lanes to create");
+                        return;
+                    }
+                    await PlaceService.GeneratePoolTemplateAsync(place.Id, laneNames, false, poolName, null, null);
+                }
             }
             else if (type == "Annat")
             {
@@ -605,7 +711,9 @@
         {
             Console.WriteLine($"Error creating place: {ex.Message}");
             Console.WriteLine($"Stack: {ex.StackTrace}");
+            // Show error to user (you might want to add a toast notification here)
             // Don't close modal on error - let user try again
+            throw; // Re-throw to see error in browser console
         }
     }
 

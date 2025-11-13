@@ -715,14 +715,60 @@ body .app-root .sa-topbar,
 }
 
 .btn-primary {
-    background: #1976d2;
-    border-color: #1976d2;
-    color: white;
+    padding: 8px 12px !important;
+    border: none !important;
+    border-radius: 4px !important;
+    background: #1761a5 !important;
+    color: #fff !important;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    line-height: 16px !important;
+    letter-spacing: 0.4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: background-color 0.2s ease !important;
 }
 
-.btn-primary:hover {
-    background: #1565c0;
-    border-color: #1565c0;
+.btn-primary:hover:not(:disabled) {
+    background: #0f4a7a !important;
+}
+
+.btn-primary:active:not(:disabled) {
+    transform: translateY(1px) !important;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6 !important;
+    cursor: not-allowed !important;
+}
+
+.btn-outline {
+    padding: 8px 12px !important;
+    border: none !important;
+    border-radius: 4px !important;
+    background: #EEEEEE !important;
+    color: #000000 !important;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    line-height: 16px !important;
+    letter-spacing: 0.4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.btn-outline:hover {
+    background: #e0e0e0 !important;
+}
+
+.btn-outline:active {
+    transform: translateY(1px) !important;
 }
 
 .btn-outline-secondary {
@@ -738,14 +784,87 @@ body .app-root .sa-topbar,
 }
 
 .btn-danger {
-    background: #dc3545;
-    border-color: #dc3545;
-    color: white;
+    padding: 8px 12px !important;
+    border: none !important;
+    border-radius: 4px !important;
+    background: #DA321D !important;
+    color: #fff !important;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    line-height: 16px !important;
+    letter-spacing: 0.4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: background-color 0.2s ease !important;
 }
 
 .btn-danger:hover {
-    background: #c82333;
-    border-color: #c82333;
+    background: #c02a19 !important;
+}
+
+.btn-danger:active {
+    transform: translateY(1px) !important;
+}
+
+.btn-danger-left {
+    padding: 8px 12px !important;
+    border: none !important;
+    border-radius: 4px !important;
+    background: #DA321D !important;
+    color: #fff !important;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    line-height: 16px !important;
+    letter-spacing: 0.4px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: background-color 0.2s ease !important;
+}
+
+.btn-danger-left:hover {
+    background: #c02a19 !important;
+}
+
+.btn-danger-left:active {
+    transform: translateY(1px) !important;
+}
+
+/* Modal styles */
+.bm-modal {
+    border-radius: 8px !important;
+    box-shadow: 0px 1px 4px 0px rgba(0,0,0,0.16) !important;
+    border: none !important;
+}
+
+.bm-title {
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 22px !important;
+    letter-spacing: 0.1px !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+.bm-label {
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    font-size: 11px !important;
+    font-weight: 400 !important;
+    line-height: 16px !important;
+    color: #000000 !important;
+}
+
+.bm-field {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
 }
 
 /* Dropdown */

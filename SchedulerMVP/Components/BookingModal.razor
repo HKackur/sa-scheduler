@@ -188,7 +188,7 @@
         
         @* Övrigt (toggle) *@
         <div class="bm-field" style="margin-top:12px;" @onclick:stopPropagation="true">
-            <button type="button" @onclick="ToggleExtras" @onclick:stopPropagation="true" style="background:transparent;border:none;color:#0b1e34;cursor:pointer;padding:0;font-weight:600;text-align:left;">@(showExtras ? "Dölj alternativ" : "Fler alternativ")</button>
+            <button type="button" @onclick="ToggleExtras" @onclick:stopPropagation="true" style="background:transparent;border:none;color:#0b1e34;cursor:pointer;padding:0;font-weight:600;text-align:left;font-size:14px;">@(showExtras ? "Dölj alternativ" : "Fler alternativ")</button>
         </div>
         @if (showExtras)
         {
@@ -286,8 +286,6 @@
            BOOKING MODAL - ACTIONS
            ============================================ */
         .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
-        .btn-outline{padding:8px 16px;border:1px solid #d1d5db;border-radius:10px;background:#fff;color:#0f1720;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
-        .btn-primary{padding:8px 16px;border:none;border-radius:10px;background:#1761a5;color:#fff;cursor:pointer;min-height:40px;display:inline-flex;align-items:center;justify-content:center;line-height:20px}
         .bm-option-unavailable{color:#9ca3af;background-color:#f9fafb}
     </style>
 }
@@ -509,7 +507,15 @@
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
-            AvailablePlaces = await db.Places.OrderBy(p => p.Name).ToListAsync();
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var isAdmin = await UserContext.IsAdminAsync();
+            var query = db.Places.AsQueryable();
+            // Filter by user - only show places created by the current user (unless admin)
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                query = query.Where(p => p.UserId == userId);
+            }
+            AvailablePlaces = await query.OrderBy(p => p.Name).ToListAsync();
         }
         catch (Exception ex)
         {
