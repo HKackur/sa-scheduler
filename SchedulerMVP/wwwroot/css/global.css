@@ -840,6 +840,44 @@ body .app-root .sa-topbar,
     border-radius: 8px !important;
     box-shadow: 0px 1px 4px 0px rgba(0,0,0,0.16) !important;
     border: none !important;
+    width: 480px !important;
+    padding: 20px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+}
+
+/* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
+.bm-modal.bm-modal-wide,
+div.bm-modal.bm-modal-wide {
+    width: 900px !important;
+    min-width: 900px !important;
+    max-width: 900px !important;
+    padding: 20px !important;
+}
+
+/* Modal header */
+.bm-header {
+    position: sticky !important;
+    top: 0 !important;
+    background: #fff !important;
+    z-index: 12 !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Modal actions */
+.bm-actions {
+    display: flex !important;
+    gap: 12px !important;
+    justify-content: flex-end !important;
+    position: sticky !important;
+    bottom: 0 !important;
+    background: #fff !important;
+    padding-top: 8px !important;
+    margin-top: 0 !important;
+    padding-bottom: 0 !important;
+    z-index: 10 !important;
 }
 
 .bm-title {
@@ -1353,7 +1391,7 @@ body .app-root .sa-topbar,
    BOOKING MODAL - INPUT STYLING
    ============================================ */
 /* All inputs in booking modal use .bm-input for consistency */
-.bm-field{margin-bottom:12px;display:flex;flex-direction:column}
+.bm-field{display:flex;flex-direction:column}
 .bm-label{display:block;margin-bottom:4px;font-weight:400;font-size:11px;color:#0f1720;line-height:1.2}
 
 /* Template selector - deprecated, use .bm-input instead */

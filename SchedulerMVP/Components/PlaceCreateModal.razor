@@ -5,7 +5,7 @@
 @if (IsOpen)
 {
     <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="OnBackdrop"></div>
-    <div class="bm-modal">
+    <div class="bm-modal bm-modal-wide">
         <div class="bm-header">
             <h2 class="bm-title">Skapa ny plats</h2>
         </div>
@@ -286,8 +286,7 @@
         </div>
     </div>
     <style>
-        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;width:75vw;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
-        .bm-header{position:sticky;top:0;background:#fff;z-index:12;padding-bottom:12px;margin-bottom:12px}
+        .bm-modal.bm-modal-wide{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:20px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;width:900px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
         .bm-field{margin-bottom:16px}
         .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
         .bm-input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
@@ -310,7 +309,6 @@
         .bm-column-left{flex:1;min-width:0;padding-right:24px;border-right:1px solid #e5e7eb}
         .bm-column-right{flex:2;min-width:0;padding-left:24px}
         .bm-chip-remove:disabled{background:#9ca3af;color:#fff;cursor:not-allowed}
-        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px}
         .bm-hierarchy{display:flex;flex-direction:column;gap:16px}
         .bm-row{display:flex;gap:8px}
         .bm-level-1{margin-left:0}
