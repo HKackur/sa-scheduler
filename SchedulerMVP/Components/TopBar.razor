@@ -142,6 +142,17 @@
                                     <option value="@t.Id" selected="@(UI.SelectedTemplateId == t.Id)">@t.Name</option>
                                 }
                             </select>
+                            
+                            <!-- View toggle buttons -->
+                            <div class="view-toggle-group">
+                                <button class="view-toggle-btn @(!isListView ? "active" : "")" @onclick="() => ToggleView(false)" title="Veckovy">
+                                    <span class="material-symbols-outlined">calendar_view_week</span>
+                                </button>
+                                <button class="view-toggle-btn @(isListView ? "active" : "")" @onclick="() => ToggleView(true)" title="Listvy">
+                                    <span class="material-symbols-outlined">view_list</span>
+                                </button>
+                            </div>
+                            
                             <div class="more-group">
                                 <div style="position: relative;">
                                     <button class="tb-btn" @onclick="ToggleMoreMenu" title="Fler alternativ">
@@ -708,6 +719,7 @@
     private bool userMenuOpen;
     private string? currentUserEmail;
     private bool isCurrentUserAdmin;
+    private bool isListView = false;
     
     // SelectedArea for breadcrumb - cached and loaded async
     private Area? selectedAreaCache;
@@ -840,6 +852,14 @@
             isCurrentUserAdmin = user?.IsInRole("Admin") == true;
         }
         catch { }
+    }
+    
+    private void ToggleView(bool listView)
+    {
+        isListView = listView;
+        UI.IsWeekListView = listView;
+        UI.RaiseChanged();
+        StateHasChanged();
     }
     
     public void Dispose()

@@ -473,10 +473,6 @@
                 UI.SelectedAreaId = targetAreaId;
             }
             
-            // Force WeekGrid to reload so updates are visible immediately
-            UI.ForceRefresh = true;
-            UI.RaiseChanged();
-            
             // Show success toast
             ToastService.ShowSuccess("Bokning uppdaterad", "Bokningen har sparats");
             

@@ -122,34 +122,24 @@
     
     private void SelectGroup(Guid groupId)
     {
-        Console.WriteLine($"SelectGroup called with groupId: {groupId}");
-        Console.WriteLine($"Current UI.IsGroupFilterActive: {UI.IsGroupFilterActive}");
-        Console.WriteLine($"Current UI.FilteredGroupId: {UI.FilteredGroupId}");
-        
         // If already filtering this group, exit group filter mode
         if (UI.IsGroupFilterActive && UI.FilteredGroupId == groupId)
         {
-            Console.WriteLine("Exiting group filter mode");
             UI.FilteredGroupId = null;
             UI.SelectedGroupId = null; // Clear selection when exiting group filter mode
         }
         // If filtering a different group, switch to this group
         else if (UI.IsGroupFilterActive)
         {
-            Console.WriteLine("Switching to different group filter");
             UI.FilteredGroupId = groupId;
             UI.SelectedGroupId = groupId;
         }
         // If not filtering any group, start filtering this group
         else
         {
-            Console.WriteLine("Starting group filter mode");
             UI.FilteredGroupId = groupId;
             UI.SelectedGroupId = groupId;
         }
-        
-        Console.WriteLine($"After change - UI.IsGroupFilterActive: {UI.IsGroupFilterActive}");
-        Console.WriteLine($"After change - UI.FilteredGroupId: {UI.FilteredGroupId}");
         
         // Trigger UI refresh to update the WeekGrid
         UI.RaiseChanged();

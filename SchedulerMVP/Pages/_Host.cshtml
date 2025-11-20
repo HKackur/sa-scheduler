@@ -24,11 +24,36 @@
 <body>
     <component type="typeof(SchedulerMVP.Components.App)" render-mode="Server" />
 
-    
+    <!-- Blazor reconnection UI (hidden by default, shown when connection issues occur) -->
+    <div id="components-reconnect-modal" style="display: none;">
+        <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9998;"></div>
+        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 9999; max-width: 400px; text-align: center;">
+            <h3 style="margin: 0 0 16px 0; color: #1f2937;">Anslutningsproblem</h3>
+            <p style="margin: 0 0 20px 0; color: #6b7280;">Laddar om sidan automatiskt...</p>
+            <div class="spinner"></div>
+        </div>
+    </div>
 
     <script src="js/dragdrop.js"></script>
     <script src="js/blazor-connection.js"></script>
-    <script src="_framework/blazor.server.js"></script>
+    <script src="_framework/blazor.server.js" autostart="false"></script>
+    <script>
+        // Start Blazor with custom reconnection handling
+        Blazor.start({
+            reconnectionOptions: {
+                maxRetries: 3,
+                retryIntervalMilliseconds: 2000
+            }
+        }).then(function() {
+            console.log('[Blazor] Started successfully with auto-reload support');
+        }).catch(function(error) {
+            console.error('[Blazor] Failed to start:', error);
+            // Auto-reload if Blazor fails to start
+            setTimeout(function() {
+                window.location.reload();
+            }, 3000);
+        });
+    </script>
 </body>
 </html>
 

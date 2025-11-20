@@ -241,12 +241,7 @@
     
     private Guid? GetPrefilledGroupId()
     {
-        var groupId = UI.IsGroupFilterActive ? UI.FilteredGroupId : null;
-        Console.WriteLine($"=== GetPrefilledGroupId ===");
-        Console.WriteLine($"UI.IsGroupFilterActive: {UI.IsGroupFilterActive}");
-        Console.WriteLine($"UI.FilteredGroupId: {UI.FilteredGroupId}");
-        Console.WriteLine($"Returning groupId: {groupId}");
-        return groupId;
+        return UI.IsGroupFilterActive ? UI.FilteredGroupId : null;
     }
     
     private async Task OnBookingSaved()
@@ -363,11 +358,14 @@
     {
         calendarEditOpen = false;
         calendarEditBooking = null;
-        StateHasChanged();
         
         // Notify WeekGrid to refresh after edit
         UI.ForceRefresh = true;
         UI.RaiseChanged();
+        
+        // Give a small delay to ensure the UI state change is processed
+        await Task.Delay(50);
+        StateHasChanged();
     }
     
     private async Task OpenTemplateEditModal(Guid templateId)
@@ -395,10 +393,14 @@
     {
         templateEditOpen = false;
         templateEditId = null;
-        StateHasChanged();
         
         // Notify WeekGrid to refresh after template edit
+        UI.ForceRefresh = true;
         UI.RaiseChanged();
+        
+        // Give a small delay to ensure the UI state change is processed
+        await Task.Delay(50);
+        StateHasChanged();
     }
     
     private async Task PreloadDataAsync()

@@ -16,6 +16,7 @@ public class UIState
     private Guid? _selectedGroupId;
     private Guid? _selectedTemplateId;
     private bool _isDayView = false;
+    private bool _isWeekListView = false;
     
     public Guid? SelectedPlaceId
     {
@@ -146,6 +147,19 @@ public class UIState
             if (_isDayView != value)
             {
                 _isDayView = value;
+                OnChanged?.Invoke();
+            }
+        }
+    }
+    
+    public bool IsWeekListView
+    {
+        get => _isWeekListView;
+        set
+        {
+            if (_isWeekListView != value)
+            {
+                _isWeekListView = value;
                 OnChanged?.Invoke();
             }
         }

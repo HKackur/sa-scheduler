@@ -17,7 +17,15 @@
 <div class="week-grid-container">
     @* Navigation elements moved to TopBar *@
 
-    <div class="week-grid @(UI.IsDayView ? "day-view" : "")">
+    @if (!UI.IsCalendarViewMode && UI.IsWeekListView)
+    {
+        <!-- List view for week planning -->
+        <WeekListView />
+    }
+    else
+    {
+        <!-- Grid view (default) -->
+        <div class="week-grid @(UI.IsDayView ? "day-view" : "")">
         <div class="time-gutter">
             <div class="time-header">
                 <div class="time-name">&nbsp;</div>
@@ -75,7 +83,7 @@
                                      data-day="@template.DayOfWeek"
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
-                                     style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
+                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle"
                                      title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
@@ -119,7 +127,7 @@
                                      data-day="@(calBooking != null && template.Date.HasValue ? template.Date.Value.ToString("yyyy-MM-dd") : template.DayOfWeek.ToString())"
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
-                                     style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
+                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle"
                                      title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { if (isPrimary && calBooking != null) OnCalendarBookingClick(calBooking, e); else OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
@@ -188,7 +196,7 @@
                                      data-day="@template.DayOfWeek"
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
-                                     style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
+                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle"
                                      title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
@@ -232,7 +240,7 @@
                                      data-day="@(calBooking != null && template.Date.HasValue ? template.Date.Value.ToString("yyyy-MM-dd") : template.DayOfWeek.ToString())"
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
-                                     style="top: @(template.StartMin)px; height: @(template.EndMin - template.StartMin)px; @posStyle"
+                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle"
                                      title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { if (isPrimary && calBooking != null) OnCalendarBookingClick(calBooking, e); else OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
@@ -263,6 +271,7 @@
             }
         }
     </div>
+    }
 </div>
 
 @if (popoverOpen && (popoverBooking != null || popoverTemplate != null))
@@ -317,7 +326,6 @@
     </div>
     <div @onclick="ClosePopover" style="position:fixed; inset:0; z-index:4999; background:transparent;"></div>
 }
-
 @code {
     private List<TemplateView> allTemplates = new();
     private List<Group> groups = new();
@@ -366,6 +374,7 @@
     private Guid? _lastLoadedTemplateId;
     private bool _lastLoadedCalendarMode;
     private DateOnly _lastLoadedWeekStart;
+    private Guid? _lastLoadedFilteredGroupId;
     
     protected override async Task OnInitializedAsync()
     {
@@ -378,16 +387,18 @@
                 var templateChanged = _lastLoadedTemplateId != UI.SelectedTemplateId;
                 var viewModeChanged = _lastLoadedCalendarMode != UI.IsCalendarViewMode;
                 var weekChanged = _lastLoadedWeekStart != UI.CurrentWeekStart;
+                var groupFilterChanged = _lastLoadedFilteredGroupId != UI.FilteredGroupId;
                 
                 // Always reload if state changed OR if force refresh is requested
                 // This ensures new bookings appear immediately
-                if (areaChanged || templateChanged || viewModeChanged || weekChanged || UI.ForceRefresh)
+                if (areaChanged || templateChanged || viewModeChanged || weekChanged || groupFilterChanged || UI.ForceRefresh)
                 {
                     await LoadDataAsync();
                     _lastLoadedAreaId = UI.SelectedAreaId;
                     _lastLoadedTemplateId = UI.SelectedTemplateId;
                     _lastLoadedCalendarMode = UI.IsCalendarViewMode;
                     _lastLoadedWeekStart = UI.CurrentWeekStart;
+                    _lastLoadedFilteredGroupId = UI.FilteredGroupId;
                     UI.ForceRefresh = false; // Reset flag after reload
                     await InvokeAsync(StateHasChanged);
                 }

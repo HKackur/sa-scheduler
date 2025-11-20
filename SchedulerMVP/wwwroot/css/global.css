@@ -249,9 +249,9 @@ body .app-root .sa-topbar,
     border: 1px solid #e4e4e4;
     border-top: none;
     border-radius: 4px;
-    padding-bottom: 0; /* no extra spacer; bottom line provided by ::after rules */
     border-top-left-radius: 4px;
     border-top-right-radius: 4px;
+    margin-bottom: 60px;
 }
 
 .week-grid.day-view {
@@ -265,7 +265,7 @@ body .app-root .sa-topbar,
     display: grid;
     grid-template-rows: auto 1fr; /* match day-header height */
     position: relative;
-    height: 1440px; /* 24 hours * 60 minutes = 1440px (1px per minute) */
+    height: 1504px;
 }
 
 .time-header {
@@ -304,6 +304,18 @@ body .app-root .sa-topbar,
     bottom: 0;
     height: 1px;
     background: #e4e4e4;
+}
+
+/* Ensure right border extends to bottom of time gutter */
+.time-gutter::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #e4e4e4;
+    z-index: 1;
 }
 
 .time-name { font-weight: 600; margin-bottom: 2px; visibility: hidden; }
@@ -1409,6 +1421,13 @@ div.bm-modal.bm-modal-wide {
 .tb-btn{padding:8px 12px;border:none;border-radius:8px;background:#1761A5;font-size:13px;color:#FFF;cursor:pointer;display:flex;align-items:center;gap:8px}
 .tb-btn:hover{background:#0f4a7a}
 
+/* View toggle buttons */
+.view-toggle-group{display:flex;border:1px solid #dcdee2;border-radius:6px;overflow:hidden;background:#f3f5f7}
+.view-toggle-btn{border:none;background:transparent;padding:8px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#64748b;transition:all 0.2s ease}
+.view-toggle-btn:hover{background:#e2e8f0;color:#475569}
+.view-toggle-btn.active{background:#1761A5;color:#fff}
+.view-toggle-btn .material-symbols-outlined{font-size:18px}
+
 /* Force sa- classes to work independently - highest priority */
 input.sa-input-field,
 .sa-input-field {
@@ -1477,4 +1496,22 @@ input.sa-input-field,
 /* Textarea has different height */
 .bm-modal .bm-field textarea.bm-input {
     min-height: 80px !important;
+}
+
+/* ============================================
+   BLAZOR CONNECTION - SPINNER ANIMATION
+   ============================================ */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e5e7eb;
+    border-top: 2px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
