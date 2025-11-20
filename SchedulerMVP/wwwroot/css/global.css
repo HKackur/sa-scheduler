@@ -1422,11 +1422,41 @@ div.bm-modal.bm-modal-wide {
 .tb-btn:hover{background:#0f4a7a}
 
 /* View toggle buttons */
-.view-toggle-group{display:flex;border:1px solid #dcdee2;border-radius:6px;overflow:hidden;background:#f3f5f7}
-.view-toggle-btn{border:none;background:transparent;padding:8px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#64748b;transition:all 0.2s ease}
-.view-toggle-btn:hover{background:#e2e8f0;color:#475569}
-.view-toggle-btn.active{background:#1761A5;color:#fff}
-.view-toggle-btn .material-symbols-outlined{font-size:18px}
+.view-toggle-group {
+    display: flex !important;
+    flex-direction: row !important;
+    border: 1px solid #dcdee2;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #f3f5f7;
+}
+
+.view-toggle-btn {
+    border: none;
+    background: transparent;
+    padding: 8px 10px;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.view-toggle-btn:hover {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.view-toggle-btn.active {
+    background: #1761A5;
+    color: #fff;
+}
+
+.view-toggle-btn .material-symbols-outlined {
+    font-size: 18px;
+}
 
 /* Force sa- classes to work independently - highest priority */
 input.sa-input-field,
