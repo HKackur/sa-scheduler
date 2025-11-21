@@ -145,10 +145,10 @@
                             
                             <!-- View toggle buttons -->
                             <div class="view-toggle-group">
-                                <button class="view-toggle-btn @(!isListView ? "active" : "")" @onclick="() => ToggleView(false)" title="Veckovy">
+                                <button class="grid-list-toggle-btn @(!isListView ? "active" : "")" @onclick="() => ToggleView(false)" title="Veckovy">
                                     <span class="material-symbols-outlined">calendar_view_week</span>
                                 </button>
-                                <button class="view-toggle-btn @(isListView ? "active" : "")" @onclick="() => ToggleView(true)" title="Listvy">
+                                <button class="grid-list-toggle-btn @(isListView ? "active" : "")" @onclick="() => ToggleView(true)" title="Listvy">
                                     <span class="material-symbols-outlined">view_list</span>
                                 </button>
                             </div>

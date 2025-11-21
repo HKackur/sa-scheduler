@@ -1431,7 +1431,7 @@ div.bm-modal.bm-modal-wide {
     background: #f3f5f7;
 }
 
-.view-toggle-btn {
+.grid-list-toggle-btn {
     border: none;
     background: transparent;
     padding: 8px 10px;
@@ -1442,19 +1442,21 @@ div.bm-modal.bm-modal-wide {
     color: #64748b;
     transition: all 0.2s ease;
     flex-shrink: 0;
+    min-width: 36px;
+    height: auto;
 }
 
-.view-toggle-btn:hover {
+.grid-list-toggle-btn:hover {
     background: #e2e8f0;
     color: #475569;
 }
 
-.view-toggle-btn.active {
+.grid-list-toggle-btn.active {
     background: #1761A5;
     color: #fff;
 }
 
-.view-toggle-btn .material-symbols-outlined {
+.grid-list-toggle-btn .material-symbols-outlined {
     font-size: 18px;
 }
 
