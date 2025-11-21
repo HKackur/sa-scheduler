@@ -1425,35 +1425,37 @@ div.bm-modal.bm-modal-wide {
 .view-toggle-group {
     display: flex !important;
     flex-direction: row !important;
-    border: 1px solid #dcdee2;
-    border-radius: 6px;
-    overflow: hidden;
-    background: #f3f5f7;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 2px;
 }
 
 .grid-list-toggle-btn {
     border: none;
     background: transparent;
-    padding: 8px 10px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #64748b;
     cursor: pointer;
+    transition: all 0.2s;
+    height: 34px;
+    box-sizing: border-box;
     display: flex !important;
     align-items: center;
     justify-content: center;
-    color: #64748b;
-    transition: all 0.2s ease;
     flex-shrink: 0;
-    min-width: 36px;
-    height: auto;
 }
 
 .grid-list-toggle-btn:hover {
-    background: #e2e8f0;
-    color: #475569;
+    color: #334155;
 }
 
 .grid-list-toggle-btn.active {
-    background: #1761A5;
-    color: #fff;
+    background: #fff;
+    color: #0f172a;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .grid-list-toggle-btn .material-symbols-outlined {

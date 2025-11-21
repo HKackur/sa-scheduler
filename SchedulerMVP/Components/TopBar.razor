@@ -854,12 +854,26 @@
         catch { }
     }
     
-    private void ToggleView(bool listView)
+    private async void ToggleView(bool listView)
     {
         isListView = listView;
         UI.IsWeekListView = listView;
         UI.RaiseChanged();
         StateHasChanged();
+        
+        // När man togglar tillbaka till grid-vyn, scrolla till 07:00 (420 minuter)
+        if (!listView)
+        {
+            await Task.Delay(100); // Vänta på att grid-vyn renderas
+            try
+            {
+                await JS.InvokeVoidAsync("SchedulerMVP.scrollToTime", 420); // 07:00 = 420 minuter
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error scrolling to time: {ex.Message}");
+            }
+        }
     }
     
     public void Dispose()

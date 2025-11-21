@@ -16,6 +16,14 @@ var SchedulerMVP = {
         } catch (_) { }
     },
 
+    scrollToTime: function (minutes) {
+        try {
+            // Convert minutes to pixels (1 minute = 1 pixel)
+            const topPx = minutes;
+            this.scrollToPos(topPx);
+        } catch (_) { }
+    },
+
     // Drag and Drop functionality
     initDragDrop: function (dotNetHelper) {
         try {
