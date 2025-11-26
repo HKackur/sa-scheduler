@@ -17,12 +17,12 @@
     </div>
 }
 
-<div class="sa-panel" style="margin:16px; @(isLoading ? "opacity:0.5; pointer-events:none;" : "")">
+<div class="sa-panel" style="margin:16px; max-height: calc(100vh - 120px); overflow-y: auto; overflow-x: hidden; @(isLoading ? "opacity:0.5; pointer-events:none;" : "")">
     <div class="sa-panel-header" style="display:flex;align-items:center;gap:12px;">
         <h6 class="sa-panel-title">Användare</h6>
     </div>
 
-    <div class="sa-panel-content" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+    <div class="sa-panel-content" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap; padding-bottom:32px;">
         <div style="flex:1 1 320px;max-width:520px;">
             <div style="margin-bottom:12px;font-weight:600;">Skapa testkonto</div>
             <form @onsubmit="CreateUser" @onsubmit:preventDefault>

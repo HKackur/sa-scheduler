@@ -159,6 +159,9 @@
         background: white;
         border-radius: 8px;
         border: 1px solid #e4e4e4;
+        max-height: calc(100vh - 120px); /* Account for TopBar and margins */
+        overflow-y: auto;
+        overflow-x: hidden;
     }
     
     .day-section {
@@ -167,6 +170,7 @@
     
     .day-section:last-child {
         margin-bottom: 0;
+        padding-bottom: 32px; /* Extra margin at bottom when scrolling */
     }
     
     .day-title {
