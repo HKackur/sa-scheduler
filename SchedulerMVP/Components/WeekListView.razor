@@ -4,6 +4,7 @@
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject UIState UI
+@inject UserContextService UserContext
 
 <div class="week-list-container">
     @for (int day = 1; day <= 7; day++)
@@ -64,12 +65,37 @@
             
             await using var db = await DbFactory.CreateDbContextAsync();
             
-            var templates = await db.BookingTemplates
+            // Get current user and admin status
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var isAdmin = await UserContext.IsAdminAsync();
+            
+            // First verify template ownership
+            var templateQuery = db.ScheduleTemplates.Where(t => t.Id == UI.SelectedTemplateId.Value);
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                templateQuery = templateQuery.Where(t => t.UserId == userId);
+            }
+            var templateExists = await templateQuery.AnyAsync();
+            
+            if (!templateExists)
+            {
+                groupedTemplates = null;
+                return;
+            }
+            
+            var templatesQuery = db.BookingTemplates
                 .Include(bt => bt.Group)
                 .Include(bt => bt.Area)
                     .ThenInclude(a => a.Place)
-                .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value)
-                .ToListAsync();
+                .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value);
+            
+            // Filter by user ownership through Group
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.UserId == userId);
+            }
+            
+            var templates = await templatesQuery.ToListAsync();
             
             // Apply area filter if set
             if (UI.SelectedAreaId.HasValue)

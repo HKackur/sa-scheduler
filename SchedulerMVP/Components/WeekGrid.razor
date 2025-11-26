@@ -563,8 +563,16 @@
                 Guid templateId = UI.SelectedTemplateId ?? Guid.Empty;
                 if (templateId == Guid.Empty)
                 {
-                    templateId = await db.ScheduleTemplates
-                        .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId))
+                    var templateQuery = db.ScheduleTemplates
+                        .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId));
+                    
+                    // Filter by user ownership
+                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    {
+                        templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
+                    }
+                    
+                    templateId = await templateQuery
                         .Select(t => t.Id)
                         .FirstOrDefaultAsync();
 
@@ -575,19 +583,44 @@
                 }
                 else
                 {
-                    var templateContainsGroup = await db.BookingTemplates
-                        .AnyAsync(bt => bt.ScheduleTemplateId == templateId && bt.GroupId == filteredGroupId);
-
-                    if (!templateContainsGroup)
+                    // Verify template ownership before checking if it contains the group
+                    var templateOwnershipQuery = db.ScheduleTemplates.Where(t => t.Id == templateId);
+                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
                     {
-                        templateId = await db.ScheduleTemplates
-                            .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId))
-                            .Select(t => t.Id)
-                            .FirstOrDefaultAsync();
+                        templateOwnershipQuery = templateOwnershipQuery.Where(t => t.UserId == currentUserId);
+                    }
+                    var templateExists = await templateOwnershipQuery.AnyAsync();
+                    
+                    if (!templateExists)
+                    {
+                        // Template doesn't exist or user doesn't have access, reset selection
+                        templateId = Guid.Empty;
+                        UI.SelectedTemplateId = null;
+                    }
+                    else
+                    {
+                        var templateContainsGroup = await db.BookingTemplates
+                            .AnyAsync(bt => bt.ScheduleTemplateId == templateId && bt.GroupId == filteredGroupId);
 
-                        if (templateId != Guid.Empty)
+                        if (!templateContainsGroup)
                         {
-                            UI.SelectedTemplateId = templateId;
+                            var templateQuery = db.ScheduleTemplates
+                                .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId));
+                            
+                            // Filter by user ownership
+                            if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                            {
+                                templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
+                            }
+                            
+                            templateId = await templateQuery
+                                .Select(t => t.Id)
+                                .FirstOrDefaultAsync();
+
+                            if (templateId != Guid.Empty)
+                            {
+                                UI.SelectedTemplateId = templateId;
+                            }
                         }
                     }
                 }
@@ -599,46 +632,70 @@
                 }
                 else
                 {
-                    var templateEntity = await db.ScheduleTemplates
+                    var templateQuery = db.ScheduleTemplates
                         .AsNoTracking()
                         .Include(t => t.Bookings)
                             .ThenInclude(bt => bt.Area)
                                 .ThenInclude(a => a.Place)
                         .Include(t => t.Bookings)
                             .ThenInclude(bt => bt.Group)
-                        .FirstOrDefaultAsync(t => t.Id == templateId);
-
-                    var groupTemplates = templateEntity?.Bookings
-                        .Where(bt => bt.GroupId == filteredGroupId)
-                        .ToList() ?? new List<BookingTemplate>();
-
-                    areaCache.Clear();
-                    foreach (var bt in groupTemplates)
+                        .Where(t => t.Id == templateId);
+                    
+                    // Filter by user ownership
+                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
                     {
-                        if (bt.Area != null)
-                        {
-                            areaCache[bt.Area.Id] = bt.Area;
-                        }
+                        templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
                     }
+                    
+                    var templateEntity = await templateQuery.FirstOrDefaultAsync();
 
-                    allTemplates = groupTemplates.Select(bt => new TemplateView
+                    if (templateEntity == null)
                     {
-                        Id = bt.Id,
-                        AreaId = bt.AreaId,
-                        GroupId = bt.GroupId,
-                        DayOfWeek = bt.DayOfWeek,
-                        StartMin = bt.StartMin,
-                        EndMin = bt.EndMin,
-                        Notes = bt.Notes,
-                        Group = bt.Group,
-                        Area = bt.Area,
-                        IsGhost = false,
-                        SourceAreaName = bt.Area?.Place != null
-                            ? $"{bt.Area.Place.Name} - {bt.Area.Name}"
-                            : bt.Area != null ? bt.Area.Name ?? "Okänd yta" : "Okänd plats"
-                    }).ToList();
+                        allTemplates = new List<TemplateView>();
+                        weekBookings = new List<CalendarBooking>();
+                    }
+                    else
+                    {
+                        var groupTemplates = templateEntity.Bookings
+                            .Where(bt => bt.GroupId == filteredGroupId)
+                            .ToList();
+                        
+                        // Additional filter: ensure group belongs to current user
+                        if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                        {
+                            groupTemplates = groupTemplates
+                                .Where(bt => bt.Group != null && bt.Group.UserId == currentUserId)
+                                .ToList();
+                        }
 
-                    weekBookings = new List<CalendarBooking>();
+                        areaCache.Clear();
+                        foreach (var bt in groupTemplates)
+                        {
+                            if (bt.Area != null)
+                            {
+                                areaCache[bt.Area.Id] = bt.Area;
+                            }
+                        }
+
+                        allTemplates = groupTemplates.Select(bt => new TemplateView
+                        {
+                            Id = bt.Id,
+                            AreaId = bt.AreaId,
+                            GroupId = bt.GroupId,
+                            DayOfWeek = bt.DayOfWeek,
+                            StartMin = bt.StartMin,
+                            EndMin = bt.EndMin,
+                            Notes = bt.Notes,
+                            Group = bt.Group,
+                            Area = bt.Area,
+                            IsGhost = false,
+                            SourceAreaName = bt.Area?.Place != null
+                                ? $"{bt.Area.Place.Name} - {bt.Area.Name}"
+                                : bt.Area != null ? bt.Area.Name ?? "Okänd yta" : "Okänd plats"
+                        }).ToList();
+
+                        weekBookings = new List<CalendarBooking>();
+                    }
                 }
             }
                 else if (UI.SelectedTemplateId.HasValue)
