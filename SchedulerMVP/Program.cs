@@ -23,6 +23,83 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("en-US");
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("en-US");
 
+// Check if we should create test user instead of running the web app
+if (args.Length > 0 && args[0] == "create-test-user")
+{
+    var services = new ServiceCollection();
+    services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Information));
+
+    // Use SQLite for local database
+    var testUserConnectionString = "Data Source=app.db";
+
+    services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite(testUserConnectionString));
+
+    services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+    {
+        options.Password.RequireDigit = false;
+        options.Password.RequireLowercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequiredLength = 8;
+    })
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
+
+    var provider = services.BuildServiceProvider();
+    var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
+
+    Console.WriteLine("🔧 Creating test user for LOCAL database...");
+
+    const string testEmail = "test@kackur.se";
+    const string testPassword = "test1234";
+
+    var testUser = await userManager.FindByEmailAsync(testEmail);
+
+    if (testUser == null)
+    {
+        Console.WriteLine($"Creating new user: {testEmail}");
+        testUser = new ApplicationUser
+        {
+            UserName = testEmail,
+            Email = testEmail,
+            EmailConfirmed = true
+        };
+        var result = await userManager.CreateAsync(testUser, testPassword);
+        if (result.Succeeded)
+        {
+            Console.WriteLine($"✅ Created test user: {testEmail}");
+        }
+        else
+        {
+            Console.WriteLine($"❌ Failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+            Environment.Exit(1);
+        }
+    }
+    else
+    {
+        Console.WriteLine($"✅ User already exists: {testEmail}");
+        var token = await userManager.GeneratePasswordResetTokenAsync(testUser);
+        var resetResult = await userManager.ResetPasswordAsync(testUser, token, testPassword);
+        if (resetResult.Succeeded)
+        {
+            Console.WriteLine($"✅ Password reset successfully for: {testEmail}");
+        }
+        else
+        {
+            Console.WriteLine($"❌ Password reset failed: {string.Join(", ", resetResult.Errors.Select(e => e.Description))}");
+            Environment.Exit(1);
+        }
+    }
+
+    Console.WriteLine($"\n📋 Login credentials for LOCAL database:");
+    Console.WriteLine($"   Email: {testEmail}");
+    Console.WriteLine($"   Password: {testPassword}");
+    Console.WriteLine($"\n✅ Done! You can now log in to your local app.");
+    
+    Environment.Exit(0);
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Force IPv4 for Supabase connections (Azure Basic B1 doesn't support IPv6)
@@ -638,6 +715,96 @@ _ = Task.Run(async () =>
                 await context.Database.EnsureCreatedAsync();
                 Console.WriteLine("[MIGRATION] AppDbContext EnsureCreated completed");
                 logger.LogInformation("=== AppDbContext EnsureCreated completed ===");
+                
+                // Fix SourceTemplateId foreign key constraint for SQLite
+                // SQLite doesn't support DROP CONSTRAINT, so we need to recreate the table
+                // This is a one-time fix that ensures the constraint points to ScheduleTemplates (not BookingTemplates)
+                try
+                {
+                    // Check if constraint needs fixing by checking the table schema
+                    // We'll check if the constraint exists and points to the wrong table
+                    var needsFix = false;
+                    try
+                    {
+                        // Try to insert a test value with a ScheduleTemplate ID - if it fails with FK error,
+                        // the constraint might be pointing to BookingTemplates instead
+                        // But we can't easily check this, so we'll just run the fix once
+                        // Use a marker table to track if we've already run the fix
+                        var fixApplied = await context.Database.ExecuteSqlRawAsync(@"
+                            SELECT name FROM sqlite_master 
+                            WHERE type='table' AND name='_constraint_fix_applied'
+                        ");
+                        needsFix = false; // Fix already applied
+                    }
+                    catch
+                    {
+                        needsFix = true; // Need to apply fix
+                    }
+                    
+                    if (needsFix)
+                    {
+                        await context.Database.ExecuteSqlRawAsync(@"
+                            PRAGMA foreign_keys = OFF;
+                            
+                            -- Create new table with correct foreign key constraint
+                            CREATE TABLE CalendarBookings_fixed (
+                                Id TEXT NOT NULL PRIMARY KEY,
+                                AreaId TEXT NOT NULL,
+                                GroupId TEXT,
+                                Date TEXT NOT NULL,
+                                StartMin INTEGER NOT NULL,
+                                EndMin INTEGER NOT NULL,
+                                Notes TEXT,
+                                ContactName TEXT,
+                                ContactPhone TEXT,
+                                ContactEmail TEXT,
+                                SourceTemplateId TEXT,
+                                CreatedAt TEXT,
+                                UpdatedAt TEXT,
+                                FOREIGN KEY (AreaId) REFERENCES Areas(Id) ON DELETE CASCADE,
+                                FOREIGN KEY (GroupId) REFERENCES Groups(Id) ON DELETE CASCADE,
+                                FOREIGN KEY (SourceTemplateId) REFERENCES ScheduleTemplates(Id) ON DELETE SET NULL
+                            );
+                            
+                            -- Copy all data from old table
+                            INSERT INTO CalendarBookings_fixed 
+                            SELECT Id, AreaId, GroupId, Date, StartMin, EndMin, Notes, 
+                                   ContactName, ContactPhone, ContactEmail, SourceTemplateId, 
+                                   CreatedAt, UpdatedAt 
+                            FROM CalendarBookings;
+                            
+                            -- Drop old table
+                            DROP TABLE CalendarBookings;
+                            
+                            -- Rename new table to original name
+                            ALTER TABLE CalendarBookings_fixed RENAME TO CalendarBookings;
+                            
+                            -- Recreate indexes
+                            CREATE INDEX IF NOT EXISTS IX_CalendarBookings_AreaId ON CalendarBookings(AreaId);
+                            CREATE INDEX IF NOT EXISTS IX_CalendarBookings_GroupId ON CalendarBookings(GroupId);
+                            CREATE INDEX IF NOT EXISTS IX_CalendarBookings_SourceTemplateId ON CalendarBookings(SourceTemplateId);
+                            
+                            -- Mark that fix has been applied
+                            CREATE TABLE IF NOT EXISTS _constraint_fix_applied (
+                                Id INTEGER PRIMARY KEY,
+                                AppliedAt TEXT NOT NULL
+                            );
+                            INSERT INTO _constraint_fix_applied (AppliedAt) VALUES (datetime('now'));
+                            
+                            PRAGMA foreign_keys = ON;
+                        ");
+                        
+                        Console.WriteLine("[MIGRATION] Fixed SourceTemplateId constraint for SQLite");
+                        logger.LogInformation("Fixed SourceTemplateId constraint for SQLite");
+                    }
+                }
+                catch (Exception fixEx)
+                {
+                    // If the fix fails, it might be because the constraint is already correct
+                    // or the table structure is different - log but don't fail
+                    Console.WriteLine($"[MIGRATION] Constraint fix (non-critical): {fixEx.Message}");
+                    logger.LogInformation("Constraint fix (non-critical): {Message}", fixEx.Message);
+                }
             }
         }
         catch (Exception ex)

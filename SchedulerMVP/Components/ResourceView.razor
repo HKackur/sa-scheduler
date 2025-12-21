@@ -1,0 +1,1239 @@
+@using SchedulerMVP.Data
+@using SchedulerMVP.Data.Entities
+@using SchedulerMVP.Services
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject UIState UI
+@inject IPlaceService PlaceService
+@inject UserContextService UserContext
+@inject IJSRuntime JSRuntime
+
+<div class="resource-view-container">
+    <div class="resource-view-body">
+        <div class="resource-scroll-container">
+            <div class="resource-list-column">
+                <div class="resource-list-column-header">
+                    <div class="resource-place-header">Platser & ytor</div>
+                    <button class="resource-expand-all-btn" @onclick="ToggleAllAreas" title="@(AreAllExpanded() ? "Stäng alla" : "Öppna alla")">
+                        <span class="material-symbols-outlined">@(AreAllExpanded() ? "unfold_less" : "unfold_more")</span>
+                    </button>
+                </div>
+                @if (places != null)
+                {
+                    @foreach (var place in places)
+                    {
+                        @* Show root areas directly (place name + top level area on same row) *@
+                        @if (areasByPlace.ContainsKey(place.Id))
+                        {
+                            var rootAreas = GetRootAreas(place.Id);
+                            @foreach (var rootArea in rootAreas)
+                            {
+                                <div class="resource-place-area-row">
+                                    <button class="resource-expand-btn" @onclick="() => ToggleArea(rootArea.Id)">
+                                        <span class="material-symbols-outlined">@(expandedAreas.Contains(rootArea.Id) ? "expand_more" : "chevron_right")</span>
+                                    </button>
+                                    <span class="resource-place-name">@place.Name</span>
+                                    <span class="resource-area-name">/ @rootArea.Name</span>
+                                </div>
+                                
+                                @* Show child areas if expanded *@
+                                @if (expandedAreas.Contains(rootArea.Id))
+                                {
+                                    @foreach (var childArea in GetChildAreas(rootArea.Id))
+                                    {
+                                        @RenderAreaTree(childArea, 24)
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            <div class="resource-place-area-row">
+                                <span class="resource-place-name">@place.Name</span>
+                                <span style="color: #999; font-size: 12px; margin-left: 8px;">Laddar...</span>
+                            </div>
+                        }
+                    }
+                }
+            </div>
+            
+            <div class="resource-grid-wrapper">
+                @* Time axis header - sticky vertically relative to scroll container *@
+                <div class="resource-time-axis-header">
+                    <div class="resource-time-axis-day-names">
+                        @for (int day = 1; day <= 7; day++)
+                        {
+                            <div class="day-column-header">
+                                <div class="day-name-header">@GetDayName(day)</div>
+                            </div>
+                        }
+                    </div>
+                    <div class="resource-time-axis-time-slots">
+                        @for (int day = 1; day <= 7; day++)
+                        {
+                            <div class="day-column-header">
+                                <div class="day-time-header">
+                                    @for (int hour = 0; hour < 24; hour++)
+                                    {
+                                        <div class="time-slot-header" style="width: 60px;">
+                                            @hour.ToString("00"):00
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="resource-grid-column">
+                    <div class="resource-time-grid">
+                        @* Render time grid lines and bookings for all days - match list structure exactly *@
+                        @if (places != null)
+                        {
+                            @foreach (var place in places)
+                            {
+                                @if (areasByPlace.ContainsKey(place.Id))
+                                {
+                                    var rootAreas = GetRootAreas(place.Id);
+                                    @foreach (var rootArea in rootAreas)
+                                    {
+                                        @* Always show grid row for root area (place + top level area) *@
+                                        @RenderGridRowForArea(rootArea)
+                                        
+                                        @* Render child areas if expanded - recursively match list structure *@
+                                        @if (expandedAreas.Contains(rootArea.Id))
+                                        {
+                                            @foreach (var childArea in GetChildAreas(rootArea.Id))
+                                            {
+                                                @RenderGridRowForAreaTree(childArea)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<(int dayOfWeek, string startTime, Guid areaId)> OnOpenModal { get; set; }
+    [Parameter] public EventCallback<Guid> OnOpenTemplateEdit { get; set; }
+    
+    private List<Place>? places;
+    private Dictionary<Guid, List<Area>> areasByPlace = new();
+    private HashSet<Guid> expandedAreas = new();
+    private Dictionary<Guid, List<BookingTemplate>> bookingsByArea = new();
+    private Dictionary<Guid, Area> areaCache = new(); // Cache for area lookups
+    private Dictionary<Guid, Dictionary<int, List<BookingWithGhost>>> bookingsByAreaAndDay = new(); // AreaId -> DayOfWeek -> List of bookings with ghost flag
+    
+    protected override async Task OnInitializedAsync()
+    {
+        UI.OnChanged += OnUIChanged;
+        
+        // Restore expanded areas from UIState
+        expandedAreas = new HashSet<Guid>(UI.ResourceViewExpandedAreas);
+        
+        await LoadDataAsync();
+    }
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (UI.IsResourceView)
+        {
+            Console.WriteLine("[ResourceView] OnAfterRenderAsync - IsResourceView is true");
+            // Wait longer for DOM to be fully ready, especially after re-renders
+            await Task.Delay(500);
+            try
+            {
+                Console.WriteLine("[ResourceView] Calling initResourceViewScroll");
+                await JSRuntime.InvokeVoidAsync("SchedulerMVP.initResourceViewScroll");
+                Console.WriteLine("[ResourceView] initResourceViewScroll called successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ResourceView] Error initializing scroll: {ex.Message}");
+                Console.WriteLine($"[ResourceView] Stack: {ex.StackTrace}");
+            }
+        }
+        else
+        {
+            Console.WriteLine("[ResourceView] OnAfterRenderAsync - IsResourceView is false");
+        }
+    }
+    
+    public void Dispose()
+    {
+        UI.OnChanged -= OnUIChanged;
+    }
+    
+    private async void OnUIChanged()
+    {
+        // Reload bookings when template changes
+        await LoadBookingsAsync();
+        await InvokeAsync(StateHasChanged);
+        
+        // Re-initialize scroll sync after UI updates
+        if (UI.IsResourceView)
+        {
+            await Task.Delay(300);
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("SchedulerMVP.initResourceViewScroll");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[ResourceView] Error re-initializing scroll: {ex.Message}");
+            }
+        }
+    }
+    
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            // Get current user and admin status
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var isAdmin = await UserContext.IsAdminAsync();
+            
+            // Load places
+            places = await PlaceService.GetPlacesAsync();
+            
+            // Filter places by user if not admin
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var userPlaceIds = await db.Areas
+                    .Where(a => a.Place != null && a.Place.UserId == userId)
+                    .Select(a => a.Place!.Id)
+                    .Distinct()
+                    .ToListAsync();
+                
+                places = places.Where(p => userPlaceIds.Contains(p.Id)).ToList();
+            }
+            
+            // Load areas for each place
+            areasByPlace.Clear();
+            Console.WriteLine($"[ResourceView] LoadDataAsync: Found {places.Count} places");
+            
+            // Load areas for all places in parallel
+            var areaTasks = places.Select(async place =>
+            {
+                var areas = await PlaceService.GetAreasForPlaceAsync(place.Id);
+                return new { PlaceId = place.Id, Areas = areas };
+            });
+            
+            var areaResults = await Task.WhenAll(areaTasks);
+            foreach (var result in areaResults)
+            {
+                areasByPlace[result.PlaceId] = result.Areas;
+            }
+            
+            Console.WriteLine($"[ResourceView] Loaded areas for {areasByPlace.Count} places");
+            
+            // Load bookings for selected template
+            await LoadBookingsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading resource view data: {ex.Message}");
+        }
+    }
+    
+    private async Task LoadBookingsAsync()
+    {
+        try
+        {
+            if (!UI.SelectedTemplateId.HasValue)
+            {
+                Console.WriteLine("[ResourceView] No template selected");
+                bookingsByArea.Clear();
+                return;
+            }
+            
+            await using var db = await DbFactory.CreateDbContextAsync();
+            
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var isAdmin = await UserContext.IsAdminAsync();
+            
+            var templatesQuery = db.BookingTemplates
+                .Include(bt => bt.Group)
+                .Include(bt => bt.Area)
+                    .ThenInclude(a => a.Place)
+                .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value);
+            
+            // Filter by user ownership through Group
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.UserId == userId);
+            }
+            
+            var templates = await templatesQuery.ToListAsync();
+            
+            Console.WriteLine($"[ResourceView] LoadBookingsAsync: Found {templates.Count} booking templates for template {UI.SelectedTemplateId.Value}");
+            
+            // Build area cache
+            areaCache.Clear();
+            foreach (var areaList in areasByPlace.Values)
+            {
+                foreach (var area in areaList)
+                {
+                    areaCache[area.Id] = area;
+                }
+            }
+            
+            // Group bookings by area and day, with ghost logic
+            bookingsByArea.Clear();
+            bookingsByAreaAndDay.Clear();
+            
+            foreach (var template in templates)
+            {
+                if (template.AreaId == Guid.Empty || template.Area == null) continue;
+                
+                // Add to simple dictionary for backward compatibility
+                if (!bookingsByArea.ContainsKey(template.AreaId))
+                {
+                    bookingsByArea[template.AreaId] = new List<BookingTemplate>();
+                }
+                bookingsByArea[template.AreaId].Add(template);
+                
+                // For each area that should see this booking, add it with ghost flag
+                foreach (var kvp in areasByPlace)
+                {
+                    foreach (var viewingArea in kvp.Value)
+                    {
+                        var isGhost = ShouldShowAsGhost(viewingArea, template.Area);
+                        var isDirect = viewingArea.Id == template.AreaId;
+                        
+                        // Show booking if it's direct or should be shown as ghost
+                        if (isDirect || isGhost)
+                        {
+                            if (!bookingsByAreaAndDay.ContainsKey(viewingArea.Id))
+                            {
+                                bookingsByAreaAndDay[viewingArea.Id] = new Dictionary<int, List<BookingWithGhost>>();
+                            }
+                            
+                            if (!bookingsByAreaAndDay[viewingArea.Id].ContainsKey(template.DayOfWeek))
+                            {
+                                bookingsByAreaAndDay[viewingArea.Id][template.DayOfWeek] = new List<BookingWithGhost>();
+                            }
+                            
+                            var bookingWithGhost = new BookingWithGhost
+                            {
+                                Booking = template,
+                                IsGhost = isGhost
+                            };
+                            
+                            if (isGhost)
+                            {
+                                bookingWithGhost.SourceAreaNames.Add(template.Area.Name);
+                                bookingWithGhost.DisplayText = FormatBlockingAreas(bookingWithGhost.SourceAreaNames);
+                            }
+                            
+                            bookingsByAreaAndDay[viewingArea.Id][template.DayOfWeek].Add(bookingWithGhost);
+                        }
+                    }
+                }
+            }
+            
+            // Merge overlapping ghost bookings for the same viewing area and day
+            foreach (var areaKvp in bookingsByAreaAndDay)
+            {
+                foreach (var dayKvp in areaKvp.Value)
+                {
+                    var bookings = dayKvp.Value;
+                    var merged = new List<BookingWithGhost>();
+                    var processed = new HashSet<int>();
+                    
+                    for (int i = 0; i < bookings.Count; i++)
+                    {
+                        if (processed.Contains(i)) continue;
+                        
+                        var current = bookings[i];
+                        
+                        // If it's a direct booking, keep it as is
+                        if (!current.IsGhost)
+                        {
+                            merged.Add(current);
+                            processed.Add(i);
+                            continue;
+                        }
+                        
+                        // Find all overlapping ghost bookings
+                        var overlapping = new List<BookingWithGhost> { current };
+                        var allSourceAreas = new List<string>(current.SourceAreaNames);
+                        processed.Add(i);
+                        
+                        for (int j = i + 1; j < bookings.Count; j++)
+                        {
+                            if (processed.Contains(j)) continue;
+                            
+                            var other = bookings[j];
+                            if (!other.IsGhost) continue;
+                            
+                            // Check if bookings overlap in time
+                            if (current.Booking.StartMin < other.Booking.EndMin && 
+                                current.Booking.EndMin > other.Booking.StartMin)
+                            {
+                                overlapping.Add(other);
+                                allSourceAreas.AddRange(other.SourceAreaNames);
+                                processed.Add(j);
+                            }
+                        }
+                        
+                        // Create merged booking with combined time range
+                        var mergedStartMin = overlapping.Min(b => b.Booking.StartMin);
+                        var mergedEndMin = overlapping.Max(b => b.Booking.EndMin);
+                        
+                        // Create a new booking template with merged time (use first booking as base)
+                        // We'll create a wrapper that uses the first booking but with merged times
+                        var baseBooking = current.Booking;
+                        var mergedBookingTemplate = new BookingTemplate
+                        {
+                            Id = baseBooking.Id,
+                            ScheduleTemplateId = baseBooking.ScheduleTemplateId,
+                            AreaId = baseBooking.AreaId,
+                            GroupId = baseBooking.GroupId,
+                            DayOfWeek = baseBooking.DayOfWeek,
+                            StartMin = mergedStartMin,
+                            EndMin = mergedEndMin,
+                            Notes = baseBooking.Notes,
+                            Group = baseBooking.Group,
+                            Area = baseBooking.Area
+                        };
+                        
+                        var mergedBooking = new BookingWithGhost
+                        {
+                            Booking = mergedBookingTemplate,
+                            IsGhost = true,
+                            SourceAreaNames = allSourceAreas.Distinct().ToList()
+                        };
+                        
+                        // Format display text
+                        mergedBooking.DisplayText = FormatBlockingAreas(mergedBooking.SourceAreaNames);
+                        
+                        merged.Add(mergedBooking);
+                    }
+                    
+                    dayKvp.Value.Clear();
+                    dayKvp.Value.AddRange(merged);
+                }
+            }
+            
+            Console.WriteLine($"[ResourceView] Grouped bookings into {bookingsByArea.Count} areas");
+            Console.WriteLine($"[ResourceView] Created ghost bookings for {bookingsByAreaAndDay.Count} viewing areas");
+            
+            // Trigger UI update
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading bookings: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+    }
+    
+    private string FormatTime(int minutes)
+    {
+        var hours = minutes / 60;
+        var mins = minutes % 60;
+        return $"{hours:00}:{mins:00}";
+    }
+    
+    
+    private void ToggleArea(Guid areaId)
+    {
+        if (!expandedAreas.Add(areaId))
+        {
+            expandedAreas.Remove(areaId);
+        }
+        
+        // Save to UIState for persistence
+        UI.ResourceViewExpandedAreas = new HashSet<Guid>(expandedAreas);
+        
+        StateHasChanged();
+    }
+    
+    private void ToggleAllAreas()
+    {
+        if (AreAllExpanded())
+        {
+            // Collapse all
+            expandedAreas.Clear();
+        }
+        else
+        {
+            // Expand all areas that have children
+            expandedAreas.Clear();
+            foreach (var areaList in areasByPlace.Values)
+            {
+                foreach (var area in areaList)
+                {
+                    if (GetChildAreas(area.Id).Any())
+                    {
+                        expandedAreas.Add(area.Id);
+                    }
+                }
+            }
+        }
+        
+        // Save to UIState for persistence
+        UI.ResourceViewExpandedAreas = new HashSet<Guid>(expandedAreas);
+        
+        StateHasChanged();
+    }
+    
+    private bool AreAllExpanded()
+    {
+        if (places == null || areasByPlace.Count == 0) return false;
+        
+        // Count all areas that have children
+        int totalExpandableAreas = 0;
+        foreach (var areaList in areasByPlace.Values)
+        {
+            foreach (var area in areaList)
+            {
+                if (GetChildAreas(area.Id).Any())
+                {
+                    totalExpandableAreas++;
+                }
+            }
+        }
+        
+        // All are expanded if expandedAreas count equals total expandable areas
+        return totalExpandableAreas > 0 && expandedAreas.Count == totalExpandableAreas;
+    }
+    
+    private List<Area> GetRootAreas(Guid placeId)
+    {
+        if (!areasByPlace.ContainsKey(placeId)) return new List<Area>();
+        return areasByPlace[placeId].Where(a => a.ParentAreaId == null).OrderBy(a => a.Path).ToList();
+    }
+    
+    private List<Area> GetChildAreas(Guid parentAreaId)
+    {
+        return areasByPlace.Values
+            .SelectMany(a => a)
+            .Where(a => a.ParentAreaId == parentAreaId)
+            .OrderBy(a => a.Path)
+            .ToList();
+    }
+    
+    private RenderFragment RenderAreaTree(Area area, int indent)
+    {
+        var hasChildren = GetChildAreas(area.Id).Any();
+        var isExpanded = expandedAreas.Contains(area.Id);
+        
+        return builder =>
+        {
+            var sequence = 0;
+            
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "resource-area-row");
+            builder.AddAttribute(sequence++, "style", $"margin-left: {indent}px;");
+            
+            // Expand button (only if has children)
+            if (hasChildren)
+            {
+                builder.OpenElement(sequence++, "button");
+                builder.AddAttribute(sequence++, "class", "resource-expand-btn");
+                builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create(this, () => ToggleArea(area.Id)));
+                
+                builder.OpenElement(sequence++, "span");
+                builder.AddAttribute(sequence++, "class", "material-symbols-outlined");
+                builder.AddContent(sequence++, isExpanded ? "expand_more" : "chevron_right");
+                builder.CloseElement(); // span
+                
+                builder.CloseElement(); // button
+            }
+            else
+            {
+                // Empty space for alignment when no expand button
+                builder.OpenElement(sequence++, "span");
+                builder.AddAttribute(sequence++, "style", "width: 24px; display: inline-block;");
+                builder.CloseElement(); // span
+            }
+            
+            builder.OpenElement(sequence++, "span");
+            builder.AddAttribute(sequence++, "class", "resource-area-name");
+            builder.AddContent(sequence++, area.Name);
+            builder.CloseElement(); // span
+            
+            builder.CloseElement(); // div
+            
+            // Render children if expanded
+            if (isExpanded && hasChildren)
+            {
+                foreach (var child in GetChildAreas(area.Id))
+                {
+                    builder.AddContent(sequence++, RenderAreaTree(child, indent + 24));
+                }
+            }
+        };
+    }
+    
+    private RenderFragment RenderGridRowForArea(Area area)
+    {
+        return builder =>
+        {
+            var sequence = 0;
+            
+            builder.OpenElement(sequence++, "div");
+            builder.AddAttribute(sequence++, "class", "resource-grid-row");
+            builder.AddAttribute(sequence++, "data-area-id", area.Id.ToString());
+            
+            // Render 7 days
+            for (int day = 1; day <= 7; day++)
+            {
+                var dayCapture = day; // Capture for closure
+                builder.OpenElement(sequence++, "div");
+                builder.AddAttribute(sequence++, "class", "day-grid-column");
+                builder.AddAttribute(sequence++, "data-day", dayCapture.ToString());
+                builder.AddAttribute(sequence++, "data-area-id", area.Id.ToString());
+                builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnDayGridColumnClick(e, dayCapture, area.Id)));
+                
+                // Time grid cells for this day
+                for (int hour = 0; hour < 24; hour++)
+                {
+                    builder.OpenElement(sequence++, "div");
+                    builder.AddAttribute(sequence++, "class", "time-grid-cell");
+                    builder.AddAttribute(sequence++, "style", "width: 60px; border-right: 1px solid #d1d5db;");
+                    builder.AddAttribute(sequence++, "data-hour", hour.ToString());
+                    builder.CloseElement(); // time-grid-cell
+                }
+                
+                // Bookings for this area and day (including ghosts)
+                if (bookingsByAreaAndDay.ContainsKey(area.Id) && bookingsByAreaAndDay[area.Id].ContainsKey(day))
+                {
+                    var dayBookings = bookingsByAreaAndDay[area.Id][day].OrderBy(b => b.Booking.StartMin).ToList();
+                    foreach (var bookingWithGhost in dayBookings)
+                    {
+                        var booking = bookingWithGhost.Booking;
+                        var leftPos = booking.StartMin;
+                        var width = booking.EndMin - booking.StartMin;
+                        var isGhost = bookingWithGhost.IsGhost;
+                        var bookingClass = isGhost ? "resource-booking-block resource-booking-ghost" : "resource-booking-block resource-booking-primary";
+                        var contentClass = "resource-booking-content"; // Same structure for both
+                        
+                        // For ghost bookings: show blocking areas on line 1, time on line 2
+                        // For direct bookings: show group name on line 1, time on line 2
+                        var line1Text = isGhost 
+                            ? bookingWithGhost.DisplayText 
+                            : (booking.Group?.Name ?? "Okänd grupp");
+                        
+                        var tooltip = isGhost 
+                            ? $"Blockerande bokning från {string.Join(", ", bookingWithGhost.SourceAreaNames)}: {booking.Group?.Name ?? "Okänd grupp"} - {FormatTime(booking.StartMin)}-{FormatTime(booking.EndMin)}"
+                            : $"{booking.Group?.Name ?? "Okänd grupp"} - {FormatTime(booking.StartMin)}-{FormatTime(booking.EndMin)}";
+                        
+                        builder.OpenElement(sequence++, "div");
+                        builder.AddAttribute(sequence++, "class", bookingClass);
+                        builder.AddAttribute(sequence++, "style", $"left: {leftPos}px; width: {width}px;");
+                        builder.AddAttribute(sequence++, "title", tooltip);
+                        // Only add click handler for non-ghost bookings
+                        if (!isGhost)
+                        {
+                            builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnBookingBlockClick(booking, e)));
+                            builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
+                        }
+                        
+                        builder.OpenElement(sequence++, "div");
+                        builder.AddAttribute(sequence++, "class", contentClass);
+                        
+                        builder.OpenElement(sequence++, "div");
+                        builder.AddAttribute(sequence++, "class", "resource-booking-group");
+                        builder.AddContent(sequence++, line1Text);
+                        builder.CloseElement(); // resource-booking-group
+                        
+                        builder.OpenElement(sequence++, "div");
+                        builder.AddAttribute(sequence++, "class", "resource-booking-time");
+                        builder.AddContent(sequence++, $"{FormatTime(booking.StartMin)}-{FormatTime(booking.EndMin)}");
+                        builder.CloseElement(); // resource-booking-time
+                        
+                        builder.CloseElement(); // resource-booking-content
+                        builder.CloseElement(); // resource-booking-block
+                    }
+                }
+                
+                builder.CloseElement(); // day-grid-column
+            }
+            
+            builder.CloseElement(); // resource-grid-row
+        };
+    }
+    
+    private RenderFragment RenderGridRowForAreaTree(Area area)
+    {
+        var hasChildren = GetChildAreas(area.Id).Any();
+        var isExpanded = expandedAreas.Contains(area.Id);
+        
+        return builder =>
+        {
+            var sequence = 0;
+            
+            // Always render row for this area (matches list structure - if it's shown in list, show in grid)
+            builder.AddContent(sequence++, RenderGridRowForArea(area));
+            
+            // Recursively render children if expanded - this matches the list structure exactly
+            if (isExpanded && hasChildren)
+            {
+                foreach (var child in GetChildAreas(area.Id))
+                {
+                    builder.AddContent(sequence++, RenderGridRowForAreaTree(child));
+                }
+            }
+        };
+    }
+    
+    private string GetDayName(int dayOfWeek)
+    {
+        return dayOfWeek switch
+        {
+            1 => "Måndag",
+            2 => "Tisdag",
+            3 => "Onsdag",
+            4 => "Torsdag",
+            5 => "Fredag",
+            6 => "Lördag",
+            7 => "Söndag",
+            _ => "Okänd dag"
+        };
+    }
+    
+    // Helper class to hold booking with ghost flag
+    private class BookingWithGhost
+    {
+        public BookingTemplate Booking { get; set; } = null!;
+        public bool IsGhost { get; set; }
+        public List<string> SourceAreaNames { get; set; } = new(); // Multiple areas can block
+        public string DisplayText { get; set; } = string.Empty; // Formatted text for display
+    }
+    
+    private async Task OnBookingBlockClick(BookingTemplate booking, MouseEventArgs e)
+    {
+        Console.WriteLine($"[ResourceView] OnBookingBlockClick called for booking {booking.Id}");
+        // Only allow editing non-ghost bookings
+        if (booking.Id != Guid.Empty)
+        {
+            Console.WriteLine($"[ResourceView] Opening template edit modal for booking {booking.Id}");
+            await OnOpenTemplateEdit.InvokeAsync(booking.Id);
+        }
+        else
+        {
+            Console.WriteLine($"[ResourceView] Booking has empty ID, not opening modal");
+        }
+    }
+    
+    private async Task OnDayGridColumnClick(MouseEventArgs e, int day, Guid areaId)
+    {
+        Console.WriteLine($"[ResourceView] OnDayGridColumnClick called: day={day}, areaId={areaId}, offsetX={e.OffsetX}, offsetY={e.OffsetY}");
+        
+        // Calculate which hour was clicked based on offsetX
+        // Each hour is 60px wide
+        var clickedHour = (int)(e.OffsetX / 60);
+        if (clickedHour < 0) clickedHour = 0;
+        if (clickedHour >= 24) clickedHour = 23;
+        
+        // Calculate start time from hour
+        var startTime = $"{clickedHour:00}:00";
+        
+        Console.WriteLine($"[ResourceView] Opening booking modal: day={day}, startTime={startTime}, areaId={areaId}");
+        // Open modal with day, start time, and area
+        await OnOpenModal.InvokeAsync((day, startTime, areaId));
+    }
+    
+    // Check if an area is an ancestor of another area
+    private bool IsAncestorOf(Area potentialAncestor, Area potentialDescendant)
+    {
+        if (potentialAncestor == null || potentialDescendant == null) return false;
+        
+        var current = potentialDescendant;
+        while (current.ParentAreaId != null)
+        {
+            if (current.ParentAreaId == potentialAncestor.Id)
+                return true;
+            
+            // Get parent from cache or areasByPlace
+            Area? parent = null;
+            if (areaCache.TryGetValue(current.ParentAreaId.Value, out parent))
+            {
+                current = parent;
+            }
+            else
+            {
+                // Search in areasByPlace
+                foreach (var areaList in areasByPlace.Values)
+                {
+                    parent = areaList.FirstOrDefault(a => a.Id == current.ParentAreaId.Value);
+                    if (parent != null)
+                    {
+                        areaCache[parent.Id] = parent;
+                        current = parent;
+                        break;
+                    }
+                }
+                if (parent == null) break;
+            }
+        }
+        return false;
+    }
+    
+    // Check if a booking should be shown as ghost
+    private bool ShouldShowAsGhost(Area viewingArea, Area bookingArea)
+    {
+        if (viewingArea == null || bookingArea == null) return false;
+        if (viewingArea.Id == bookingArea.Id) return false; // Same area
+        
+        // Check if bookingArea is a child or descendant of viewingArea
+        if (IsAncestorOf(viewingArea, bookingArea)) return true;
+        
+        // Check if viewingArea is a child or descendant of bookingArea
+        if (IsAncestorOf(bookingArea, viewingArea)) return true;
+        
+        return false; // Siblings or unrelated
+    }
+    
+    // Format blocking areas text (e.g. "A1, A2, A4" or "A1, A2 +1")
+    private string FormatBlockingAreas(List<string> areaNames)
+    {
+        if (areaNames.Count == 0) return string.Empty;
+        if (areaNames.Count == 1) return areaNames[0];
+        
+        // Try full format first: "A1, A2, A4" (comma-separated, no "och")
+        var fullText = string.Join(", ", areaNames);
+        
+        // Estimate if it fits (rough estimate: ~12 chars per area name + ", ")
+        var estimatedLength = areaNames.Sum(a => a.Length) + (areaNames.Count - 1) * 2; // ", "
+        
+        if (estimatedLength <= 25) // Rough estimate for fitting
+        {
+            return fullText;
+        }
+        
+        // Truncate: show as many as possible, then "+X" for the rest
+        // Try to fit at least 2 names before truncating
+        var shownCount = 2;
+        var shownLength = areaNames.Take(shownCount).Sum(a => a.Length) + (shownCount - 1) * 2; // ", "
+        
+        // If even 2 names don't fit, just show first + count
+        if (shownLength > 20)
+        {
+            var firstArea = areaNames[0];
+            var additionalCount = areaNames.Count - 1;
+            return $"{firstArea} +{additionalCount}";
+        }
+        
+        // Try to fit more names
+        while (shownCount < areaNames.Count)
+        {
+            var testLength = areaNames.Take(shownCount + 1).Sum(a => a.Length) + shownCount * 2; // ", "
+            if (testLength > 25) break;
+            shownCount++;
+        }
+        
+        var shown = areaNames.Take(shownCount);
+        var remaining = areaNames.Count - shownCount;
+        return string.Join(", ", shown) + $" +{remaining}";
+    }
+}
+
+<style>
+    .resource-view-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+    
+    
+    .resource-time-axis {
+        display: flex;
+        min-width: 10080px; /* 7 days * 24 hours * 60px */
+    }
+    
+    .day-column-header {
+        display: flex;
+        flex-direction: column;
+        min-width: 1440px; /* 24 hours * 60px */
+        border-right: 1px solid #d1d5db;
+    }
+    
+    .day-name-header {
+        text-align: left;
+        font-weight: 600;
+        color: #1f2937;
+        font-size: 12px;
+        padding: 2px 8px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        box-sizing: border-box;
+    }
+    
+    .day-time-header {
+        display: flex;
+        height: 20px;
+        align-items: center;
+    }
+    
+    .time-slot-header {
+        flex-shrink: 0;
+        text-align: center;
+        font-size: 11px;
+        color: #666;
+        font-weight: 500;
+        border-right: 1px solid #d1d5db;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+    
+    .resource-view-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden; /* Don't scroll here - children scroll */
+        position: relative;
+    }
+    
+    .resource-scroll-container {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+        height: 100%;
+        width: 100%;
+        position: relative;
+        align-items: flex-start; /* Align children to top */
+        overflow-y: auto; /* GEMENSAM vertikal scroll här */
+        overflow-x: hidden; /* Ingen horisontell scroll - barnet hanterar det */
+    }
+    
+    .resource-list-column {
+        width: 300px;
+        min-width: 300px;
+        background: white;
+        border-right: 1px solid #d1d5db;
+        position: sticky;
+        left: 0; /* Sticky horisontellt - hänger kvar vänster när grid scrollar horisontellt */
+        z-index: 30; /* Högre än grid-wrapper så hela kolumnen ligger ovanför */
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+        align-self: flex-start; /* Don't stretch */
+        overflow: visible; /* Visible för att låta sticky header fungera */
+        align-items: stretch;
+    }
+    
+    .resource-list-column-header {
+        padding: 8px 12px;
+        border-bottom: 1px solid #e4e4e4;
+        position: sticky;
+        top: 0; /* Sticky vertikalt - hänger kvar högst upp när scrollar vertikalt i resource-scroll-container */
+        z-index: 35; /* Högre än time-axis-header (z-index: 15) så den ligger ovanför och tidsheadern scrollar bakom */
+        background: white;
+        height: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-sizing: border-box;
+        flex-shrink: 0; /* Don't shrink */
+        /* width kommer från parent (resource-list-column som är 300px) */
+        /* left sticky kommer från parent (resource-list-column har position: sticky; left: 0) */
+    }
+    
+    .resource-place-header {
+        font-weight: 600;
+        color: #1f2937;
+        font-size: 14px;
+    }
+    
+    .resource-expand-all-btn {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6b7280;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+    }
+    
+    .resource-expand-all-btn:hover {
+        background-color: #f3f4f6;
+        color: #1f2937;
+    }
+    
+    .resource-expand-all-btn .material-symbols-outlined {
+        font-size: 20px;
+    }
+    
+    .resource-list-column::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 1px;
+        background: repeating-linear-gradient(
+            to bottom,
+            transparent,
+            transparent 39px,
+            #d1d5db 39px,
+            #d1d5db 40px
+        );
+        pointer-events: none;
+    }
+    
+    .resource-place-row,
+    .resource-area-row,
+    .resource-place-area-row {
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        margin: 0;
+        border-bottom: 1px solid #d1d5db;
+        cursor: pointer;
+        height: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        box-sizing: border-box;
+        line-height: 40px;
+    }
+    
+    .resource-place-row:hover,
+    .resource-area-row:hover,
+    .resource-place-area-row:hover {
+        background: #f8fafc;
+    }
+    
+    .resource-place-area-row {
+        font-weight: 500;
+    }
+    
+    .resource-expand-btn {
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        color: #666;
+    }
+    
+    .resource-expand-btn:hover {
+        color: #333;
+    }
+    
+    .resource-place-name {
+        font-weight: 600;
+        color: #1f2937;
+        margin-left: 8px;
+    }
+    
+    .resource-area-name {
+        color: #374151;
+        margin-left: 8px;
+    }
+    
+    
+    .resource-grid-wrapper {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        min-height: 0;
+        align-self: flex-start; /* Don't stretch */
+        min-width: 0; /* Allow flex child to shrink */
+        width: 100%; /* Take full width */
+        overflow: visible; /* Visible för att låta sticky header fungera - parent scrollar vertikalt */
+    }
+    
+    .resource-time-axis-header {
+        display: flex;
+        flex-direction: column;
+        border-bottom: 1px solid #e4e4e4;
+        background: white;
+        position: sticky;
+        top: 0; /* Sticky vertically - stays at top when scrolling vertically in resource-scroll-container */
+        z-index: 15; /* Högre z-index för att vara ovanpå innehåll */
+        height: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        flex-shrink: 0; /* Don't shrink */
+        width: 10080px; /* Exact width to match grid - 7 days * 24 hours * 60px */
+        align-self: flex-start; /* Don't stretch */
+        /* Horizontal position synced via JavaScript to match grid scroll */
+    }
+    
+    .resource-scroll-container > .resource-time-axis-header {
+        /* Header is now direct child of scroll container, so sticky works */
+        margin-left: 300px; /* Offset for list column width */
+    }
+    
+    .resource-time-axis-day-names {
+        display: flex;
+        height: 20px;
+        min-height: 20px;
+        max-height: 20px;
+        width: 10080px; /* Exact width - 7 days * 24 hours * 60px */
+    }
+    
+    .resource-time-axis-time-slots {
+        display: flex;
+        height: 20px;
+        min-height: 20px;
+        max-height: 20px;
+        width: 10080px; /* Exact width - 7 days * 24 hours * 60px */
+    }
+    
+    .resource-time-axis {
+        display: flex;
+        min-width: 10080px; /* 7 days * 24 hours * 60px */
+    }
+    
+    .resource-grid-column {
+        flex: 1;
+        overflow-x: auto; /* Horisontell scroll - behålls */
+        overflow-y: hidden; /* Ingen egen vertikal scroll - parent scrollar */
+        scroll-behavior: smooth;
+        position: relative;
+        min-height: 0;
+        align-self: flex-start; /* Don't stretch */
+        width: 100%; /* Take full width */
+        min-width: 0; /* Allow to shrink below content width */
+    }
+    
+    .resource-grid-column::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    .resource-grid-column::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    
+    .resource-grid-column::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    .resource-grid-column::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    
+    .resource-time-grid {
+        width: 10080px; /* Exact width to match header - 7 days * 24 hours * 60px */
+        position: relative;
+    }
+    
+    .resource-grid-row {
+        position: relative;
+        height: 40px;
+        min-height: 40px;
+        max-height: 40px;
+        border-bottom: 1px solid #d1d5db;
+        display: flex;
+        align-items: stretch;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+    
+    .day-grid-column {
+        position: relative;
+        min-width: 1440px; /* 24 hours * 60px */
+        height: 100%;
+        display: flex;
+        border-right: 1px solid #d1d5db;
+        cursor: pointer; /* Show pointer cursor to indicate clickability */
+    }
+    
+    .time-grid-cell {
+        flex-shrink: 0;
+        height: 100%;
+        position: relative; /* Ensure cells can receive clicks */
+        z-index: 0; /* Below booking blocks */
+        pointer-events: none; /* Let parent handle clicks */
+    }
+    
+    .resource-booking-block {
+        position: absolute;
+        top: 2px;
+        bottom: 2px;
+        border-radius: 4px;
+        padding: 2px 4px;
+        overflow: hidden;
+        pointer-events: auto; /* Ensure booking blocks can receive clicks */
+    }
+    
+    .resource-booking-primary {
+        background: #3b82f6;
+        color: white;
+        z-index: 10;
+        cursor: pointer;
+    }
+    
+    .resource-booking-ghost {
+        background: #e2e8f0; /* slate-200 */
+        border: 1px dashed #9ca3af; /* slate-400 */
+        color: #334155; /* slate-700 */
+        opacity: 0.85;
+        z-index: 1; /* Below primary bookings */
+        cursor: default; /* Ghost bookings are not clickable */
+        pointer-events: none; /* Allow clicks to pass through to grid cells below */
+    }
+    
+    .resource-booking-block:hover {
+        opacity: 0.9;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .resource-booking-content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        justify-content: center;
+    }
+    
+    .resource-ghost-content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        justify-content: center;
+        gap: 2px;
+    }
+    
+    .resource-booking-group {
+        font-weight: 600;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .resource-booking-time {
+        font-size: 10px;
+        opacity: 0.9;
+        white-space: nowrap;
+    }
+    
+    .resource-ghost-source {
+        font-size: 9px;
+        opacity: 0.8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+

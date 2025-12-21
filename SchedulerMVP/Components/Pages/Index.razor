@@ -1,3 +1,4 @@
+@implements IDisposable
 @page "/"
 @using SchedulerMVP.Data.Entities
 @using Microsoft.EntityFrameworkCore
@@ -12,12 +13,23 @@
 
 <div class="sa-app">
     <div class="sa-shell-new">
-        <main class="sa-panel sa-center-new">
-            <WeekGrid OnOpenModal="OpenBookingModal" OnOpenCalendarBookingEdit="OpenCalendarBookingEditModal" OnOpenTemplateEdit="OpenTemplateEditModal" />
+        <main class="sa-panel @(UI.IsResourceView ? "sa-center-full" : "sa-center-new")">
+            <ViewToggleBar />
+            @if (UI.IsResourceView)
+            {
+                <ResourceView OnOpenModal="OpenBookingModalFromResource" OnOpenTemplateEdit="OpenTemplateEditModal" />
+            }
+            else
+            {
+                <WeekGrid OnOpenModal="OpenBookingModal" OnOpenCalendarBookingEdit="OpenCalendarBookingEditModal" OnOpenTemplateEdit="OpenTemplateEditModal" />
+            }
         </main>
-        <aside class="sa-panel sa-right-new">
-            <CombinedSidebar />
-        </aside>
+        @if (!UI.IsResourceView)
+        {
+            <aside class="sa-panel sa-right-new">
+                <CombinedSidebar />
+            </aside>
+        }
     </div>
 </div>
 
@@ -70,91 +82,103 @@
     
     protected override void OnInitialized()
     {
-        UI.OnChanged += StateHasChanged;
+        UI.OnChanged += HandleUIStateChanged;
         
-        // CRITICAL: Check query param early to ensure modal opens on navigation
-        try
-        {
-            var uri = new Uri(Navigation.Uri);
-            var query = QueryHelpers.ParseQuery(uri.Query);
-            if (query.TryGetValue("openPlace", out var val) && val == "1")
-            {
-                UI.ShouldOpenPlaceCreateModal = true;
-                UI.RaiseChanged();
-            }
-        }
-        catch { }
+        // ...
+    }
+
+    private void HandleUIStateChanged()
+    {
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        UI.OnChanged -= HandleUIStateChanged;
     }
     
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            // PERF: Preload critical data in background for faster subsequent clicks
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    loadingMessage = "Läser in platser...";
-                    await InvokeAsync(StateHasChanged);
-                    
-                    // Preload all places and areas
-                    var places = await PlaceService.GetPlacesAsync();
-                    foreach (var place in places.Take(3)) // Preload first 3 places' areas
-                    {
-                        await PlaceService.GetAreasForPlaceAsync(place.Id);
-                    }
-                    
-                    loadingMessage = "Läser in veckomallar...";
-                    await InvokeAsync(StateHasChanged);
-                    
-                    // Preload templates
-                    await TemplateService.GetTemplatesAsync();
-                    
-                    loadingMessage = "Nästan klart...";
-                    await InvokeAsync(StateHasChanged);
-                    
-                    // Small delay for smooth transition
-                    await Task.Delay(300);
-                    
-                    // Hide loading screen
-                    isInitialLoading = false;
-                    await InvokeAsync(StateHasChanged);
-                }
-                catch
-                {
-                    // On error, just hide loading screen
-                    isInitialLoading = false;
-                    await InvokeAsync(StateHasChanged);
-                }
-            });
-
-            // Query param trigger for opening place modal after hard navigation
-            try
-            {
-                var uri = new Uri(Navigation.Uri);
-                var query = QueryHelpers.ParseQuery(uri.Query);
-                if (query.TryGetValue("openPlace", out var val) && val == "1")
-                {
-                    UI.ShouldOpenPlaceCreateModal = true;
-                    UI.RaiseChanged();
-                }
-            }
-            catch { }
-
+            // ...
+            
             // Watch for modal open requests
-            UI.OnChanged += async () =>
-            {
-                if (UI.ShouldOpenBookingModal)
-                {
-                    // Default values when opening from UI state
-                    await OpenBookingModal((1, "08:00"));
-                }
-            };
+            UI.OnChanged += HandleModalOpenRequests;
+        }
+    }
+
+    private async void HandleModalOpenRequests()
+    {
+        // Don't open booking modal if template edit modal or calendar edit modal is open
+        if (UI.ShouldOpenBookingModal && !templateEditOpen && !calendarEditOpen)
+        {
+            // Default values when opening from UI state
+            await OpenBookingModal((1, "08:00"));
         }
     }
     
     private bool isOpeningBookingModal = false; // Prevent double-clicks
+    
+    private async Task OpenBookingModalFromResource((int dayOfWeek, string startTime, Guid areaId) data)
+    {
+        // Prevent double-clicks
+        if (isOpeningBookingModal) return;
+        isOpeningBookingModal = true;
+        
+        try
+        {
+            // Load area and place data FIRST (synchronously) before opening modal
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var area = await db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == data.areaId);
+            
+            if (area?.Place == null)
+            {
+                Console.WriteLine($"Area or Place not found for areaId: {data.areaId}");
+                isOpeningBookingModal = false;
+                return;
+            }
+            
+            // Set area and place BEFORE opening modal
+            selectedArea = area;
+            selectedPlace = area.Place;
+            
+            // Set prefilled values
+            prefilledDay = data.dayOfWeek;
+            prefilledStartTime = data.startTime;
+            
+            // Calculate end time based on place's default duration
+            if (selectedPlace.DefaultDurationMin > 0)
+            {
+                var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
+                var endMinutes = startMinutes + selectedPlace.DefaultDurationMin;
+                var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
+                prefilledEndTime = endTime.ToString("HH:mm");
+            }
+            else
+            {
+                // Default to 1 hour if no default duration
+                var startTime = TimeOnly.Parse(data.startTime);
+                var endTime = startTime.AddHours(1);
+                prefilledEndTime = endTime.ToString("HH:mm");
+            }
+            
+            // Set selected area ID
+            UI.SelectedAreaId = data.areaId;
+            
+            // Now open modal with all data ready
+            UI.ShouldOpenBookingModal = true;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error opening booking modal from resource: {ex.Message}");
+        }
+        finally
+        {
+            isOpeningBookingModal = false;
+        }
+    }
     
     private async Task OpenBookingModal((int dayOfWeek, string startTime) data)
     {
@@ -372,6 +396,8 @@
     {
         try
         {
+            // Ensure booking modal is closed when opening template edit modal
+            UI.ShouldOpenBookingModal = false;
             templateEditId = templateId;
             templateEditOpen = true;
             StateHasChanged();
@@ -384,6 +410,8 @@
     
     private void CloseTemplateEditModal()
     {
+        // Ensure booking modal doesn't open when closing template edit modal
+        UI.ShouldOpenBookingModal = false;
         templateEditOpen = false;
         templateEditId = null;
         StateHasChanged();
@@ -391,10 +419,18 @@
     
     private async Task RefreshAfterTemplateEdit()
     {
+        // CRITICAL: Ensure booking modal doesn't open when closing template edit modal
+        // Set this BEFORE closing the modal and raising changed events
+        UI.ShouldOpenBookingModal = false;
+        
         templateEditOpen = false;
         templateEditId = null;
         
-        // Notify WeekGrid to refresh after template edit
+        // Force a state change first to ensure ShouldOpenBookingModal is cleared
+        StateHasChanged();
+        await Task.Delay(10); // Small delay to ensure state is updated
+        
+        // Now notify WeekGrid to refresh after template edit
         UI.ForceRefresh = true;
         UI.RaiseChanged();
         

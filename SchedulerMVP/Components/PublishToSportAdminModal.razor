@@ -1,0 +1,329 @@
+@using SchedulerMVP.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
+@inject SchedulerMVP.Services.ICalendarBookingService CalendarBookingService
+@inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Services.UserContextService UserContext
+@inject SchedulerMVP.Services.ToastService ToastService
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="CloseModal"></div>
+    
+    <div class="bm-modal" @onclick:stopPropagation="true">
+        <div class="bm-header">
+            <h2 class="bm-title">Publicera till närvarokorten</h2>
+        </div>
+        
+        @* Date Range Selection *@
+        <div class="bm-field">
+            <label class="bm-label">Datumintervall</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                    <label class="bm-label" style="font-size: 11px; margin-bottom: 4px;">Från</label>
+                    <input type="date" @bind="StartDate" @bind:event="onchange" @bind:after="OnDateRangeChanged" class="bm-input" />
+                </div>
+                <div>
+                    <label class="bm-label" style="font-size: 11px; margin-bottom: 4px;">Till</label>
+                    <input type="date" @bind="EndDate" @bind:event="onchange" @bind:after="OnDateRangeChanged" class="bm-input" />
+                </div>
+            </div>
+        </div>
+        
+        @* Booking Counts *@
+        @if (StartDate.HasValue && EndDate.HasValue && StartDate <= EndDate)
+        {
+            <div class="bm-field">
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f9fafb; border-radius: 6px;">
+                        <span style="font-size: 14px; color: #374151;">@UnpublishedCount opublicerade bokningar</span>
+                    </div>
+                    @if (PublishedCount > 0)
+                    {
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0fdf4; border-radius: 6px;">
+                            <span class="material-symbols-outlined" style="font-size: 18px; color: #16a34a;">check_circle</span>
+                            <span style="font-size: 14px; color: #374151;">@PublishedCount publicerade bokningar</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        
+        @* Action Buttons *@
+        <div class="bm-actions">
+            <button type="button" @onclick="CloseModal" class="btn-outline">Avbryt</button>
+            <button type="button" @onclick="PublishBookings" class="btn-primary" disabled="@(!CanPublish())">Publicera till SportAdmin</button>
+        </div>
+    </div>
+    
+    <style>
+        .bm-modal {
+            position: fixed;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff;
+            color: #0f1720;
+            padding: 28px 28px 0 28px;
+            z-index: 4000;
+            border: 1px solid #e6e7ea;
+            border-radius: 12px;
+            width: 480px;
+            box-shadow: 0 8px 28px rgba(16,24,40,.18);
+            max-height: 80vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .bm-header {
+            margin-bottom: 8px;
+        }
+        
+        .bm-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0f1720;
+            margin: 0;
+        }
+        
+        .bm-field {
+            margin-bottom: 16px;
+        }
+        
+        .bm-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+        
+        .bm-input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 4px;
+            border: 1px solid #dcdee2;
+            background-color: #f3f5f7;
+            box-shadow: 0 2px 8px 0 rgba(0,0,0,0.02);
+            font-size: 12px;
+            font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            box-sizing: border-box;
+            min-height: 40px;
+        }
+        
+        .bm-input[type="date"] {
+            padding: 10px 12px;
+        }
+        
+        .bm-input[type="date"]::-webkit-calendar-picker-indicator {
+            opacity: 1;
+            cursor: pointer;
+        }
+        
+        .bm-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            background: #fff;
+            border-top: 1px solid #e6e7ea;
+            padding-top: 12px;
+            padding-bottom: 28px;
+            z-index: 10;
+            flex-shrink: 0;
+            margin-top: 8px;
+        }
+        
+        .btn-outline {
+            padding: 10px 20px;
+            border: 1px solid #dcdee2;
+            background: #fff;
+            color: #374151;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-outline:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+        
+        .btn-primary {
+            padding: 10px 20px;
+            border: none;
+            background: #1761A5;
+            color: #fff;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #0f4a7a;
+        }
+        
+        .btn-primary:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    
+    private DateOnly? StartDate { get; set; }
+    private DateOnly? EndDate { get; set; }
+    private int UnpublishedCount { get; set; }
+    private int PublishedCount { get; set; }
+    private bool isLoading = false;
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            // Initialize with current week if in calendar view
+            if (UI.IsCalendarViewMode)
+            {
+                var weekStart = UI.CurrentWeekStart;
+                StartDate = weekStart;
+                EndDate = weekStart.AddDays(6);
+            }
+            else
+            {
+                var today = DateOnly.FromDateTime(DateTime.Today);
+                StartDate = today;
+                EndDate = today;
+            }
+            
+            await LoadBookingCountsAsync();
+        }
+    }
+    
+    private async Task OnDateRangeChanged()
+    {
+        await LoadBookingCountsAsync();
+    }
+    
+    private async Task LoadBookingCountsAsync()
+    {
+        if (!StartDate.HasValue || !EndDate.HasValue || StartDate > EndDate)
+        {
+            UnpublishedCount = 0;
+            PublishedCount = 0;
+            return;
+        }
+        
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var isAdmin = await UserContext.IsAdminAsync();
+            
+            var bookingsQuery = db.CalendarBookings
+                .Where(b => b.Date >= StartDate.Value && b.Date <= EndDate.Value)
+                .Include(b => b.Group)
+                .AsQueryable();
+            
+            // Filter by user if not admin
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                bookingsQuery = bookingsQuery.Where(b => b.Group != null && b.Group.UserId == userId);
+            }
+            
+            var bookings = await bookingsQuery.ToListAsync();
+            
+            UnpublishedCount = bookings.Count(b => !b.Published);
+            PublishedCount = bookings.Count(b => b.Published);
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading booking counts: {ex.Message}");
+        }
+    }
+    
+    private bool CanPublish()
+    {
+        return StartDate.HasValue && EndDate.HasValue && StartDate <= EndDate && UnpublishedCount > 0 && !isLoading;
+    }
+    
+    private async Task PublishBookings()
+    {
+        if (!CanPublish()) return;
+        
+        isLoading = true;
+        StateHasChanged();
+        
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            var isAdmin = await UserContext.IsAdminAsync();
+            
+            var bookingsQuery = db.CalendarBookings
+                .Where(b => b.Date >= StartDate.Value && b.Date <= EndDate.Value && !b.Published)
+                .Include(b => b.Group)
+                .AsQueryable();
+            
+            // Filter by user if not admin
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                bookingsQuery = bookingsQuery.Where(b => b.Group != null && b.Group.UserId == userId);
+            }
+            
+            var bookingsToPublish = await bookingsQuery.ToListAsync();
+            var publishedCount = bookingsToPublish.Count;
+            
+            var publishTime = DateTime.UtcNow;
+            foreach (var booking in bookingsToPublish)
+            {
+                booking.Published = true;
+                booking.PublishedAt = publishTime;
+            }
+            
+            await db.SaveChangesAsync();
+            
+            // Show success toast
+            ToastService.ShowSuccess($"{publishedCount} bokningar publicerade till SportAdmin");
+            
+            // Close modal
+            await CloseModal();
+            
+            // Trigger UI refresh
+            UI.ForceRefresh = true;
+            UI.RaiseChanged();
+            
+            isLoading = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error publishing bookings: {ex.Message}");
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task CloseModal()
+    {
+        IsOpen = false;
+        await OnClose.InvokeAsync();
+    }
+}
+
+
+
+
+

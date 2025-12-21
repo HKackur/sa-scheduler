@@ -12,6 +12,7 @@
     <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="CloseModal"></div>
     
     <div class="bm-modal" @onclick="CloseAreaDropdown">
+        <div style="flex: 1; overflow-y: auto;">
         <div class="bm-header">
             <h2 class="bm-title">Skapa bokning</h2>
         </div>
@@ -155,23 +156,53 @@
             </div>
         }
 
-        @* Time Selection *@
-        <div class="bm-field" @onclick:stopPropagation="true">
-            <div class="bm-time-row">
-                <div>
-                    <label class="bm-label">Starttid</label>
-                    <div class="bm-select-wrap">
-                        <input type="time" value="@StartTime" @onchange="OnStartTimeChanged" @onclick:stopPropagation="true" class="bm-input" />
+        @* Time Selection - visa olika tider per dag om flera dagar är valda *@
+        @if (!UI.IsCalendarViewMode && SelectedDays.Count > 1)
+        {
+            @foreach (var day in GetSortedSelectedDays())
+            {
+                var dayName = GetDayName(day);
+                var (dayStartTime, dayEndTime) = DayTimes.ContainsKey(day) ? DayTimes[day] : (StartTime, EndTime);
+                <div class="bm-field" @onclick:stopPropagation="true">
+                    <div class="bm-time-row">
+                        <div>
+                            <label class="bm-label">
+                                <span style="font-weight: 600; color: #1f2937;">@dayName</span> Starttid
+                            </label>
+                            <div class="bm-select-wrap">
+                                <input type="time" value="@dayStartTime" @onchange="(e) => OnDayStartTimeChanged(day, e)" @onclick:stopPropagation="true" class="bm-input" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="bm-label">Sluttid</label>
+                            <div class="bm-select-wrap">
+                                <input type="time" value="@dayEndTime" @onchange="(e) => OnDayEndTimeChanged(day, e)" @onclick:stopPropagation="true" class="bm-input" />
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <label class="bm-label">Sluttid</label>
-                    <div class="bm-select-wrap">
-                        <input type="time" value="@EndTime" @onchange="OnEndTimeChanged" @onclick:stopPropagation="true" class="bm-input" />
+            }
+        }
+        else
+        {
+            @* Original time selection när bara en dag är vald eller kalendervy *@
+            <div class="bm-field" @onclick:stopPropagation="true">
+                <div class="bm-time-row">
+                    <div>
+                        <label class="bm-label">Starttid</label>
+                        <div class="bm-select-wrap">
+                            <input type="time" value="@StartTime" @onchange="OnStartTimeChanged" @onclick:stopPropagation="true" class="bm-input" />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="bm-label">Sluttid</label>
+                        <div class="bm-select-wrap">
+                            <input type="time" value="@EndTime" @onchange="OnEndTimeChanged" @onclick:stopPropagation="true" class="bm-input" />
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        }
         
         @if (conflictMessages.Count > 0)
         {
@@ -216,7 +247,7 @@
             </div>
         }
         }
-
+        </div>
         @* Action Buttons *@
         <div class="bm-actions" @onclick:stopPropagation="true">
             <button type="button" @onclick="CloseModal" @onclick:stopPropagation="true" class="btn-outline">Avbryt</button>
@@ -228,7 +259,12 @@
         /* ============================================
            BOOKING MODAL - STRUCTURE
            ============================================ */
-        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px 28px 0 28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;width:480px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px 28px 0 28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;width:480px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
+        
+        .bm-header{margin-bottom:20px}
+        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
+        .bm-field{margin-bottom:16px}
+        .bm-label{display:block;font-size:12px;font-weight:500;color:#374151;margin-bottom:6px}
         
         /* ============================================
            BOOKING MODAL - INPUT STYLING
@@ -283,6 +319,7 @@
         /* ============================================
            BOOKING MODAL - ACTIONS
            ============================================ */
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10;flex-shrink:0;margin-top:8px}
         .bm-option-unavailable{color:#9ca3af;background-color:#f9fafb}
     </style>
 }
@@ -299,6 +336,7 @@
     [Parameter] public int? PrefilledDay { get; set; }
     
     private List<int> SelectedDays { get; set; } = new();
+    private Dictionary<int, (string start, string end)> DayTimes { get; set; } = new(); // Tider per veckodag
     private Guid? SelectedGroupId { get; set; }
     private DateTime SelectedDate { get; set; } = DateTime.Today;
     private string StartTime { get; set; } = "08:00";
@@ -398,6 +436,7 @@
                 
                 // Reset selected days
                 SelectedDays.Clear();
+                DayTimes.Clear();
                 
                 // Pre-fill day if provided (Weekplanner mode)
                 if (PrefilledDay.HasValue && PrefilledDay.Value >= 1 && PrefilledDay.Value <= 7)
@@ -789,14 +828,81 @@
             if (isChecked)
             {
                 if (!SelectedDays.Contains(day))
+                {
                     SelectedDays.Add(day);
+                    // Initiera med nuvarande tider om dagen inte redan har tider
+                    if (!DayTimes.ContainsKey(day))
+                    {
+                        DayTimes[day] = (StartTime, EndTime);
+                    }
+                }
             }
             else
             {
                 SelectedDays.Remove(day);
+                DayTimes.Remove(day);
             }
             // Check all areas first, then check conflicts (conflict check also updates availability for selected area)
             // StateHasChanged() is called by CheckAllAreasAvailabilityAsync() and RecheckConflictsAsync()
+            await CheckAllAreasAvailabilityAsync();
+            await RecheckConflictsAsync();
+        }
+    }
+    
+    // Hjälpmetod för att få sorterade valda dagar (1=Måndag, 2=Tisdag, etc.)
+    private List<int> GetSortedSelectedDays()
+    {
+        return SelectedDays.OrderBy(d => d).ToList();
+    }
+    
+    // Uppdatera starttid för en specifik dag - automatiskt uppdatera sluttid med samma logik som OnStartTimeChanged
+    private async Task OnDayStartTimeChanged(int day, ChangeEventArgs e)
+    {
+        if (e.Value != null)
+        {
+            var newStartTime = e.Value.ToString()!;
+            
+            // Om dagen inte finns i DayTimes ännu, initiera den
+            if (!DayTimes.ContainsKey(day))
+            {
+                DayTimes[day] = (StartTime, EndTime);
+            }
+            
+            var (oldStartTime, oldEndTime) = DayTimes[day];
+            
+            // Beräkna nuvarande längd för denna dag
+            var dayDuration = GetDurationInMinutes(oldStartTime, oldEndTime);
+            
+            // Uppdatera sluttiden med samma längd
+            var newEndTime = AddMinutesToTime(newStartTime, dayDuration);
+            
+            DayTimes[day] = (newStartTime, newEndTime);
+            StateHasChanged(); // Uppdatera UI först
+            
+            // Uppdatera konfliktkontroll när tider ändras
+            await CheckAllAreasAvailabilityAsync();
+            await RecheckConflictsAsync();
+        }
+    }
+    
+    // Uppdatera sluttid för en specifik dag - uppdatera duration (samma logik som OnEndTimeChanged)
+    private async Task OnDayEndTimeChanged(int day, ChangeEventArgs e)
+    {
+        if (e.Value != null)
+        {
+            var newEndTime = e.Value.ToString()!;
+            
+            // Om dagen inte finns i DayTimes ännu, initiera den
+            if (!DayTimes.ContainsKey(day))
+            {
+                DayTimes[day] = (StartTime, EndTime);
+            }
+            
+            var (start, _) = DayTimes[day];
+            DayTimes[day] = (start, newEndTime);
+            StateHasChanged(); // Uppdatera UI först
+            
+            // Uppdatera konfliktkontroll när tider ändras
             await CheckAllAreasAvailabilityAsync();
             await RecheckConflictsAsync();
         }
@@ -925,6 +1031,16 @@
                 var selectedDaysCopy = SelectedDays.ToList();
                 foreach (var day in selectedDaysCopy)
                 {
+                    // Hämta tider för denna dag, eller använd standardtider
+                    var (dayStartTime, dayEndTime) = DayTimes.ContainsKey(day) 
+                        ? DayTimes[day] 
+                        : (StartTime, EndTime);
+                    
+                    var dayStartParts = dayStartTime.Split(':');
+                    var dayEndParts = dayEndTime.Split(':');
+                    var dayStartMin = int.Parse(dayStartParts[0]) * 60 + int.Parse(dayStartParts[1]);
+                    var dayEndMin = int.Parse(dayEndParts[0]) * 60 + int.Parse(dayEndParts[1]);
+                    
                     // Normalize weekday into 1-7 (Mon-Sun)
                     var normalizedDay = day;
                     if (normalizedDay < 1) normalizedDay = 1;
@@ -936,8 +1052,8 @@
                         AreaId = targetArea.Id,
                         GroupId = SelectedGroupId.Value,
                         DayOfWeek = normalizedDay,
-                        StartMin = startMin,
-                        EndMin = endMin,
+                        StartMin = dayStartMin,
+                        EndMin = dayEndMin,
                         Notes = string.IsNullOrWhiteSpace(Notes) ? null : Notes,
                         ContactName = ContactName,
                         ContactPhone = ContactPhone,
@@ -946,7 +1062,7 @@
                     template.CreatedAt = DateTime.UtcNow;
 
                     db.BookingTemplates.Add(template);
-                    // Console.WriteLine($"Created booking template for weekday {normalizedDay}");
+                    // Console.WriteLine($"Created booking template for weekday {normalizedDay} with time {dayStartTime}-{dayEndTime}");
                 }
             }
 
@@ -1047,7 +1163,17 @@
             var selectedDaysCopy = SelectedDays.ToList();
             foreach (var d in selectedDaysCopy.OrderBy(d => d))
             {
-                var conflicts = await ConflictService.CheckAreaConflictsAsync(currentAreaId.Value, d, s, e, null, UI.SelectedTemplateId.Value);
+                // Hämta tider för denna dag, eller använd standardtider
+                var (dayStartTime, dayEndTime) = DayTimes.ContainsKey(d) 
+                    ? DayTimes[d] 
+                    : (StartTime, EndTime);
+                
+                var dayStartParts = dayStartTime.Split(':');
+                var dayEndParts = dayEndTime.Split(':');
+                var dayStartMin = int.Parse(dayStartParts[0]) * 60 + int.Parse(dayStartParts[1]);
+                var dayEndMin = int.Parse(dayEndParts[0]) * 60 + int.Parse(dayEndParts[1]);
+                
+                var conflicts = await ConflictService.CheckAreaConflictsAsync(currentAreaId.Value, d, dayStartMin, dayEndMin, null, UI.SelectedTemplateId.Value);
                 if (conflicts.Count > 0)
                 {
                     hasConflicts = true;
@@ -1124,6 +1250,7 @@
             {
                 SelectedDays.Clear();
             }
+            DayTimes.Clear();
             SelectedGroupId = null;
             SelectedPlaceId = null;
             SelectedAreaId = null;

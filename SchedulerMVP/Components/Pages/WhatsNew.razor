@@ -1,0 +1,126 @@
+@page "/vad-ar-nytt"
+@inject NavigationManager Navigation
+
+<PageTitle>Vad är nytt?</PageTitle>
+
+<div class="whats-new-container">
+    <h1 class="whats-new-title">Vad är nytt?</h1>
+    <div class="whats-new-content">
+        <div class="changelog-section">
+            <h2 class="changelog-date">December 2024</h2>
+            
+            <div class="changelog-item">
+                <h3 class="changelog-item-title">✨ Förbättrad vy för resurser</h3>
+                <p class="changelog-item-description">
+                    Nu kan du se alla bokningar i en vy där resurser (platser och ytor) visas på vänster sida och tiden på översta raden. 
+                    Detta gör det enklare att se när resurser är bokade och skapa nya bokningar direkt från denna vy.
+                </p>
+            </div>
+
+            <div class="changelog-item">
+                <h3 class="changelog-item-title">📅 Kalendervy med specifika datum</h3>
+                <p class="changelog-item-description">
+                    I kalendervyn kan du nu se bokningar för specifika datum. Du kan navigera mellan veckor och se när bokningar är publicerade.
+                </p>
+            </div>
+
+            <div class="changelog-item">
+                <h3 class="changelog-item-title">🔍 Enklare navigering</h3>
+                <p class="changelog-item-description">
+                    Förbättrad navigering med breadcrumbs som visar din nuvarande plats i hierarkin. 
+                    Du kan enkelt klicka dig tillbaka till tidigare nivåer.
+                </p>
+            </div>
+
+            <div class="changelog-item">
+                <h3 class="changelog-item-title">⚡ Snabbare och smidigare</h3>
+                <p class="changelog-item-description">
+                    Flera förbättringar har gjorts för att göra systemet snabbare och mer responsivt. 
+                    Bokningar och ändringar sparas nu mer effektivt.
+                </p>
+            </div>
+        </div>
+
+        <div class="changelog-section">
+            <h2 class="changelog-date">Tidigare uppdateringar</h2>
+            
+            <div class="changelog-item">
+                <h3 class="changelog-item-title">🎯 Första testversionen</h3>
+                <p class="changelog-item-description">
+                    Systemet är nu tillgängligt för testning. Du kan skapa veckoscheman, hantera grupper, 
+                    bokningar och se översikt över alla dina planeringar.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .whats-new-container {
+        padding: 24px;
+        max-width: 800px;
+        margin: 0 auto;
+        padding-bottom: 48px;
+    }
+
+    .whats-new-title {
+        font-size: 28px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 0 0 24px 0;
+        text-align: left;
+    }
+
+    .whats-new-content {
+        background: #fff;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        padding: 32px;
+        padding-bottom: 64px;
+    }
+
+    .changelog-section {
+        margin-bottom: 48px;
+    }
+
+    .changelog-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .changelog-date {
+        font-size: 18px;
+        font-weight: 600;
+        color: #374151;
+        margin: 0 0 24px 0;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .changelog-item {
+        margin-bottom: 32px;
+        padding-left: 24px;
+        border-left: 3px solid #0F4A7A;
+    }
+
+    .changelog-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .changelog-item-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 0 0 8px 0;
+    }
+
+    .changelog-item-description {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #4b5563;
+        margin: 0;
+    }
+
+</style>
+
+@code {
+}
