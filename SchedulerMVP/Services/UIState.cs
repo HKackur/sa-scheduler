@@ -17,6 +17,7 @@ public class UIState
     private Guid? _selectedTemplateId;
     private bool _isDayView = false;
     private bool _isWeekListView = false;
+    private bool _isResourceView = false;
     
     public Guid? SelectedPlaceId
     {
@@ -165,6 +166,19 @@ public class UIState
         }
     }
     
+    public bool IsResourceView
+    {
+        get => _isResourceView;
+        set
+        {
+            if (_isResourceView != value)
+            {
+                _isResourceView = value;
+                OnChanged?.Invoke();
+            }
+        }
+    }
+    
     public DateOnly CurrentWeekStart
     {
         get => _currentWeekStart;
@@ -300,6 +314,9 @@ public class UIState
     // Force refresh flag - when set to true, WeekGrid will reload data even if state hasn't changed
     // Used when bookings are created/updated to ensure they appear immediately
     public bool ForceRefresh { get; set; } = false;
+    
+    // Expanded areas in Resource View (persisted across view switches)
+    public HashSet<Guid> ResourceViewExpandedAreas { get; set; } = new();
 }
 
 

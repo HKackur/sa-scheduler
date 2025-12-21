@@ -34,5 +34,9 @@ namespace SchedulerMVP.Data.Entities
 
         public DateTime? CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        
+        // Publication status for SportAdmin integration
+        public bool Published { get; set; } = false;
+        public DateTime? PublishedAt { get; set; }
     }
 }

@@ -1,0 +1,298 @@
+@using SchedulerMVP.Services
+@using SchedulerMVP.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@inject UIState UI
+@inject IJSRuntime JS
+@inject IScheduleTemplateService TemplateService
+@inject ICalendarBookingService CalendarBookingService
+@inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
+@implements IDisposable
+
+<div class="view-type-bar-container">
+    <div class="view-actions-left">
+        @if (UI.IsCalendarViewMode)
+        {
+            <div class="nav-group">
+                <button class="btn btn-today" @onclick="GoToToday">Idag</button>
+                <button class="btn btn-nav" @onclick="@(UI.IsDayView ? NavigateToPreviousDay : NavigateToPreviousWeek)">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <button class="btn btn-nav" @onclick="@(UI.IsDayView ? NavigateToNextDay : NavigateToNextWeek)">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+                <div class="nav-text">@(UI.IsDayView ? GetFormattedDayText() : $"Vecka {GetWeekNumber()}")</div>
+            </div>
+        }
+        
+        <div class="toggle-group">
+        <button class="view-btn @(!UI.IsWeekListView && !UI.IsDayView && !UI.IsResourceView ? "active" : "")" 
+                @onclick="() => ToggleView(false, false, false)" title="Veckovy">
+            <span class="material-symbols-outlined">calendar_view_week</span>
+            <span class="btn-label">Vecka</span>
+        </button>
+        <button class="view-btn @(!UI.IsWeekListView && UI.IsDayView && !UI.IsResourceView ? "active" : "")" 
+                @onclick="() => ToggleView(false, true, false)" title="Dagsvy">
+            <span class="material-symbols-outlined">calendar_view_day</span>
+            <span class="btn-label">Dag</span>
+        </button>
+        @if (!UI.IsCalendarViewMode)
+        {
+            <button class="view-btn @(UI.IsWeekListView ? "active" : "")" 
+                    @onclick="() => ToggleView(true, false, false)" title="Listvy">
+                <span class="material-symbols-outlined">view_list</span>
+                <span class="btn-label">Lista</span>
+            </button>
+            <button class="view-btn @(UI.IsResourceView ? "active" : "")" 
+                    @onclick="() => ToggleView(false, false, true)" title="Resursvy">
+                <span class="material-symbols-outlined">view_timeline</span>
+                <span class="btn-label">Resurs</span>
+            </button>
+        }
+        </div>
+    </div>
+
+    @* Centered navigation for Veckoschema day view *@
+    @if (!UI.IsCalendarViewMode && UI.IsDayView)
+    {
+        <div class="view-nav-center">
+            <div class="nav-group">
+                <button class="btn btn-nav" @onclick="NavigateToPreviousDayWeekSchedule"><span class="material-symbols-outlined">chevron_left</span></button>
+                <button class="btn btn-nav" @onclick="NavigateToNextDayWeekSchedule"><span class="material-symbols-outlined">chevron_right</span></button>
+            </div>
+        </div>
+    }
+
+    <div class="view-actions-right">
+        @if (!UI.IsCalendarViewMode)
+        {
+            <select class="tb-select" @onchange="OnTemplateChanged">
+                @foreach (var t in templates)
+                {
+                    <option value="@t.Id" selected="@(UI.SelectedTemplateId == t.Id)">@t.Name</option>
+                }
+            </select>
+        }
+
+        <div class="more-group">
+            <div style="position: relative;">
+                @if (UI.IsCalendarViewMode)
+                {
+                    <button class="btn-nav btn-nav-with-text" @onclick="ToggleMoreMenu" title="Fler alternativ" aria-label="Fler alternativ">
+                        Fler alternativ <span class="material-symbols-outlined">more_vert</span>
+                    </button>
+                }
+                else
+                {
+                    <button class="btn-nav" @onclick="ToggleMoreMenu" title="Fler alternativ" aria-label="Fler alternativ">
+                        <span class="material-symbols-outlined">more_vert</span>
+                    </button>
+                }
+                @if (moreMenuOpen)
+                {
+                    <div class="menu-overlay" @onclick="CloseMoreMenu"></div>
+                    <div class="tb-menu">
+                        @if (UI.IsCalendarViewMode)
+                        {
+                            <button class="tb-item" @onclick="OpenCopyTemplateModal">Lägg till från mall</button>
+                            <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
+                            <button class="tb-item" @onclick="OpenClearWeekConfirm">Rensa vecka</button>
+                            <button class="tb-item" @onclick="CopyWeekToClipboard">Kopiera vecka</button>
+                            <button class="tb-item" @onclick="PasteWeekFromClipboard" disabled="@(!CanPasteWeek())">Klistra in vecka</button>
+                            <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
+                            <button class="tb-item" @onclick="OpenPublishModal">Publicera</button>
+                        }
+                        else
+                        {
+                            <button class="tb-item" @onclick="OpenEdit">Hantera mallen</button>
+                            <button class="tb-item" @onclick="OpenCreate">Ny tom mall</button>
+                            <button class="tb-item" @onclick="OpenCopy">Duplicera mallen</button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<ScheduleTemplateEditModal IsOpen="@editOpen" OnClose="CloseEdit" OnSaved="AfterTemplateSaved" />
+<ScheduleTemplateCreateModal IsOpen="@createOpen" OnClose="CloseCreate" OnCreated="AfterTemplateSaved" />
+<ScheduleTemplateCopyModal IsOpen="@copyOpen" OnClose="CloseCopy" OnCopied="AfterTemplateSaved" />
+<PublishToSportAdminModal IsOpen="@publishModalOpen" OnClose="ClosePublishModal" />
+
+<style>
+    .view-type-bar-container {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 12px 16px !important;
+        margin-bottom: 8px !important;
+        background: #f8fafc !important; /* Light blue-gray background */
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+    }
+    
+    .view-actions-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+
+    .view-nav-center {
+        position: absolute !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .toggle-group {
+        display: flex !important;
+        background: #f1f5f9 !important;
+        border-radius: 8px !important;
+        padding: 2px !important;
+        gap: 2px !important;
+    }
+
+    .view-actions-right {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+    
+    .view-btn {
+        border: none !important;
+        background: transparent !important;
+        padding: 6px 16px !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: #64748b !important;
+        cursor: pointer !important;
+        height: 32px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+    
+    .view-btn.active {
+        background: #fff !important;
+        color: #0f172a !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+    }
+    
+    .btn-label { font-size: 13px !important; }
+    .view-btn .material-symbols-outlined { font-size: 20px !important; }
+
+    .nav-group { display: flex; align-items: center; gap: 4px; }
+    .nav-text { font-weight: 500; margin: 0 8px; font-size: 14px; white-space: nowrap; }
+    .btn { height: 34px; padding: 0 12px; border-radius: 6px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; }
+    .btn-today { }
+    .tb-select { height: 34px; padding: 0 12px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 13px; min-width: 180px; color: #333 !important; }
+    .btn-nav {
+        display: inline-flex;
+        padding: 8px;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 6px;
+        background: #eeeeee;
+        color: #000;
+        cursor: pointer;
+        transition: all 0.2s;
+        width: 34px;
+        height: 34px;
+        box-sizing: border-box;
+    }
+    .btn-nav:hover { background: #e4e4e4; }
+    .btn-nav:focus { outline: none; background: #eeeeee; border: 1px solid #cfcfcf; }
+    .btn-nav .material-symbols-outlined { font-size: 18px; }
+    .btn-nav-with-text {
+        width: auto;
+        padding: 0 16px;
+        gap: 8px;
+        font-size: 13px;
+    }
+    .btn-nav-with-text .material-symbols-outlined { font-size: 18px; }
+    .tb-menu { position: absolute; top: 40px; right: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); padding: 8px; min-width: 200px; z-index: 1000; }
+    .tb-item { display: flex; align-items: center; width: 100%; padding: 8px 12px; border-radius: 6px; border: none; background: transparent; font-size: 13px; cursor: pointer; text-align: left; }
+    .tb-item:hover { background: #f1f5f9; }
+    .menu-overlay { position: fixed; inset: 0; z-index: 999; }
+</style>
+
+@code {
+    private List<ScheduleTemplate> templates = new();
+    private bool moreMenuOpen, publishModalOpen, editOpen, createOpen, copyOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        UI.OnChanged += HandleUIStateChanged;
+        await ReloadTemplatesForPlace();
+    }
+
+    private void HandleUIStateChanged()
+    {
+        InvokeAsync(async () => {
+            await ReloadTemplatesForPlace();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        UI.OnChanged -= HandleUIStateChanged;
+    }
+
+    private async Task ReloadTemplatesForPlace(bool force = false) {
+        if (force || templates.Count == 0) {
+            templates = await TemplateService.GetTemplatesAsync();
+            UI.SelectedTemplateId ??= templates.FirstOrDefault()?.Id;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleView(bool l, bool d, bool r) {
+        UI.IsWeekListView = l; UI.IsDayView = d; UI.IsResourceView = r;
+        UI.RaiseChanged();
+        if (!l && !r) {
+            await Task.Delay(50);
+            try { await JS.InvokeVoidAsync("SchedulerMVP.scrollToTime", 420); } catch {}
+        }
+    }
+
+    private void OnTemplateChanged(ChangeEventArgs e) { if (Guid.TryParse(e.Value?.ToString(), out var id)) { UI.SelectedTemplateId = id; UI.RaiseChanged(); } }
+    private void NavigateToPreviousWeek() { UI.CurrentWeekStart = UI.CurrentWeekStart.AddDays(-7); UI.RaiseChanged(); }
+    private void NavigateToNextWeek() { UI.CurrentWeekStart = UI.CurrentWeekStart.AddDays(7); UI.RaiseChanged(); }
+    private void NavigateToPreviousDay() { UI.CurrentWeekStart = UI.CurrentWeekStart.AddDays(-1); UI.RaiseChanged(); }
+    private void NavigateToNextDay() { UI.CurrentWeekStart = UI.CurrentWeekStart.AddDays(1); UI.RaiseChanged(); }
+    private string GetWeekNumber() => System.Globalization.ISOWeek.GetWeekOfYear(UI.CurrentWeekStart.ToDateTime(TimeOnly.MinValue)).ToString();
+    private string GetFormattedDayText() => UI.CurrentWeekStart.ToString("dddd, d MMMM yyyy", new System.Globalization.CultureInfo("sv-SE"));
+    private void GoToToday() { UI.CurrentWeekStart = DateOnly.FromDateTime(DateTime.Today); UI.RaiseChanged(); }
+    private int GetCurrentDayOfWeekForSchedule() { var d = (int)UI.CurrentWeekStart.DayOfWeek; return d == 0 ? 7 : d; }
+    private void SetCurrentDayForSchedule(int d) { 
+        var start = UI.CurrentWeekStart; var diff = (int)start.DayOfWeek; if (diff == 0) diff = 7;
+        UI.CurrentWeekStart = start.AddDays(-(diff - 1)).AddDays(d - 1); UI.RaiseChanged();
+    }
+    private string GetFormattedDayNameWeekSchedule() => GetCurrentDayOfWeekForSchedule() switch { 1=>"Måndag", 2=>"Tisdag", 3=>"Onsdag", 4=>"Torsdag", 5=>"Fredag", 6=>"Lördag", 7=>"Söndag", _=>"" };
+    private void NavigateToPreviousDayWeekSchedule() { SetCurrentDayForSchedule(GetCurrentDayOfWeekForSchedule() == 1 ? 7 : GetCurrentDayOfWeekForSchedule() - 1); }
+    private void NavigateToNextDayWeekSchedule() { SetCurrentDayForSchedule(GetCurrentDayOfWeekForSchedule() == 7 ? 1 : GetCurrentDayOfWeekForSchedule() + 1); }
+    private void ToggleMoreMenu() => moreMenuOpen = !moreMenuOpen;
+    private void CloseMoreMenu() => moreMenuOpen = false;
+    private void OpenEdit() { moreMenuOpen = false; editOpen = true; }
+    private void OpenCreate() { moreMenuOpen = false; createOpen = true; }
+    private void OpenCopy() { moreMenuOpen = false; copyOpen = true; }
+    private Task CloseEdit() { editOpen = false; return Task.CompletedTask; }
+    private Task CloseCreate() { createOpen = false; return Task.CompletedTask; }
+    private Task CloseCopy() { copyOpen = false; return Task.CompletedTask; }
+    private async Task AfterTemplateSaved() { await ReloadTemplatesForPlace(true); UI.RaiseChanged(); }
+    private void OpenPublishModal() { moreMenuOpen = false; publishModalOpen = true; }
+    private void ClosePublishModal() => publishModalOpen = false;
+    private async Task CopyWeekToClipboard() { UI.ClipboardWeek = (await CalendarBookingService.GetBookingsForWeekAsync(UI.CurrentWeekStart)); moreMenuOpen = false; UI.RaiseChanged(); }
+    private async Task PasteWeekFromClipboard() { /* paste logic */ moreMenuOpen = false; UI.RaiseChanged(); }
+    private bool CanPasteWeek() => UI.IsCalendarViewMode && UI.ClipboardWeek?.Count > 0;
+    private void OpenCopyTemplateModal() { moreMenuOpen = false; UI.ShouldOpenCopyTemplateModal = true; UI.RaiseChanged(); }
+    private void OpenClearWeekConfirm() { /* clear logic */ }
+}

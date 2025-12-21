@@ -56,7 +56,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasIndex("PlaceId");
 
-                    b.ToTable("Areas");
+                    b.ToTable("Areas", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.AreaLeaf", b =>
@@ -75,7 +75,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasIndex("LeafId");
 
-                    b.ToTable("AreaLeafs");
+                    b.ToTable("AreaLeafs", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.Booking", b =>
@@ -87,6 +87,9 @@ namespace SchedulerMVP.Data.Migrations
                     b.Property<Guid>("AreaId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BookingTitle")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -96,8 +99,11 @@ namespace SchedulerMVP.Data.Migrations
                     b.Property<int>("EndMin")
                         .HasColumnType("INTEGER");
 
-                    b.Property<Guid>("GroupId")
+                    b.Property<Guid?>("GroupId")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsOtherBookingType")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Notes")
                         .HasColumnType("TEXT");
@@ -111,7 +117,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasIndex("GroupId");
 
-                    b.ToTable("Bookings");
+                    b.ToTable("Bookings", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.BookingTemplate", b =>
@@ -164,7 +170,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasIndex("ScheduleTemplateId", "DayOfWeek", "StartMin");
 
-                    b.ToTable("BookingTemplates");
+                    b.ToTable("BookingTemplates", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.CalendarBooking", b =>
@@ -174,6 +180,9 @@ namespace SchedulerMVP.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("AreaId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BookingTitle")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ContactEmail")
@@ -194,8 +203,11 @@ namespace SchedulerMVP.Data.Migrations
                     b.Property<int>("EndMin")
                         .HasColumnType("INTEGER");
 
-                    b.Property<Guid>("GroupId")
+                    b.Property<Guid?>("GroupId")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsOtherBookingType")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Notes")
                         .HasColumnType("TEXT");
@@ -217,7 +229,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasIndex("SourceTemplateId");
 
-                    b.ToTable("CalendarBookings");
+                    b.ToTable("CalendarBookings", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.Group", b =>
@@ -245,7 +257,26 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Groups");
+                    b.ToTable("Groups", (string)null);
+                });
+
+            modelBuilder.Entity("SchedulerMVP.Data.Entities.GroupType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("GroupTypes", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.Leaf", b =>
@@ -269,7 +300,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasIndex("PlaceId");
 
-                    b.ToTable("Leafs");
+                    b.ToTable("Leafs", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.Place", b =>
@@ -300,7 +331,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Places");
+                    b.ToTable("Places", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.ScheduleTemplate", b =>
@@ -324,7 +355,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasIndex("PlaceId");
 
-                    b.ToTable("ScheduleTemplates");
+                    b.ToTable("ScheduleTemplates", (string)null);
                 });
 
             modelBuilder.Entity("SchedulerMVP.Data.Entities.Area", b =>
@@ -374,9 +405,7 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasOne("SchedulerMVP.Data.Entities.Group", "Group")
                         .WithMany()
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("GroupId");
 
                     b.Navigation("Area");
 
@@ -420,13 +449,12 @@ namespace SchedulerMVP.Data.Migrations
 
                     b.HasOne("SchedulerMVP.Data.Entities.Group", "Group")
                         .WithMany()
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("GroupId");
 
-                    b.HasOne("SchedulerMVP.Data.Entities.BookingTemplate", "SourceTemplate")
+                    b.HasOne("SchedulerMVP.Data.Entities.ScheduleTemplate", "SourceTemplate")
                         .WithMany("CalendarBookings")
-                        .HasForeignKey("SourceTemplateId");
+                        .HasForeignKey("SourceTemplateId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Area");
 
@@ -462,11 +490,6 @@ namespace SchedulerMVP.Data.Migrations
                     b.Navigation("AreaLeafs");
                 });
 
-            modelBuilder.Entity("SchedulerMVP.Data.Entities.BookingTemplate", b =>
-                {
-                    b.Navigation("CalendarBookings");
-                });
-
             modelBuilder.Entity("SchedulerMVP.Data.Entities.Leaf", b =>
                 {
                     b.Navigation("AreaLeafs");
@@ -482,6 +505,8 @@ namespace SchedulerMVP.Data.Migrations
             modelBuilder.Entity("SchedulerMVP.Data.Entities.ScheduleTemplate", b =>
                 {
                     b.Navigation("Bookings");
+
+                    b.Navigation("CalendarBookings");
                 });
 #pragma warning restore 612, 618
         }

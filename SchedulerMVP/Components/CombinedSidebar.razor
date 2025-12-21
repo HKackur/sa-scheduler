@@ -1,3 +1,4 @@
+@implements IDisposable
 @using SchedulerMVP.Data.Entities
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.EntityFrameworkCore.Infrastructure
@@ -95,16 +96,16 @@
 
 <style>
     .combined-sidebar {
-        height: calc(100vh - 120px); /* Fixed height to ensure scrollability */
+        flex: 1;
         display: flex;
         flex-direction: column;
         background: transparent; /* Remove white background */
         border-radius: 8px;
+        min-height: 0;
         overflow-y: auto; /* Single scroll for entire panel */
         overflow-x: hidden; /* Prevent horizontal scroll */
         padding-bottom: 20px; /* Add padding at bottom for better scroll */
         scrollbar-width: thin; /* Thin scrollbar in Firefox */
-        scrollbar-color: transparent transparent; /* Hide scrollbar by default */
     }
 
     .combined-sidebar:hover {
@@ -381,44 +382,39 @@
             _lastTemplateId = UI.SelectedTemplateId;
             _lastViewMode = UI.IsCalendarViewMode;
             
-            UI.OnChanged += async () =>
-            {
-                try
-                {
-                    // Always reload counts on UI change to catch booking create/delete
-                    // This ensures counts are updated when bookings are created/deleted
-                    await LoadCountsAsync();
-                    
-                    // Update tracking variables
-                    _lastWeekStart = UI.CurrentWeekStart;
-                    _lastTemplateId = UI.SelectedTemplateId;
-                    _lastViewMode = UI.IsCalendarViewMode;
-                    
-                    // Open create place modal when requested globally (from onboarding)
-                    if (UI.ShouldOpenPlaceCreateModal)
-                    {
-                        UI.ShouldOpenPlaceCreateModal = false;
-                        placeOpen = true;
-                    }
-                    StateHasChanged();
-                }
-                catch (Exception ex)
-                {
-                    // Silently handle errors to prevent circuit crashes
-                    // Modal opening can still work even if counts fail
-                    if (UI.ShouldOpenPlaceCreateModal)
-                    {
-                        UI.ShouldOpenPlaceCreateModal = false;
-                        placeOpen = true;
-                        StateHasChanged();
-                    }
-                }
-            };
+            UI.OnChanged += HandleUIStateChanged;
         }
         catch (Exception ex)
         {
             // Console.WriteLine($"Error loading groups: {ex.Message}");
         }
+    }
+
+    private void HandleUIStateChanged()
+    {
+        InvokeAsync(async () => {
+            try
+            {
+                await LoadCountsAsync();
+                
+                _lastWeekStart = UI.CurrentWeekStart;
+                _lastTemplateId = UI.SelectedTemplateId;
+                _lastViewMode = UI.IsCalendarViewMode;
+                
+                if (UI.ShouldOpenPlaceCreateModal)
+                {
+                    UI.ShouldOpenPlaceCreateModal = false;
+                    placeOpen = true;
+                }
+                StateHasChanged();
+            }
+            catch {}
+        });
+    }
+
+    public void Dispose()
+    {
+        UI.OnChanged -= HandleUIStateChanged;
     }
 
     private Guid? _lastSelectedPlaceId;
@@ -485,7 +481,7 @@
         
         // Select the top-most area for the chosen place
         var first = roots.OrderBy(r => r.Area.Path).FirstOrDefault();
-        if (first is not null) UI.SelectedAreaId = first.Area.Id;
+        UI.SelectedAreaId = first?.Area.Id; // Reset if none exist
         
         ExpandToSelected();
         UI.RaiseChanged();

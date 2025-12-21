@@ -49,7 +49,7 @@
             // Day view: render exactly one column based on CurrentWeekStart
             var currentDayCapture = GetCurrentDayIndex();
                 var dayDate = UI.CurrentWeekStart;
-                var dayName = GetDayName(currentDayCapture);
+                var dayName = GetFullDayName(currentDayCapture);
 
                 <div class="day-column">
                     <div class="day-header @(UI.IsCalendarViewMode && IsToday(dayDate) ? "today-highlight" : "")">
@@ -134,6 +134,18 @@
                                     @* Always render resize handles for ALL booking blocks *@
                                     <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
                                     <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
+                                    @* Published indicator - green check icon for primary, gray for ghost *@
+                                    @if (template.Date.HasValue && template.Published)
+                                    {
+                                        @if (positioned.IsGhost)
+                                        {
+                                            <span class="material-symbols-outlined published-check-icon-ghost">check_circle</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="material-symbols-outlined published-check-icon">check_circle</span>
+                                        }
+                                    }
                                     <div class="@(positioned.IsGhost ? "ghost-content" : "booking-content")">
                                     @if (!hideGhostText)
                                     {
@@ -247,6 +259,11 @@
                                     @* Always render resize handles for ALL booking blocks *@
                                     <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
                                     <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
+                                    @* Published indicator - green check icon in top right corner *@
+                                    @if (template.Date.HasValue && template.Published)
+                                    {
+                                        <span class="material-symbols-outlined published-check-icon">check_circle</span>
+                                    }
                                     <div class="@(positioned.IsGhost ? "ghost-content" : "booking-content")">
                                     @if (!hideGhostText)
                                     {
@@ -291,6 +308,11 @@
         : $"{GetFullDayName(popoverTemplate?.DayOfWeek ?? 1)} {FormatTime(startMin)} – {FormatTime(endMin)}";
     
     <div @onclick:stopPropagation="true" style="position:fixed; left:@(popoverX)px; top:@(popoverY)px; transform: translate(8px, 8px); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 10px 24px rgba(16,24,40,.18); width:320px; z-index:5000;">
+        @* Published indicator - green check icon in top right corner *@
+        @if (popoverBooking != null && popoverBooking.Published)
+        {
+            <span class="material-symbols-outlined" style="position:absolute; top:12px; right:12px; font-size:20px; color:#16a34a; z-index:10;">check_circle</span>
+        }
         <div style="display:flex; align-items:center; padding:12px 14px; border-bottom:1px solid #eef2f7;">
             <div style="font-size:16px; font-weight:600; color:#0b1e34; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@areaName</div>
             <div style="display:flex; gap:4px;">
@@ -358,6 +380,8 @@
         public double WidthPercent { get; set; } = 100;
         public double LeftPercent { get; set; } = 0;
         public DateOnly? Date { get; set; } // For calendar bookings
+        public bool Published { get; set; } // For calendar bookings - published status
+        public DateTime? PublishedAt { get; set; } // For calendar bookings - published timestamp
     }
     
     public class PositionedBooking
@@ -848,7 +872,9 @@
                         Area = cb.Area,
                         IsGhost = false, // All group filter bookings are primary (blue)
                         SourceAreaName = $"{cb.Area?.Place?.Name ?? "Okänd plats"} - {cb.Area?.Name ?? "Okänd yta"}",
-                        Date = cb.Date
+                        Date = cb.Date,
+                        Published = cb.Published,
+                        PublishedAt = cb.PublishedAt
                     });
                 }
 
@@ -917,7 +943,9 @@
                             Area = cb.Area,
                             IsGhost = isGhost,
                             SourceAreaName = $"{cb.Area?.Name ?? "Okänd yta"}",
-                            Date = cb.Date
+                            Date = cb.Date,
+                            Published = cb.Published,
+                            PublishedAt = cb.PublishedAt
                         });
                     }
 
@@ -966,7 +994,9 @@
                             Area = cb.Area,
                             IsGhost = false,
                             SourceAreaName = $"{cb.Area?.Place?.Name ?? "Okänd plats"} - {cb.Area?.Name ?? "Okänd yta"}",
-                            Date = cb.Date
+                            Date = cb.Date,
+                            Published = cb.Published,
+                            PublishedAt = cb.PublishedAt
                         });
                     }
 
@@ -1012,7 +1042,9 @@
                             Area = cb.Area,
                             IsGhost = false,
                             SourceAreaName = $"{cb.Area?.Place?.Name ?? "Okänd plats"} - {cb.Area?.Name ?? "Okänd yta"}",
-                            Date = cb.Date
+                            Date = cb.Date,
+                            Published = cb.Published,
+                            PublishedAt = cb.PublishedAt
                         });
                     }
 
@@ -2031,5 +2063,30 @@
     .booking-block:active {
         transform: translateY(0);
         opacity: 0.8;
+    }
+    
+    /* Published check icon - positioned in top right corner */
+    .published-check-icon {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        font-size: 16px;
+        color: #16a34a;
+        z-index: 15;
+        pointer-events: none;
+    }
+    
+    /* Published check icon for ghost bookings - gray scale */
+    .published-check-icon-ghost {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        font-size: 16px;
+        color: #6b7280;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 50%;
+        padding: 1px;
+        z-index: 10;
+        pointer-events: none;
     }
 </style>

@@ -1,4 +1,4 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Authorization
@@ -21,9 +21,11 @@ else
     @* Normal page - require auth; otherwise redirect to login *@
     <AuthorizeView>
         <Authorized>
-            <div class="app-root">
+            <div class="app-root" style="display: flex; flex-direction: column; height: 100vh;">
                 <TopBar />
-                @Body
+                <div style="flex: 1; overflow: @(_isWhatsNewPage ? "auto" : "hidden"); display: flex; flex-direction: column;">
+                    @Body
+                </div>
                 <Toast />
             </div>
         </Authorized>
@@ -35,6 +37,7 @@ else
 
 @code {
     private bool _isLoginPage = false;
+    private bool _isWhatsNewPage = false;
 
     protected override void OnInitialized()
     {
@@ -49,10 +52,12 @@ else
             var uri = Navigation.Uri.ToLower();
             var path = new Uri(uri).AbsolutePath.ToLower();
             _isLoginPage = path == "/login" || path.EndsWith("/login");
+            _isWhatsNewPage = path == "/vad-ar-nytt" || path.EndsWith("/vad-ar-nytt");
         }
         catch
         {
             _isLoginPage = false;
+            _isWhatsNewPage = false;
         }
     }
 

@@ -157,6 +157,20 @@
         }
         }
         
+        @* Published Status Info *@
+        @if (Booking != null && Booking.Published && Booking.PublishedAt.HasValue)
+        {
+            <div class="bm-field" style="margin-top: 12px; padding: 12px; background: #f0fdf4; border-radius: 8px; border: 1px solid #86efac;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="material-symbols-outlined" style="font-size: 18px; color: #16a34a;">check_circle</span>
+                    <div>
+                        <div style="font-size: 13px; font-weight: 600; color: #166534; margin-bottom: 2px;">Publicerad</div>
+                        <div style="font-size: 12px; color: #15803d;">Publicerad: @Booking.PublishedAt.Value.ToString("yyyy-MM-dd HH:mm", new System.Globalization.CultureInfo("sv-SE"))</div>
+                    </div>
+                </div>
+            </div>
+        }
+        
         @* Action Buttons *@
         <div class="bm-actions" @onclick:stopPropagation="true">
             <button type="button" @onclick="DeleteBooking" @onclick:stopPropagation="true" class="btn-danger" style="margin-right: auto;">Ta bort</button>
@@ -170,6 +184,10 @@
            BOOKING MODAL - STRUCTURE
            ============================================ */
         .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px 28px 0 28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;width:480px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto}
+        .bm-header{margin-bottom:20px}
+        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
+        .bm-field{margin-bottom:16px}
+        .bm-label{display:block;font-size:12px;font-weight:500;color:#374151;margin-bottom:6px}
         
         /* ============================================
            BOOKING MODAL - INPUT STYLING
@@ -214,6 +232,7 @@
         /* ============================================
            BOOKING MODAL - ACTIONS
            ============================================ */
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
         .bm-option-unavailable{color:#9ca3af;background-color:#f9fafb}
     </style>
 }

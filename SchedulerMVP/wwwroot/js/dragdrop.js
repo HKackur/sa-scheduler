@@ -23,6 +23,49 @@ var SchedulerMVP = {
             this.scrollToPos(topPx);
         } catch (_) { }
     },
+    
+    initResourceViewScroll: function () {
+        try {
+            const listColumn = document.querySelector('.resource-list-column');
+            const gridColumn = document.querySelector('.resource-grid-column');
+            const timeAxisHeader = document.querySelector('.resource-time-axis-header');
+            
+            if (!listColumn || !gridColumn || !timeAxisHeader) {
+                console.log('[ResourceView] Elements not found, retrying...');
+                setTimeout(() => SchedulerMVP.initResourceViewScroll(), 100);
+                return;
+            }
+            
+            // Header is outside scroll column but needs horizontal sync
+            // It's sticky vertically, but we need to sync its horizontal position with grid scroll
+            const syncHeaderScroll = () => {
+                if (gridColumn && timeAxisHeader) {
+                    const scrollLeft = gridColumn.scrollLeft;
+                    // Sync header horizontal position with grid scroll
+                    timeAxisHeader.style.transform = `translateX(-${scrollLeft}px)`;
+                }
+            };
+            
+            // Initial sync
+            syncHeaderScroll();
+            
+            // Sync on scroll
+            gridColumn.addEventListener('scroll', syncHeaderScroll, { passive: true });
+            
+            // Store cleanup function
+            if (!SchedulerMVP._resourceScrollCleanup) {
+                SchedulerMVP._resourceScrollCleanup = () => {
+                    if (gridColumn) {
+                        gridColumn.removeEventListener('scroll', syncHeaderScroll);
+                    }
+                };
+            }
+            
+            console.log('[ResourceView] Scroll synchronization initialized');
+        } catch (error) {
+            console.error('[ResourceView] Error initializing scroll:', error);
+        }
+    },
 
     // Drag and Drop functionality
     initDragDrop: function (dotNetHelper) {
