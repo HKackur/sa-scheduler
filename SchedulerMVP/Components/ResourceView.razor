@@ -615,8 +615,13 @@
                         var leftPos = booking.StartMin;
                         var width = booking.EndMin - booking.StartMin;
                         var isGhost = bookingWithGhost.IsGhost;
-                        var bookingClass = isGhost ? "resource-booking-block resource-booking-ghost" : "resource-booking-block resource-booking-primary";
+                        var bookingClass = isGhost ? "resource-booking-block resource-booking-ghost" : "resource-booking-block";
                         var contentClass = "resource-booking-content"; // Same structure for both
+                        
+                        // Get color style for non-ghost bookings (ghost bookings use CSS class)
+                        var colorStyle = isGhost ? string.Empty : GetResourceBookingColorStyle(booking);
+                        var positionStyle = $"left: {leftPos}px; width: {width}px;";
+                        var fullStyle = isGhost ? positionStyle : $"{positionStyle} {colorStyle}";
                         
                         // For ghost bookings: show blocking areas on line 1, time on line 2
                         // For direct bookings: show group name on line 1, time on line 2
@@ -630,7 +635,7 @@
                         
                         builder.OpenElement(sequence++, "div");
                         builder.AddAttribute(sequence++, "class", bookingClass);
-                        builder.AddAttribute(sequence++, "style", $"left: {leftPos}px; width: {width}px;");
+                        builder.AddAttribute(sequence++, "style", fullStyle);
                         builder.AddAttribute(sequence++, "title", tooltip);
                         // Only add click handler for non-ghost bookings
                         if (!isGhost)
@@ -709,6 +714,24 @@
         public bool IsGhost { get; set; }
         public List<string> SourceAreaNames { get; set; } = new(); // Multiple areas can block
         public string DisplayText { get; set; } = string.Empty; // Formatted text for display
+    }
+    
+    private string GetResourceBookingColorStyle(BookingTemplate booking)
+    {
+        if (booking.Group == null)
+        {
+            // Default colors if no group
+            var defaultColor = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"];
+            return $"background-color: {defaultColor.Background}; border: 1px solid {defaultColor.Border}; color: {defaultColor.Text};";
+        }
+        
+        // Get color from group's DisplayColor, default to Ljusblå if not found
+        var displayColor = booking.Group.DisplayColor ?? "Ljusblå";
+        var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
+            displayColor, 
+            SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
+        
+        return $"background-color: {colorInfo.Background}; border: 1px solid {colorInfo.Border}; color: {colorInfo.Text};";
     }
     
     private async Task OnBookingBlockClick(BookingTemplate booking, MouseEventArgs e)
@@ -1177,12 +1200,7 @@
         pointer-events: auto; /* Ensure booking blocks can receive clicks */
     }
     
-    .resource-booking-primary {
-        background: #3b82f6;
-        color: white;
-        z-index: 10;
-        cursor: pointer;
-    }
+    /* resource-booking-primary removed - using inline styles with DisplayColor instead */
     
     .resource-booking-ghost {
         background: #e2e8f0; /* slate-200 */

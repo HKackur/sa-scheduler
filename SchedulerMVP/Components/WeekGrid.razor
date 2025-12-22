@@ -73,9 +73,10 @@
                             {
                                 var template = (TemplateView)positioned.Booking;
                             var isPrimaryT = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
-                                var clsT = isPrimaryT ? "booking-block booking--primary" : "booking-block booking--ghost";
+                                var clsT = "booking-block"; // Keep base class, colors come from inline style
                                 var templateCapture = template; // Capture for onclick
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
+                                var colorStyle = GetBookingColorStyle(template, positioned.IsGhost);
                             var hideGhostText = positioned.IsGhost && positioned.WidthPercent < 35.0 && !UI.IsDayView; // always show text in day view
                                 <div class="@clsT" 
                                      data-booking-id="@template.Id"
@@ -83,7 +84,7 @@
                                      data-day="@template.DayOfWeek"
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
-                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle"
+                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle @colorStyle"
                                      title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
@@ -113,9 +114,10 @@
                             @foreach (var positioned in GetPositionedCalendarForDay(dayDate))
                             {
                                 var template = (TemplateView)positioned.Booking;
-                            var isPrimary = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
-                                var cls = isPrimary ? "booking-block booking--primary" : "booking-block booking--ghost";
+                                var isPrimary = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
+                                var cls = "booking-block"; // Keep base class, colors come from inline style
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
+                                var colorStyle = GetBookingColorStyle(template, positioned.IsGhost);
                                 var calBooking = weekBookings.FirstOrDefault(b => b.Id == template.Id);
                             var templateCapture = template; // Capture for onclick
                             var hideGhostText = positioned.IsGhost && positioned.WidthPercent < 35.0 && !UI.IsDayView; // always show text in day view
@@ -127,7 +129,7 @@
                                      data-day="@(calBooking != null && template.Date.HasValue ? template.Date.Value.ToString("yyyy-MM-dd") : template.DayOfWeek.ToString())"
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
-                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle"
+                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle @colorStyle"
                                      title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { if (isPrimary && calBooking != null) OnCalendarBookingClick(calBooking, e); else OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
@@ -198,9 +200,10 @@
                             {
                                 var template = (TemplateView)positioned.Booking;
                                 var isPrimaryT = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
-                                var clsT = isPrimaryT ? "booking-block booking--primary" : "booking-block booking--ghost";
+                                var clsT = "booking-block"; // Keep base class, colors come from inline style
                                 var templateCapture = template; // Capture for onclick
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
+                                var colorStyle = GetBookingColorStyle(template, positioned.IsGhost);
                             var hideGhostText = positioned.IsGhost && positioned.WidthPercent < 35.0 && !UI.IsDayView; // always show text in day view
                                 <div class="@clsT" 
                                      data-booking-id="@template.Id"
@@ -208,7 +211,7 @@
                                      data-day="@template.DayOfWeek"
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
-                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle"
+                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle @colorStyle"
                                      title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
@@ -239,8 +242,9 @@
                             {
                                 var template = (TemplateView)positioned.Booking;
                                 var isPrimary = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
-                                var cls = isPrimary ? "booking-block booking--primary" : "booking-block booking--ghost";
+                                var cls = "booking-block"; // Keep base class, colors come from inline style
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
+                                var colorStyle = GetBookingColorStyle(template, positioned.IsGhost);
                                 var calBooking = weekBookings.FirstOrDefault(b => b.Id == template.Id);
                             var templateCapture = template; // Capture for onclick
                             var hideGhostText = positioned.IsGhost && positioned.WidthPercent < 35.0 && !UI.IsDayView; // always show text in day view
@@ -252,7 +256,7 @@
                                      data-day="@(calBooking != null && template.Date.HasValue ? template.Date.Value.ToString("yyyy-MM-dd") : template.DayOfWeek.ToString())"
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
-                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle"
+                                     style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle @colorStyle"
                                      title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
                                  @onclick="@((MouseEventArgs e) => { if (isPrimary && calBooking != null) OnCalendarBookingClick(calBooking, e); else OnTemplateClick(templateCapture, e); })"
                                      @onclick:stopPropagation="true">
@@ -1092,7 +1096,7 @@
             var groupQuery = db.Groups.AsQueryable();
             if (!isAdmin && !string.IsNullOrEmpty(userId))
             {
-                groupQuery = groupQuery.Where(g => g.UserId == userId || g.UserId == null);
+                groupQuery = groupQuery.Where(g => g.UserId == userId);
             }
             groups = await groupQuery.OrderBy(g => g.Name).ToListAsync();
             StateHasChanged();
@@ -1594,6 +1598,47 @@
         var hours = minutes / 60;
         var mins = minutes % 60;
         return $"{hours:00}:{mins:00}";
+    }
+    
+    private string GetBookingColorStyle(TemplateView template, bool isGhost)
+    {
+        // Ghost bookings ALWAYS use gray colors for better contrast
+        if (isGhost)
+        {
+            return "background-color: #f3f4f6; border: 1px dashed #d1d5db; color: #6b7280;";
+        }
+        
+        if (template.Group == null)
+        {
+            // Default colors if no group
+            var defaultColor = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"];
+            return $"background-color: {defaultColor.Background}; border: 1px solid {defaultColor.Border}; color: {defaultColor.Text};";
+        }
+        
+        // Get color from group's DisplayColor, default to Ljusblå if not found
+        var displayColor = template.Group.DisplayColor ?? "Ljusblå";
+        var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
+            displayColor, 
+            SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
+        
+        return $"background-color: {colorInfo.Background}; border: 1px solid {colorInfo.Border}; color: {colorInfo.Text};";
+    }
+    
+    private string HexToRgba(string hex, double alpha)
+    {
+        // Simple hex to rgba conversion for ghost effect
+        // Remove # if present
+        hex = hex.TrimStart('#');
+        
+        if (hex.Length == 6)
+        {
+            var r = Convert.ToInt32(hex.Substring(0, 2), 16);
+            var g = Convert.ToInt32(hex.Substring(2, 2), 16);
+            var b = Convert.ToInt32(hex.Substring(4, 2), 16);
+            return $"rgba({r}, {g}, {b}, {alpha.ToString(System.Globalization.CultureInfo.InvariantCulture)})";
+        }
+        
+        return hex; // Fallback to original hex if conversion fails
     }
     
 

@@ -13,6 +13,10 @@ public class GroupType
 
     // Multi-tenant
     public string? UserId { get; set; }
+    
+    // Standard visningsfärg för grupptypen (används som default när man skapar nya grupper)
+    [MaxLength(50)]
+    public string StandardDisplayColor { get; set; } = "Ljusblå";
 }
 
 
