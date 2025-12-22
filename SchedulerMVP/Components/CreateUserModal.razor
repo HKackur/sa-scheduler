@@ -1,0 +1,142 @@
+@using Microsoft.AspNetCore.Identity
+@using SchedulerMVP.Data.Entities
+@inject UserManager<ApplicationUser> UserManager
+@inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
+
+@if (IsOpen)
+{
+    <div class="modal-container" @onclick="OnBackdrop">
+        <div class="bm-modal" @onclick:stopPropagation="true">
+            <div class="bm-header">
+                <h2 class="bm-title">Skapa användare</h2>
+            </div>
+            <div class="bm-field">
+                <label class="bm-label">E-post</label>
+                <input class="bm-input" type="email" @bind="newEmail" placeholder="Ange e-postadress" />
+            </div>
+            <div class="bm-field">
+                <label class="bm-label">Lösenord</label>
+                <input class="bm-input" type="password" @bind="newPassword" placeholder="Ange lösenord (minst 8 tecken)" />
+                <div style="color:#6b7280;font-size:11px;margin-top:4px;">Minst 8 tecken.</div>
+            </div>
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="message message-error">@errorMessage</div>
+            }
+            <div class="bm-actions">
+                <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+                <button type="button" @onclick="OnSave" class="btn-primary" disabled="@(string.IsNullOrWhiteSpace(newEmail) || string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8 || isCreating)">
+                    @if (isCreating)
+                    {
+                        <span>Skapar...</span>
+                    }
+                    else
+                    {
+                        <span>Skapa användare</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px 28px 0 28px;border:1px solid #e6e7ea;border-radius:12px;width:480px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{margin-bottom:20px}
+        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
+        .bm-field{margin-bottom:16px}
+        .bm-label{display:block;font-size:12px;font-weight:500;color:#374151;margin-bottom:6px}
+        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
+        .message{padding:12px;border-radius:6px;font-size:13px;margin-top:8px}
+        .message-error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnCreated { get; set; }
+
+    private string newEmail = string.Empty;
+    private string newPassword = string.Empty;
+    private bool isCreating = false;
+    private string errorMessage = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            newEmail = string.Empty;
+            newPassword = string.Empty;
+            errorMessage = string.Empty;
+        }
+    }
+
+    private void OnBackdrop()
+    {
+        OnCancel();
+    }
+
+    private void OnCancel()
+    {
+        newEmail = string.Empty;
+        newPassword = string.Empty;
+        errorMessage = string.Empty;
+        OnClose.InvokeAsync();
+    }
+
+    private async Task OnSave()
+    {
+        if (string.IsNullOrWhiteSpace(newEmail) || string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
+            return;
+
+        isCreating = true;
+        errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var user = new ApplicationUser 
+            { 
+                UserName = newEmail, 
+                Email = newEmail, 
+                EmailConfirmed = true 
+            };
+            
+            var result = await UserManager.CreateAsync(user, newPassword);
+            
+            if (result.Succeeded)
+            {
+                // Create template for user
+                try 
+                { 
+                    await TemplateService.CreateForUserAsync(user.Id, "Veckomall");
+                } 
+                catch (Exception templateEx) 
+                { 
+                    Console.WriteLine($"Warning: Failed to create template for user {user.Email}: {templateEx.Message}");
+                }
+                
+                newEmail = string.Empty;
+                newPassword = string.Empty;
+                errorMessage = string.Empty;
+                
+                await OnCreated.InvokeAsync();
+                await OnClose.InvokeAsync();
+            }
+            else
+            {
+                errorMessage = string.Join("; ", result.Errors.Select(e => e.Description));
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ett fel uppstod: {ex.Message}";
+        }
+        finally
+        {
+            isCreating = false;
+            StateHasChanged();
+        }
+    }
+}

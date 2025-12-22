@@ -7,91 +7,206 @@
 @inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
 @inject SchedulerMVP.Services.UIState UI
 
-<PageTitle>Admin</PageTitle>
+<div class="sa-panel" style="padding:16px; overflow-y: auto; overflow-x: hidden; padding-bottom: 64px;">
+    @if (isLoading)
+    {
+        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+            <div style="width: 40px; height: 40px; border: 4px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: admin-spin 0.8s linear infinite;"></div>
+            <div style="font-size: 14px; color: #6b7280;">Läser in användare...</div>
+        </div>
+    }
 
-@if (isLoading)
-{
-    <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-        <div style="width: 40px; height: 40px; border: 4px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: admin-spin 0.8s linear infinite;"></div>
-        <div style="font-size: 14px; color: #6b7280;">Läser in användare...</div>
+    <!-- Create User Button -->
+    <div style="display:flex; justify-content:flex-end; margin-bottom:20px;">
+        <button class="tb-btn" @onclick="OpenCreateUserModal">
+            <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+            Skapa användare
+        </button>
     </div>
-}
 
-<div class="sa-panel" style="margin:16px; max-height: calc(100vh - 120px); overflow-y: auto; overflow-x: hidden; @(isLoading ? "opacity:0.5; pointer-events:none;" : "")">
-    <div class="sa-panel-header" style="display:flex;align-items:center;gap:12px;">
-        <h6 class="sa-panel-title">Användare</h6>
-    </div>
-
-    <div class="sa-panel-content" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap; padding-bottom:32px;">
-        <div style="flex:1 1 320px;max-width:520px;">
-            <div style="margin-bottom:12px;font-weight:600;">Skapa testkonto</div>
-            <form @onsubmit="CreateUser" @onsubmit:preventDefault>
-                <div class="sa-input-group">
-                    <label class="sa-input-label">E-post</label>
-                    <input type="email" placeholder="E-post" @bind="newEmail" class="sa-input-field" required />
-                </div>
-                <div class="sa-input-group">
-                    <label class="sa-input-label">Lösenord</label>
-                    <input type="password" placeholder="Lösenord" @bind="newPassword" class="sa-input-field" minlength="8" required />
-                    <div style="color:#6b7280;font-size:12px;margin-top:4px;">Minst 8 tecken.</div>
-                </div>
-                <button class="tb-action-btn" type="submit" disabled="@(!CanSubmit || isCreatingUser)"><span class="action-text">@(isCreatingUser ? "Skapar..." : "Skapa")</span></button>
-                @if (!string.IsNullOrEmpty(errorMessage))
+    <!-- Users table -->
+    <h3 class="groups-table-title" style="margin-bottom:12px;">Användare</h3>
+    <div class="groups-table-container">
+        <table class="groups-table">
+            <thead>
+                <tr>
+                    <th>E-post</th>
+                    <th>Senast inloggad</th>
+                    <th>Admin</th>
+                    <th style="width: 40px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var u in users)
                 {
-                    <div style="margin-top:8px;color:#b91c1c;font-size:13px;">@errorMessage</div>
-                }
-            </form>
-        </div>
-
-        <div style="flex:2 1 520px;min-width:420px;">
-            <table style="width:100%;border-collapse:collapse;">
-                <thead>
-                    <tr style="text-align:left;border-bottom:1px solid #e5e7eb;">
-                        <th style="padding:8px;">E-post</th>
-                        <th style="padding:8px;">Senast inloggad</th>
-                        <th style="padding:8px;">Admin</th>
-                        <th style="padding:8px;text-align:right;"></th>
+                    var isAdmin = adminIds.Contains(u.Id);
+                    <tr>
+                        <td>@u.Email</td>
+                        <td>@FormatLastLogin(u.LastLoginAt)</td>
+                        <td>
+                            @if (isAdmin)
+                            {
+                                <span style="display:inline-block; padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500; background:#d1fae5; color:#065f46; border:1px solid #6ee7b7;">Ja</span>
+                            }
+                            else
+                            {
+                                <span style="display:inline-block; padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500; background:#f3f4f6; color:#6b7280;">Nej</span>
+                            }
+                        </td>
+                        <td style="position:relative;">
+                            <button class="action-menu-trigger" @onclick="() => ToggleActionMenu(u.Id)" @onclick:stopPropagation="true">
+                                <span class="material-symbols-outlined">more_vert</span>
+                            </button>
+                            @if (actionMenuOpenForUserId == u.Id)
+                            {
+                                <div class="action-menu" @onclick:stopPropagation="true">
+                                    <button class="action-menu-item" @onclick="() => Impersonate(u.Id)" disabled="@(isProcessing.Contains(u.Id))">Logga in som</button>
+                                    <button class="action-menu-item" @onclick="() => ToggleAdmin(u.Id)" disabled="@(isProcessing.Contains(u.Id))">
+                                        @(isProcessing.Contains(u.Id) && processingAction.ContainsKey(u.Id) && processingAction[u.Id] == "admin" ? "Uppdaterar..." : (isAdmin ? "Ta bort admin" : "Gör admin"))
+                                    </button>
+                                    <button class="action-menu-item" @onclick="() => ResetPassword(u.Id)" disabled="@(isProcessing.Contains(u.Id))">Nytt lösenord</button>
+                                    <button class="action-menu-item" style="color:#dc2626;" @onclick="() => DeleteUser(u.Id)" disabled="@(isProcessing.Contains(u.Id))">Radera</button>
+                                </div>
+                                <div class="menu-overlay" @onclick="CloseActionMenu"></div>
+                            }
+                        </td>
                     </tr>
-                </thead>
-                <tbody>
-                    @foreach (var u in users)
-                    {
-                        var isAdmin = adminIds.Contains(u.Id);
-                        <tr style="border-bottom:1px solid #f1f5f9;">
-                            <td style="padding:8px;">@u.Email</td>
-                            <td style="padding:8px;color:#6b7280;">@FormatLastLogin(u.LastLoginAt)</td>
-                            <td style="padding:8px;">@(isAdmin ? "Ja" : "Nej")</td>
-                            <td style="padding:8px;display:flex;gap:8px;justify-content:flex-end;">
-                                <button class="tb-action-btn" @onclick="() => Impersonate(u.Id)" disabled="@(isProcessing.Contains(u.Id))"><span class="action-text">Logga in som</span></button>
-                                <button class="tb-action-btn" @onclick="() => ToggleAdmin(u.Id)" disabled="@(isProcessing.Contains(u.Id))"><span class="action-text">@(isProcessing.Contains(u.Id) && processingAction[u.Id] == "admin" ? "Uppdaterar..." : isAdmin?"Ta bort admin":"Gör admin")</span></button>
-                                <button class="tb-action-btn" @onclick="() => ResetPassword(u.Id)" disabled="@(isProcessing.Contains(u.Id))"><span class="action-text">Nytt lösen</span></button>
-                                <button class="tb-action-btn" @onclick="() => DeleteUser(u.Id)" disabled="@(isProcessing.Contains(u.Id))" style="background:#fee2e2;"><span class="action-text">Radera</span></button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+                }
+            </tbody>
+        </table>
     </div>
 </div>
+
+<CreateUserModal IsOpen="@createUserModalOpen" OnClose="CloseCreateUserModal" OnCreated="AfterUserCreated" />
 
 <style>
     @@keyframes admin-spin {
         to { transform: rotate(360deg); }
+    }
+
+    .groups-table-container {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        overflow: visible !important;
+        min-height: fit-content;
+    }
+
+    .groups-table-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0;
+        padding: 0;
+    }
+
+    .groups-table {
+        width: 100%;
+        border-collapse: collapse;
+        display: table;
+    }
+
+    .groups-table thead {
+        background: #F9FAFB;
+    }
+
+    .groups-table th {
+        padding: 12px 20px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: #6B7280;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .groups-table tbody tr {
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .groups-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .groups-table td {
+        padding: 12px 20px;
+        font-size: 14px;
+        color: #111827;
+    }
+
+    .action-menu-trigger {
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6B7280;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+
+    .action-menu-trigger:hover {
+        background: #f3f4f6;
+    }
+
+    .action-menu-trigger .material-symbols-outlined {
+        font-size: 20px;
+    }
+
+    .action-menu {
+        position: absolute;
+        top: 32px;
+        right: 0;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        padding: 8px;
+        min-width: 160px;
+        z-index: 1000;
+    }
+
+    .action-menu-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        font-size: 13px;
+        cursor: pointer;
+        text-align: left;
+        color: #111827;
+        transition: background 0.2s;
+    }
+
+    .action-menu-item:hover:not(:disabled) {
+        background: #f1f5f9;
+    }
+
+    .action-menu-item:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .menu-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
     }
 </style>
 
 @code {
     private List<ApplicationUser> users = new();
     private HashSet<string> adminIds = new();
-    private string newEmail = string.Empty;
-    private string newPassword = string.Empty;
     private string? errorMessage;
     private bool isLoading = true;
-    private bool isCreatingUser = false;
+    private bool createUserModalOpen = false;
     private HashSet<string> isProcessing = new();
     private Dictionary<string, string> processingAction = new();
-    private bool CanSubmit => !string.IsNullOrWhiteSpace(newEmail) && !string.IsNullOrWhiteSpace(newPassword) && newPassword.Length >= 8;
+    private string? actionMenuOpenForUserId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -112,21 +227,13 @@
             isLoading = true;
             StateHasChanged();
             
-            // Add a small delay to ensure any previous DbContext operations are complete
-            // This helps avoid "second operation started" errors
             await Task.Delay(100);
-            
-            // PERF: Load users efficiently - use ToListAsync if available, otherwise ToList
-            // Note: UserManager.Users is IQueryable, but Identity doesn't always support async enumeration
-            // So we'll use ToList() but optimize the admin check
             
             users = UserManager.Users.OrderBy(u => u.Email).ToList();
             
-            // PERF: Optimize admin check - check all users in parallel
             var adminRole = await RoleManager.FindByNameAsync("Admin");
             if (adminRole != null)
             {
-                // Check all users in parallel for better performance
                 var adminCheckTasks = users.Select(async u => new { Id = u.Id, IsAdmin = await UserManager.IsInRoleAsync(u, "Admin") });
                 var results = await Task.WhenAll(adminCheckTasks);
                 adminIds = new HashSet<string>(results.Where(r => r.IsAdmin).Select(r => r.Id));
@@ -149,80 +256,41 @@
 
     private static string FormatLastLogin(DateTimeOffset? ts) => ts.HasValue ? ts.Value.LocalDateTime.ToString("yyyy-MM-dd HH:mm") : "—";
 
-    private async Task CreateUser()
+    private void OpenCreateUserModal()
     {
-        errorMessage = null;
-        if (string.IsNullOrWhiteSpace(newEmail) || string.IsNullOrWhiteSpace(newPassword)) 
-        { 
-            errorMessage = "Fyll i e‑post och lösenord."; 
-            StateHasChanged();
-            return; 
-        }
-        if (newPassword.Length < 8) 
-        { 
-            errorMessage = "Lösenordet måste vara minst 8 tecken."; 
-            StateHasChanged();
-            return; 
-        }
-        
-        isCreatingUser = true;
+        createUserModalOpen = true;
         StateHasChanged();
-        
-        try
+    }
+    
+    private void CloseCreateUserModal()
+    {
+        createUserModalOpen = false;
+        StateHasChanged();
+    }
+    
+    private async Task AfterUserCreated()
+    {
+        await LoadAsync();
+        CloseCreateUserModal();
+    }
+
+    private void ToggleActionMenu(string userId)
+    {
+        if (actionMenuOpenForUserId == userId)
         {
-            var user = new ApplicationUser { UserName = newEmail, Email = newEmail, EmailConfirmed = true };
-            var res = await UserManager.CreateAsync(user, newPassword);
-            if (res.Succeeded)
-            {
-                newEmail = string.Empty; 
-                newPassword = string.Empty;
-                
-                // Give Identity DbContext time to complete the transaction
-                await Task.Delay(100);
-                
-                // Create template synchronously to avoid DbContext conflicts
-                // Use a timeout to prevent blocking if it takes too long
-                try 
-                { 
-                    var templateTask = TemplateService.CreateForUserAsync(user.Id, "Veckomall");
-                    var timeoutTask = Task.Delay(5000); // 5 second timeout
-                    var completedTask = await Task.WhenAny(templateTask, timeoutTask);
-                    if (completedTask == timeoutTask)
-                    {
-                        // Template creation timed out, but user was created successfully
-                        // Continue with reload
-                    }
-                    else
-                    {
-                        await templateTask; // Ensure any exceptions are handled
-                    }
-                } 
-                catch (Exception templateEx) 
-                { 
-                    // Log but don't fail user creation - template can be created later
-                    Console.WriteLine($"Warning: Failed to create template for user {user.Email}: {templateEx.Message}");
-                }
-                
-                // Give a small delay before reloading to ensure all operations are complete
-                await Task.Delay(50);
-                
-                // Reload data after template creation is complete (or timed out)
-                await LoadAsync();
-            }
-            else
-            {
-                errorMessage = string.Join("; ", res.Errors.Select(e => e.Description));
-            }
+            actionMenuOpenForUserId = null;
         }
-        catch (Exception ex)
+        else
         {
-            errorMessage = $"Fel vid skapande: {ex.Message}";
+            actionMenuOpenForUserId = userId;
         }
-        finally
-        {
-            isCreatingUser = false;
-            StateHasChanged();
-        }
+        StateHasChanged();
+    }
+
+    private void CloseActionMenu()
+    {
+        actionMenuOpenForUserId = null;
+        StateHasChanged();
     }
 
     private async Task ToggleAdmin(string userId)
@@ -246,21 +314,15 @@
             if (wasAdmin)
             {
                 await UserManager.RemoveFromRoleAsync(u, "Admin");
-            }
-            else
-            {
-                await UserManager.AddToRoleAsync(u, "Admin");
-            }
-            
-            // PERF: Update adminIds immediately without full reload
-            if (wasAdmin)
-            {
                 adminIds.Remove(userId);
             }
             else
             {
+                await UserManager.AddToRoleAsync(u, "Admin");
                 adminIds.Add(userId);
             }
+            
+            actionMenuOpenForUserId = null;
             StateHasChanged();
         }
         catch (Exception ex)
@@ -294,6 +356,8 @@
             }
             var token = await UserManager.GeneratePasswordResetTokenAsync(u);
             await UserManager.ResetPasswordAsync(u, token, "Test1234!");
+            actionMenuOpenForUserId = null;
+            StateHasChanged();
         }
         catch (Exception ex)
         {
@@ -325,9 +389,9 @@
             }
             await UserManager.DeleteAsync(u);
             
-            // PERF: Remove from local lists immediately
             users.RemoveAll(u => u.Id == userId);
             adminIds.Remove(userId);
+            actionMenuOpenForUserId = null;
             StateHasChanged();
         }
         catch (Exception ex)
@@ -342,14 +406,11 @@
         }
     }
 
-    private void GoHome() => Nav.NavigateTo("/");
-
     private async Task Impersonate(string userId)
     {
-        // POST to our endpoint
+        actionMenuOpenForUserId = null;
+        StateHasChanged();
         await new HttpClient().PostAsync(Nav.ToAbsoluteUri($"/auth/impersonate/{userId}"), null);
         Nav.NavigateTo("/", forceLoad: true);
     }
 }
-
-

@@ -27,6 +27,9 @@ public class DbSeeder
         // Seed henrik user (if not exists)
         await SeedHenrikUserAsync();
 
+        // Seed henrik admin user (if not exists)
+        await SeedHenrikAdminUserAsync();
+
         // Ensure existing schedule templates have an owner (default to admin)
         await EnsureTemplatesHaveOwnerAsync();
 
@@ -116,6 +119,48 @@ public class DbSeeder
         {
             // User exists - don't reset password, let user keep their own password
             _logger.LogInformation("Henrik user already exists - password not changed.");
+        }
+    }
+    
+    private async Task SeedHenrikAdminUserAsync()
+    {
+        const string henrikAdminEmail = "henrik.kackur@gmail.com";
+        var henrikAdminUser = await _userManager.FindByEmailAsync(henrikAdminEmail);
+        
+        const string henrikAdminPassword = "vårloggaärgrön";
+        
+        if (henrikAdminUser == null)
+        {
+            henrikAdminUser = new ApplicationUser
+            {
+                UserName = henrikAdminEmail,
+                Email = henrikAdminEmail,
+                EmailConfirmed = true
+            };
+
+            var result = await _userManager.CreateAsync(henrikAdminUser, henrikAdminPassword);
+            if (result.Succeeded)
+            {
+                await _userManager.AddToRoleAsync(henrikAdminUser, "Admin");
+                _logger.LogInformation("Created henrik admin user: {Email}", henrikAdminEmail);
+            }
+            else
+            {
+                _logger.LogError("Failed to create henrik admin user: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            // User exists - ensure they're in Admin role
+            if (!await _userManager.IsInRoleAsync(henrikAdminUser, "Admin"))
+            {
+                await _userManager.AddToRoleAsync(henrikAdminUser, "Admin");
+                _logger.LogInformation("Added henrik admin user to Admin role.");
+            }
+            else
+            {
+                _logger.LogInformation("Henrik admin user already exists with correct role - password not changed.");
+            }
         }
     }
 
