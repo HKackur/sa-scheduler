@@ -810,74 +810,138 @@ _ = Task.Run(async () =>
                     logger.LogInformation("Constraint fix (non-critical): {Message}", fixEx.Message);
                 }
                 
-                // Add Source and DisplayColor columns to Groups table if they don't exist (SQLite only)
+                // Add Source and DisplayColor columns to Groups table if they don't exist
                 // CRITICAL: This must run before any queries that use these columns
+                // Works for both SQLite and PostgreSQL
                 try
                 {
-                    // Check columns by querying pragma_table_info directly
                     var connection = context.Database.GetDbConnection();
                     if (connection.State != System.Data.ConnectionState.Open)
                         await connection.OpenAsync();
                     
-                    var command = connection.CreateCommand();
-                    command.CommandText = "PRAGMA table_info(Groups)";
-                    var reader = await command.ExecuteReaderAsync();
-                    var columnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    while (await reader.ReadAsync())
-                    {
-                        var colName = reader.GetString(1); // Column name is at index 1
-                        columnNames.Add(colName);
-                    }
-                    await reader.CloseAsync();
+                    bool isPostgres = provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase);
                     
-                    var hasSourceColumn = columnNames.Contains("Source");
-                    var hasDisplayColorColumn = columnNames.Contains("DisplayColor");
-                    
-                    if (!hasSourceColumn)
+                    if (isPostgres)
                     {
-                        await context.Database.ExecuteSqlRawAsync("ALTER TABLE Groups ADD COLUMN Source TEXT DEFAULT 'Egen'");
-                        await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET Source = 'Egen' WHERE Source IS NULL OR Source = ''");
-                        Console.WriteLine("[MIGRATION] ✅ Added Source column to Groups table");
-                        logger.LogInformation("✅ Added Source column to Groups table");
-                    }
-                    
-                    if (!hasDisplayColorColumn)
-                    {
-                        await context.Database.ExecuteSqlRawAsync("ALTER TABLE Groups ADD COLUMN DisplayColor TEXT DEFAULT 'Ljusblå'");
-                        await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET DisplayColor = 'Ljusblå' WHERE DisplayColor IS NULL OR DisplayColor = ''");
-                        Console.WriteLine("[MIGRATION] ✅ Added DisplayColor column to Groups table");
-                        logger.LogInformation("✅ Added DisplayColor column to Groups table");
+                        // PostgreSQL: Use information_schema
+                        // Add Source column if it doesn't exist
+                        await context.Database.ExecuteSqlRawAsync(@"
+                            DO $$ 
+                            BEGIN 
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns 
+                                    WHERE table_name = 'Groups' AND column_name = 'Source'
+                                ) THEN
+                                    ALTER TABLE ""Groups"" ADD COLUMN ""Source"" VARCHAR(50) NOT NULL DEFAULT 'Egen';
+                                END IF;
+                            END $$;
+                        ");
+                        Console.WriteLine("[MIGRATION] ✅ Checked/added Source column to Groups table (PostgreSQL)");
+                        logger.LogInformation("✅ Checked/added Source column to Groups table (PostgreSQL)");
+                        
+                        // Add DisplayColor column if it doesn't exist
+                        await context.Database.ExecuteSqlRawAsync(@"
+                            DO $$ 
+                            BEGIN 
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns 
+                                    WHERE table_name = 'Groups' AND column_name = 'DisplayColor'
+                                ) THEN
+                                    ALTER TABLE ""Groups"" ADD COLUMN ""DisplayColor"" VARCHAR(50) NOT NULL DEFAULT 'Ljusblå';
+                                END IF;
+                            END $$;
+                        ");
+                        Console.WriteLine("[MIGRATION] ✅ Checked/added DisplayColor column to Groups table (PostgreSQL)");
+                        logger.LogInformation("✅ Checked/added DisplayColor column to Groups table (PostgreSQL)");
+                        
+                        // Update existing groups with default values
+                        var updated = await context.Database.ExecuteSqlRawAsync(@"
+                            UPDATE ""Groups"" 
+                            SET ""Source"" = COALESCE(""Source"", 'Egen'),
+                                ""DisplayColor"" = COALESCE(""DisplayColor"", 'Ljusblå')
+                            WHERE ""Source"" IS NULL OR ""DisplayColor"" IS NULL
+                        ");
+                        Console.WriteLine($"[MIGRATION] ✅ Updated {updated} groups with default values (PostgreSQL)");
+                        logger.LogInformation("✅ Updated {Count} groups with default values (PostgreSQL)", updated);
+                        
+                        // Add StandardDisplayColor to GroupTypes if it doesn't exist
+                        await context.Database.ExecuteSqlRawAsync(@"
+                            DO $$ 
+                            BEGIN 
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.columns 
+                                    WHERE table_name = 'GroupTypes' AND column_name = 'StandardDisplayColor'
+                                ) THEN
+                                    ALTER TABLE ""GroupTypes"" ADD COLUMN ""StandardDisplayColor"" VARCHAR(50) NOT NULL DEFAULT 'Ljusblå';
+                                END IF;
+                            END $$;
+                        ");
+                        Console.WriteLine("[MIGRATION] ✅ Checked/added StandardDisplayColor column to GroupTypes table (PostgreSQL)");
+                        logger.LogInformation("✅ Checked/added StandardDisplayColor column to GroupTypes table (PostgreSQL)");
                     }
                     else
                     {
-                        Console.WriteLine("[MIGRATION] DisplayColor column already exists");
-                    }
-                    
-                    // Check and add StandardDisplayColor column to GroupTypes table
-                    var groupTypesColumnNames = new List<string>();
-                    using (var groupTypesCommand = connection.CreateCommand())
-                    {
-                        groupTypesCommand.CommandText = "SELECT name FROM pragma_table_info('GroupTypes')";
-                        using (var groupTypesReader = await groupTypesCommand.ExecuteReaderAsync())
+                        // SQLite: Use PRAGMA
+                        var command = connection.CreateCommand();
+                        command.CommandText = "PRAGMA table_info(Groups)";
+                        var reader = await command.ExecuteReaderAsync();
+                        var columnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        while (await reader.ReadAsync())
                         {
-                            while (await groupTypesReader.ReadAsync())
+                            var colName = reader.GetString(1); // Column name is at index 1
+                            columnNames.Add(colName);
+                        }
+                        await reader.CloseAsync();
+                        
+                        var hasSourceColumn = columnNames.Contains("Source");
+                        var hasDisplayColorColumn = columnNames.Contains("DisplayColor");
+                        
+                        if (!hasSourceColumn)
+                        {
+                            await context.Database.ExecuteSqlRawAsync("ALTER TABLE Groups ADD COLUMN Source TEXT DEFAULT 'Egen'");
+                            await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET Source = 'Egen' WHERE Source IS NULL OR Source = ''");
+                            Console.WriteLine("[MIGRATION] ✅ Added Source column to Groups table");
+                            logger.LogInformation("✅ Added Source column to Groups table");
+                        }
+                        
+                        if (!hasDisplayColorColumn)
+                        {
+                            await context.Database.ExecuteSqlRawAsync("ALTER TABLE Groups ADD COLUMN DisplayColor TEXT DEFAULT 'Ljusblå'");
+                            await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET DisplayColor = 'Ljusblå' WHERE DisplayColor IS NULL OR DisplayColor = ''");
+                            Console.WriteLine("[MIGRATION] ✅ Added DisplayColor column to Groups table");
+                            logger.LogInformation("✅ Added DisplayColor column to Groups table");
+                        }
+                        else
+                        {
+                            Console.WriteLine("[MIGRATION] DisplayColor column already exists");
+                        }
+                        
+                        // Check and add StandardDisplayColor column to GroupTypes table
+                        var groupTypesColumnNames = new List<string>();
+                        using (var groupTypesCommand = connection.CreateCommand())
+                        {
+                            groupTypesCommand.CommandText = "SELECT name FROM pragma_table_info('GroupTypes')";
+                            using (var groupTypesReader = await groupTypesCommand.ExecuteReaderAsync())
                             {
-                                groupTypesColumnNames.Add(groupTypesReader.GetString(0));
+                                while (await groupTypesReader.ReadAsync())
+                                {
+                                    groupTypesColumnNames.Add(groupTypesReader.GetString(0));
+                                }
                             }
                         }
-                    }
-                    
-                    var hasStandardDisplayColorColumn = groupTypesColumnNames.Contains("StandardDisplayColor");
-                    if (!hasStandardDisplayColorColumn)
-                    {
-                        await context.Database.ExecuteSqlRawAsync("ALTER TABLE GroupTypes ADD COLUMN StandardDisplayColor TEXT DEFAULT 'Ljusblå'");
-                        await context.Database.ExecuteSqlRawAsync("UPDATE GroupTypes SET StandardDisplayColor = 'Ljusblå' WHERE StandardDisplayColor IS NULL OR StandardDisplayColor = ''");
-                        Console.WriteLine("[MIGRATION] ✅ Added StandardDisplayColor column to GroupTypes table");
-                        logger.LogInformation("✅ Added StandardDisplayColor column to GroupTypes table");
-                    }
-                    else
-                    {
-                        Console.WriteLine("[MIGRATION] StandardDisplayColor column already exists");
+                        
+                        var hasStandardDisplayColorColumn = groupTypesColumnNames.Contains("StandardDisplayColor");
+                        if (!hasStandardDisplayColorColumn)
+                        {
+                            await context.Database.ExecuteSqlRawAsync("ALTER TABLE GroupTypes ADD COLUMN StandardDisplayColor TEXT DEFAULT 'Ljusblå'");
+                            await context.Database.ExecuteSqlRawAsync("UPDATE GroupTypes SET StandardDisplayColor = 'Ljusblå' WHERE StandardDisplayColor IS NULL OR StandardDisplayColor = ''");
+                            Console.WriteLine("[MIGRATION] ✅ Added StandardDisplayColor column to GroupTypes table");
+                            logger.LogInformation("✅ Added StandardDisplayColor column to GroupTypes table");
+                        }
+                        else
+                        {
+                            Console.WriteLine("[MIGRATION] StandardDisplayColor column already exists");
+                        }
                     }
                     
                     if (connection.State == System.Data.ConnectionState.Open)
