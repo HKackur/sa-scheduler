@@ -1068,6 +1068,7 @@ _ = Task.Run(async () =>
         }
 
         // One-time data ownership fix: attach legacy data without UserId to admin account
+        // CRITICAL: This ensures groups are visible to users
         try
         {
             const string adminEmail = "admin@sportadmin.se";
@@ -1075,12 +1076,18 @@ _ = Task.Run(async () =>
             if (adminUser != null)
             {
                 var adminId = adminUser.Id;
-                await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
-                await context.Database.ExecuteSqlRawAsync("UPDATE ScheduleTemplates SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
-                await context.Database.ExecuteSqlRawAsync("UPDATE Places SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+                var fixedGroups = await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+                var fixedTemplates = await context.Database.ExecuteSqlRawAsync("UPDATE ScheduleTemplates SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+                var fixedPlaces = await context.Database.ExecuteSqlRawAsync("UPDATE Places SET UserId = {0} WHERE UserId IS NULL OR TRIM(UserId) = ''", adminId);
+                Console.WriteLine($"[SEED] Fixed UserId: {fixedGroups} groups, {fixedTemplates} templates, {fixedPlaces} places");
+                logger.LogInformation("Fixed UserId: {Groups} groups, {Templates} templates, {Places} places", fixedGroups, fixedTemplates, fixedPlaces);
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SEED] Error fixing UserId: {ex.Message}");
+            logger.LogError(ex, "Error fixing UserId");
+        }
 
         // One-time data fix: rename legacy group "Herr U" -> "P19" and set type to "Akademi"
         try
