@@ -612,6 +612,75 @@ app.UseAuthorization();
 
 app.MapRazorPages();
 
+// Admin endpoint to fix database columns (temporary, remove after use)
+app.MapGet("/admin/fix-db-columns", async (AppDbContext context) =>
+{
+    try
+    {
+        await context.Database.OpenConnectionAsync();
+        
+        // Fix Groups table
+        await context.Database.ExecuteSqlRawAsync(@"
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'Groups' AND column_name = 'Source'
+                ) THEN
+                    ALTER TABLE ""Groups"" ADD COLUMN ""Source"" VARCHAR(50) NOT NULL DEFAULT 'Egen';
+                END IF;
+            END $$;
+        ");
+        
+        await context.Database.ExecuteSqlRawAsync(@"
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'Groups' AND column_name = 'DisplayColor'
+                ) THEN
+                    ALTER TABLE ""Groups"" ADD COLUMN ""DisplayColor"" VARCHAR(50) NOT NULL DEFAULT 'Ljusblå';
+                END IF;
+            END $$;
+        ");
+        
+        var updated = await context.Database.ExecuteSqlRawAsync(@"
+            UPDATE ""Groups"" 
+            SET ""Source"" = COALESCE(""Source"", 'Egen'),
+                ""DisplayColor"" = COALESCE(""DisplayColor"", 'Ljusblå')
+            WHERE ""Source"" IS NULL OR ""DisplayColor"" IS NULL
+        ");
+        
+        // Fix GroupTypes table
+        await context.Database.ExecuteSqlRawAsync(@"
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'GroupTypes' AND column_name = 'StandardDisplayColor'
+                ) THEN
+                    ALTER TABLE ""GroupTypes"" ADD COLUMN ""StandardDisplayColor"" VARCHAR(50) NOT NULL DEFAULT 'Ljusblå';
+                END IF;
+            END $$;
+        ");
+        
+        var updatedTypes = await context.Database.ExecuteSqlRawAsync(@"
+            UPDATE ""GroupTypes"" 
+            SET ""StandardDisplayColor"" = COALESCE(""StandardDisplayColor"", 'Ljusblå')
+            WHERE ""StandardDisplayColor"" IS NULL
+        ");
+        
+        return Results.Ok(new { 
+            success = true, 
+            message = $"Fixed! Updated {updated} groups and {updatedTypes} group types." 
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Error: {ex.Message}");
+    }
+});
+
 // Configure Blazor Server SignalR hub
 app.MapBlazorHub(options =>
 {
