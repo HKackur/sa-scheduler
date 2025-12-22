@@ -613,11 +613,12 @@ app.UseAuthorization();
 app.MapRazorPages();
 
 // Admin endpoint to fix database columns (temporary, remove after use)
-app.MapGet("/admin/fix-db-columns", async (AppDbContext context) =>
+app.MapGet("/admin/fix-db-columns", async (AppDbContext context, IServiceProvider services) =>
 {
     try
     {
         await context.Database.OpenConnectionAsync();
+        var scope = services.CreateScope();
         
         // Fix Groups table
         await context.Database.ExecuteSqlRawAsync(@"
@@ -670,9 +671,24 @@ app.MapGet("/admin/fix-db-columns", async (AppDbContext context) =>
             WHERE ""StandardDisplayColor"" IS NULL
         ");
         
+        // Fix UserId for groups without owner (attach to admin)
+        const string adminEmail = "admin@sportadmin.se";
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var adminUser = await userManager.FindByEmailAsync(adminEmail);
+        if (adminUser != null)
+        {
+            var adminId = adminUser.Id;
+            var fixedUserId = await context.Database.ExecuteSqlRawAsync(@"
+                UPDATE ""Groups"" 
+                SET ""UserId"" = {0} 
+                WHERE ""UserId"" IS NULL OR TRIM(""UserId"") = ''
+            ", adminId);
+            Console.WriteLine($"[FIX] Fixed UserId for {fixedUserId} groups");
+        }
+        
         // Check how many groups exist
         var groupCount = await context.Database.SqlQueryRaw<int>(@"SELECT COUNT(*) FROM ""Groups""").FirstOrDefaultAsync();
-        var groupsWithUserId = await context.Database.SqlQueryRaw<int>(@"SELECT COUNT(*) FROM ""Groups"" WHERE ""UserId"" IS NOT NULL AND ""UserId"" != ''").FirstOrDefaultAsync();
+        var groupsWithUserId = await context.Database.SqlQueryRaw<int>(@"SELECT COUNT(*) FROM ""Groups"" WHERE ""UserId"" IS NOT NULL AND TRIM(""UserId"") != ''").FirstOrDefaultAsync();
         
         return Results.Ok(new { 
             success = true, 
