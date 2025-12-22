@@ -1,0 +1,17 @@
+@page "/hjalp"
+@inject SchedulerMVP.Services.UIState UI
+
+<div class="sa-panel" style="padding:16px; overflow-y: auto; overflow-x: hidden; padding-bottom: 64px;">
+    <div class="help-content">
+        <p style="font-size:14px; color:#374151; line-height:1.6;">
+            I denna testversion finns ingen hjälpsektion än. Vid frågor kontakta produktägare <a href="mailto:henrik.kackur@sportadmin.se" style="color:#1761A5; text-decoration:none;">henrik.kackur@sportadmin.se</a>.
+        </p>
+    </div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        UI.PageTitle = "Hjälp";
+    }
+}

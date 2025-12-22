@@ -1,0 +1,351 @@
+@page "/mitt-konto"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject SchedulerMVP.Services.UIState UI
+
+<div class="sa-panel" style="padding:16px; overflow-y: auto; overflow-x: hidden; padding-bottom: 64px;">
+    <!-- Current Email Display -->
+    <div class="account-section">
+        <h3 class="section-title">E-postadress</h3>
+        <div class="account-info">
+            <span class="account-value">@currentEmail</span>
+        </div>
+    </div>
+
+    <!-- Update Email Form -->
+    <div class="account-section">
+        <h3 class="section-title">Ändra e-postadress</h3>
+        <div class="account-form">
+            <div class="form-field">
+                <label class="form-label">Ny e-postadress</label>
+                <input class="form-input" type="email" @bind="newEmail" placeholder="Ange ny e-postadress" />
+            </div>
+            <div class="form-actions">
+                <button class="btn-primary" @onclick="UpdateEmail" disabled="@(string.IsNullOrWhiteSpace(newEmail) || newEmail == currentEmail || isUpdatingEmail)">
+                    @if (isUpdatingEmail)
+                    {
+                        <span>Sparar...</span>
+                    }
+                    else
+                    {
+                        <span>Spara e-postadress</span>
+                    }
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(emailMessage))
+            {
+                <div class="message @(emailSuccess ? "message-success" : "message-error")">@emailMessage</div>
+            }
+        </div>
+    </div>
+
+    <!-- Update Password Form -->
+    <div class="account-section">
+        <h3 class="section-title">Ändra lösenord</h3>
+        <div class="account-form">
+            <div class="form-field">
+                <label class="form-label">Nuvarande lösenord</label>
+                <input class="form-input" type="password" @bind="currentPassword" placeholder="Ange nuvarande lösenord" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Nytt lösenord</label>
+                <input class="form-input" type="password" @bind="newPassword" placeholder="Ange nytt lösenord" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Bekräfta nytt lösenord</label>
+                <input class="form-input" type="password" @bind="confirmPassword" placeholder="Bekräfta nytt lösenord" />
+            </div>
+            <div class="form-actions">
+                <button class="btn-primary" @onclick="UpdatePassword" disabled="@(string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword) || string.IsNullOrWhiteSpace(confirmPassword) || isUpdatingPassword)">
+                    @if (isUpdatingPassword)
+                    {
+                        <span>Sparar...</span>
+                    }
+                    else
+                    {
+                        <span>Spara lösenord</span>
+                    }
+                </button>
+            </div>
+            @if (!string.IsNullOrEmpty(passwordMessage))
+            {
+                <div class="message @(passwordSuccess ? "message-success" : "message-error")">@passwordMessage</div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    .account-section {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 24px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 768px) {
+        .account-section {
+            max-width: 50%;
+        }
+    }
+
+    .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0 0 16px 0;
+    }
+
+    .account-info {
+        display: flex;
+        align-items: center;
+    }
+
+    .account-value {
+        font-size: 14px;
+        color: #374151;
+    }
+
+    .account-form {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .form-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #374151;
+    }
+
+    .form-input {
+        width: 100%;
+        max-width: 100%;
+        padding: 10px 12px;
+        border-radius: 4px;
+        border: 1px solid #dcdee2;
+        background-color: #f3f5f7;
+        box-shadow: 0 2px 8px 0 rgba(0,0,0,0.02);
+        font-size: 12px;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        box-sizing: border-box;
+        min-height: 40px;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: #1761A5;
+        background-color: #fff;
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+    }
+
+    .btn-primary {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        background: #1761A5;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: #0f4a7a;
+    }
+
+    .btn-primary:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
+    }
+
+    .message {
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        margin-top: 8px;
+    }
+
+    .message-success {
+        background: #d1fae5;
+        color: #065f46;
+        border: 1px solid #6ee7b7;
+    }
+
+    .message-error {
+        background: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fca5a5;
+    }
+</style>
+
+@code {
+    private string currentEmail = string.Empty;
+    private string newEmail = string.Empty;
+    private string currentPassword = string.Empty;
+    private string newPassword = string.Empty;
+    private string confirmPassword = string.Empty;
+    private bool isUpdatingEmail = false;
+    private bool isUpdatingPassword = false;
+    private string emailMessage = string.Empty;
+    private string passwordMessage = string.Empty;
+    private bool emailSuccess = false;
+    private bool passwordSuccess = false;
+    private ApplicationUser? currentUser;
+
+    protected override void OnInitialized()
+    {
+        UI.PageTitle = "Mitt konto";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserData();
+    }
+
+    private async Task LoadUserData()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            var email = user?.FindFirstValue(ClaimTypes.Email) ?? user?.Identity?.Name;
+            
+            if (!string.IsNullOrEmpty(email))
+            {
+                currentUser = await UserManager.FindByEmailAsync(email);
+                if (currentUser != null)
+                {
+                    currentEmail = currentUser.Email ?? string.Empty;
+                    newEmail = currentEmail;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MyAccount] Error loading user data: {ex.Message}");
+        }
+    }
+
+    private async Task UpdateEmail()
+    {
+        if (currentUser == null || string.IsNullOrWhiteSpace(newEmail))
+            return;
+
+        if (newEmail == currentEmail)
+        {
+            emailMessage = "Ny e-postadress måste vara annorlunda än den nuvarande.";
+            emailSuccess = false;
+            return;
+        }
+
+        isUpdatingEmail = true;
+        emailMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            // Update email and username (they should match)
+            currentUser.Email = newEmail;
+            currentUser.UserName = newEmail;
+            currentUser.NormalizedEmail = newEmail.ToUpperInvariant();
+            currentUser.NormalizedUserName = newEmail.ToUpperInvariant();
+            
+            var result = await UserManager.UpdateAsync(currentUser);
+            
+            if (result.Succeeded)
+            {
+                emailMessage = "E-postadressen har uppdaterats. Du kommer att loggas ut för att logga in med din nya e-postadress.";
+                emailSuccess = true;
+                currentEmail = newEmail;
+                newEmail = string.Empty;
+                
+                // Sign out and redirect to login to re-authenticate with new email
+                await Task.Delay(1500);
+                Navigation.NavigateTo("/auth/logout", true);
+            }
+            else
+            {
+                emailMessage = string.Join(" ", result.Errors.Select(e => e.Description));
+                emailSuccess = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            emailMessage = $"Ett fel uppstod: {ex.Message}";
+            emailSuccess = false;
+        }
+        finally
+        {
+            isUpdatingEmail = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpdatePassword()
+    {
+        if (currentUser == null || string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
+            return;
+
+        if (newPassword != confirmPassword)
+        {
+            passwordMessage = "Nya lösenordet och bekräftelsen matchar inte.";
+            passwordSuccess = false;
+            StateHasChanged();
+            return;
+        }
+
+        isUpdatingPassword = true;
+        passwordMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var result = await UserManager.ChangePasswordAsync(currentUser, currentPassword, newPassword);
+            
+            if (result.Succeeded)
+            {
+                passwordMessage = "Lösenordet har uppdaterats.";
+                passwordSuccess = true;
+                currentPassword = string.Empty;
+                newPassword = string.Empty;
+                confirmPassword = string.Empty;
+            }
+            else
+            {
+                passwordMessage = string.Join(" ", result.Errors.Select(e => e.Description));
+                passwordSuccess = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            passwordMessage = $"Ett fel uppstod: {ex.Message}";
+            passwordSuccess = false;
+        }
+        finally
+        {
+            isUpdatingPassword = false;
+            StateHasChanged();
+        }
+    }
+}

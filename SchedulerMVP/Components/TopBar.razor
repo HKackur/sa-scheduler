@@ -23,6 +23,8 @@
     var isAdminPage = UI.IsAdminPage || path == "/admin" || path.EndsWith("/admin") || path.Contains("/admin/");
     var isGroupsManagePage = path == "/grupper" || path.EndsWith("/grupper");
     var isWhatsNewPage = path == "/vad-ar-nytt" || path.EndsWith("/vad-ar-nytt");
+    var isMyAccountPage = path == "/mitt-konto" || path.EndsWith("/mitt-konto");
+    var isHelpPage = path == "/hjalp" || path.EndsWith("/hjalp");
 }
 
 @if (!isLoginPage)
@@ -31,14 +33,14 @@
         <div class="sa-topbar-row">
             @* Left column: Title and Breadcrumbs *@
             <div class="tb-topbar-left">
-                @if (isAdminPage || isGroupsManagePage)
+                @if (isAdminPage || isGroupsManagePage || isMyAccountPage || isHelpPage)
                 {
                     <div class="sa-header-content">
                         <button class="btn-back" @onclick="NavigateBack" title="Tillbaka">
                             <span class="material-symbols-outlined">chevron_left</span>
                             Tillbaka
                         </button>
-                        <h2 class="sa-page-title">@(isAdminPage ? "Admin" : "Hantera grupper")</h2>
+                        <h2 class="sa-page-title">@(isAdminPage ? "Admin" : (isGroupsManagePage ? "Hantera grupper" : (isMyAccountPage ? "Mitt konto" : "Hjälp")))</h2>
                     </div>
                 }
                 else if (isWhatsNewPage)
@@ -82,7 +84,7 @@
             
             @* Right column: Actions *@
             <div class="tb-topbar-right">
-                @if (!isAdminPage && !isGroupsManagePage && !isWhatsNewPage)
+                @if (!isAdminPage && !isGroupsManagePage && !isWhatsNewPage && !isMyAccountPage && !isHelpPage)
                 {
                     <div class="calendar-actions">
                         @* Main View Switcher *@
@@ -113,7 +115,10 @@
                                 <a href="/admin" class="tb-item" style="text-decoration:none;">Admin</a>
                             }
                             <a href="/grupper" class="tb-item" style="text-decoration:none;">Hantera grupper</a>
+                            <a href="/mitt-konto" class="tb-item" style="text-decoration:none;">Mitt konto</a>
+                            <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
                             <a href="/vad-ar-nytt" class="tb-item" style="text-decoration:none;">Vad är nytt?</a>
+                            <a href="/hjalp" class="tb-item" style="text-decoration:none;">Hjälp</a>
                             <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
                             <button class="tb-item danger" @onclick="PerformLogout">Logga ut</button>
                         </div>

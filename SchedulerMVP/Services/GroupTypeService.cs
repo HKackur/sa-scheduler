@@ -7,8 +7,8 @@ namespace SchedulerMVP.Services;
 public interface IGroupTypeService
 {
     Task<List<GroupType>> GetTypesAsync();
-    Task<GroupType> CreateAsync(string name);
-    Task<GroupType?> UpdateAsync(Guid id, string name);
+    Task<GroupType> CreateAsync(string name, string? standardDisplayColor = null);
+    Task<GroupType?> UpdateAsync(Guid id, string name, string? standardDisplayColor = null);
     Task DeleteAsync(Guid id);
 }
 
@@ -33,22 +33,32 @@ public class GroupTypeService : IGroupTypeService
         return await q.OrderBy(x => x.Name).ToListAsync();
     }
 
-    public async Task<GroupType> CreateAsync(string name)
+    public async Task<GroupType> CreateAsync(string name, string? standardDisplayColor = null)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
         var userId = await _userContext.GetCurrentUserIdAsync();
-        var gt = new GroupType { Id = Guid.NewGuid(), Name = name, UserId = userId };
+        var gt = new GroupType 
+        { 
+            Id = Guid.NewGuid(), 
+            Name = name, 
+            UserId = userId,
+            StandardDisplayColor = standardDisplayColor ?? "Ljusblå"
+        };
         db.GroupTypes.Add(gt);
         await db.SaveChangesAsync();
         return gt;
     }
 
-    public async Task<GroupType?> UpdateAsync(Guid id, string name)
+    public async Task<GroupType?> UpdateAsync(Guid id, string name, string? standardDisplayColor = null)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
         var gt = await db.GroupTypes.FindAsync(id);
         if (gt == null) return null;
         gt.Name = name;
+        if (standardDisplayColor != null)
+        {
+            gt.StandardDisplayColor = standardDisplayColor;
+        }
         await db.SaveChangesAsync();
         return gt;
     }

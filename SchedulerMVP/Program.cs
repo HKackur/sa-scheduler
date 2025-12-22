@@ -18,6 +18,9 @@ using Npgsql;
 using System.Net.NetworkInformation;
 using System.Globalization;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using System.Data.Common;
+using System.Collections.Generic;
 
 // Fix Azure culture issue - set default culture to avoid "__10" invalid culture error
 CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("en-US");
@@ -349,6 +352,7 @@ builder.Services.AddScoped<UserContextService>();
 builder.Services.AddScoped<IGroupTypeService, GroupTypeService>();
 builder.Services.AddSingleton<ToastService>();
 builder.Services.AddScoped<RoleManager<IdentityRole>>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 var app = builder.Build();
 
@@ -805,6 +809,86 @@ _ = Task.Run(async () =>
                     Console.WriteLine($"[MIGRATION] Constraint fix (non-critical): {fixEx.Message}");
                     logger.LogInformation("Constraint fix (non-critical): {Message}", fixEx.Message);
                 }
+                
+                // Add Source and DisplayColor columns to Groups table if they don't exist (SQLite only)
+                // CRITICAL: This must run before any queries that use these columns
+                try
+                {
+                    // Check columns by querying pragma_table_info directly
+                    var connection = context.Database.GetDbConnection();
+                    if (connection.State != System.Data.ConnectionState.Open)
+                        await connection.OpenAsync();
+                    
+                    var command = connection.CreateCommand();
+                    command.CommandText = "PRAGMA table_info(Groups)";
+                    var reader = await command.ExecuteReaderAsync();
+                    var columnNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    while (await reader.ReadAsync())
+                    {
+                        var colName = reader.GetString(1); // Column name is at index 1
+                        columnNames.Add(colName);
+                    }
+                    await reader.CloseAsync();
+                    
+                    var hasSourceColumn = columnNames.Contains("Source");
+                    var hasDisplayColorColumn = columnNames.Contains("DisplayColor");
+                    
+                    if (!hasSourceColumn)
+                    {
+                        await context.Database.ExecuteSqlRawAsync("ALTER TABLE Groups ADD COLUMN Source TEXT DEFAULT 'Egen'");
+                        await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET Source = 'Egen' WHERE Source IS NULL OR Source = ''");
+                        Console.WriteLine("[MIGRATION] ✅ Added Source column to Groups table");
+                        logger.LogInformation("✅ Added Source column to Groups table");
+                    }
+                    
+                    if (!hasDisplayColorColumn)
+                    {
+                        await context.Database.ExecuteSqlRawAsync("ALTER TABLE Groups ADD COLUMN DisplayColor TEXT DEFAULT 'Ljusblå'");
+                        await context.Database.ExecuteSqlRawAsync("UPDATE Groups SET DisplayColor = 'Ljusblå' WHERE DisplayColor IS NULL OR DisplayColor = ''");
+                        Console.WriteLine("[MIGRATION] ✅ Added DisplayColor column to Groups table");
+                        logger.LogInformation("✅ Added DisplayColor column to Groups table");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[MIGRATION] DisplayColor column already exists");
+                    }
+                    
+                    // Check and add StandardDisplayColor column to GroupTypes table
+                    var groupTypesColumnNames = new List<string>();
+                    using (var groupTypesCommand = connection.CreateCommand())
+                    {
+                        groupTypesCommand.CommandText = "SELECT name FROM pragma_table_info('GroupTypes')";
+                        using (var groupTypesReader = await groupTypesCommand.ExecuteReaderAsync())
+                        {
+                            while (await groupTypesReader.ReadAsync())
+                            {
+                                groupTypesColumnNames.Add(groupTypesReader.GetString(0));
+                            }
+                        }
+                    }
+                    
+                    var hasStandardDisplayColorColumn = groupTypesColumnNames.Contains("StandardDisplayColor");
+                    if (!hasStandardDisplayColorColumn)
+                    {
+                        await context.Database.ExecuteSqlRawAsync("ALTER TABLE GroupTypes ADD COLUMN StandardDisplayColor TEXT DEFAULT 'Ljusblå'");
+                        await context.Database.ExecuteSqlRawAsync("UPDATE GroupTypes SET StandardDisplayColor = 'Ljusblå' WHERE StandardDisplayColor IS NULL OR StandardDisplayColor = ''");
+                        Console.WriteLine("[MIGRATION] ✅ Added StandardDisplayColor column to GroupTypes table");
+                        logger.LogInformation("✅ Added StandardDisplayColor column to GroupTypes table");
+                    }
+                    else
+                    {
+                        Console.WriteLine("[MIGRATION] StandardDisplayColor column already exists");
+                    }
+                    
+                    if (connection.State == System.Data.ConnectionState.Open)
+                        await connection.CloseAsync();
+                }
+                catch (Exception colEx)
+                {
+                    Console.WriteLine($"[MIGRATION] ❌ Column addition failed: {colEx.Message}");
+                    Console.WriteLine($"[MIGRATION] Stack trace: {colEx.StackTrace}");
+                    logger.LogError(colEx, "❌ Column addition failed: {Message}", colEx.Message);
+                }
             }
         }
         catch (Exception ex)
@@ -956,6 +1040,20 @@ app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<Applica
             return Results.Redirect("/login?error=missing");
         logger.LogInformation("Login attempt for email: {Email}", email);
         
+        // Check if user exists and has password set
+        var user = await userManager.FindByEmailAsync(email);
+        if (user != null && string.IsNullOrEmpty(user.PasswordHash))
+        {
+            logger.LogWarning("Login attempt for unactivated user: {Email}", email);
+            return Results.Redirect("/login?error=notactivated");
+        }
+        
+        if (user != null && !user.EmailConfirmed)
+        {
+            logger.LogWarning("Login attempt for unconfirmed email: {Email}", email);
+            return Results.Redirect("/login?error=emailnotconfirmed");
+        }
+        
         // PasswordSignInAsync can use email directly (Identity supports this)
         // But we also need to find the user to update LastLoginAt
         var result = await signInManager.PasswordSignInAsync(email, password, isPersistent: true, lockoutOnFailure: false);
@@ -963,7 +1061,7 @@ app.MapPost("/auth/login", async (HttpContext httpContext, SignInManager<Applica
         if (result.Succeeded)
         {
             logger.LogInformation("Login successful for email: {Email}", email);
-            var user = await userManager.FindByEmailAsync(email);
+            // User was already found above, reuse it
             if (user != null)
             {
                 user.LastLoginAt = DateTimeOffset.UtcNow;

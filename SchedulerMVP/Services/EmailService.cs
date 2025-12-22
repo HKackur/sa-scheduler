@@ -1,0 +1,92 @@
+using MailKit.Net.Smtp;
+using MailKit.Security;
+using MimeKit;
+
+namespace SchedulerMVP.Services;
+
+public class EmailService : IEmailService
+{
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<EmailService> _logger;
+
+    public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
+    {
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    public async Task SendInvitationEmailAsync(string email, string confirmationToken, string baseUrl)
+    {
+        var smtpHost = _configuration["Email:SmtpHost"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_HOST");
+        var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PORT") ?? "587");
+        var smtpUser = _configuration["Email:SmtpUser"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_USER");
+        var smtpPassword = _configuration["Email:SmtpPassword"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD");
+        var fromEmail = _configuration["Email:FromEmail"] ?? Environment.GetEnvironmentVariable("EMAIL_FROM_EMAIL") ?? "noreply@sportadmin.se";
+        var fromName = _configuration["Email:FromName"] ?? Environment.GetEnvironmentVariable("EMAIL_FROM_NAME") ?? "Sportadmins Schemaläggning";
+
+        if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpUser) || string.IsNullOrEmpty(smtpPassword))
+        {
+            _logger.LogWarning("SMTP not configured. Email invitation not sent to {Email}", email);
+            return;
+        }
+
+        try
+        {
+            var confirmationLink = $"{baseUrl.TrimEnd('/')}/confirm-email?token={Uri.EscapeDataString(confirmationToken)}&email={Uri.EscapeDataString(email)}";
+            
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(fromName, fromEmail));
+            message.To.Add(new MailboxAddress("", email));
+            message.Subject = "Välkommen till Sportadmins Schemaläggning";
+
+            var bodyBuilder = new BodyBuilder
+            {
+                TextBody = $@"Hej!
+
+Du har blivit inbjuden att använda Sportadmins Schemaläggning.
+
+Klicka på länken nedan för att slutföra din registrering och skapa ditt lösenord:
+{confirmationLink}
+
+Länken är giltig i 7 dagar.
+
+Vid frågor, kontakta produktägare henrik.kackur@sportadmin.se
+
+Med vänliga hälsningar,
+SportAdmin Team",
+                HtmlBody = $@"<html>
+<body style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #1761A5;"">Välkommen till Sportadmins Schemaläggning</h2>
+    <p>Hej!</p>
+    <p>Du har blivit inbjuden att använda Sportadmins Schemaläggning.</p>
+    <p>Klicka på knappen nedan för att slutföra din registrering och skapa ditt lösenord:</p>
+    <p style=""margin: 24px 0;"">
+        <a href=""{confirmationLink}"" style=""background-color: #1761A5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;"">Slutför registrering</a>
+    </p>
+    <p style=""font-size: 12px; color: #6b7280;"">Eller kopiera denna länk till din webbläsare:<br/>{confirmationLink}</p>
+    <p style=""font-size: 12px; color: #6b7280; margin-top: 24px;"">Länken är giltig i 7 dagar.</p>
+    <p style=""margin-top: 24px;"">Vid frågor, kontakta produktägare <a href=""mailto:henrik.kackur@sportadmin.se"">henrik.kackur@sportadmin.se</a></p>
+    <p style=""margin-top: 24px;"">Med vänliga hälsningar,<br/>SportAdmin Team</p>
+</body>
+</html>"
+            };
+
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using var client = new SmtpClient();
+            // Accept all certificates for Brevo (they use valid certificates but validation might fail in some environments)
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+            await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(smtpUser, smtpPassword);
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+
+            _logger.LogInformation("Invitation email sent successfully to {Email}", email);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending invitation email to {Email}", email);
+            throw;
+        }
+    }
+}

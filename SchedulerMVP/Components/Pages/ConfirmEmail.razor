@@ -1,0 +1,260 @@
+@page "/confirm-email"
+@layout Layout.LoginLayout
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components
+@using Microsoft.JSInterop
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Navigation
+@inject SchedulerMVP.Services.UIState UI
+@inject IJSRuntime JS
+
+<PageTitle>Slutför registrering</PageTitle>
+
+<div class="login-page">
+    <header class="login-logo" aria-label="Sportadmin Labs">
+        <img class="login-logo-primary" src="Sportadmin Labs Logo.png" alt="Sportadmin Labs" />
+    </header>
+
+    <section class="login-content" aria-labelledby="confirm-heading">
+        @if (isLoading)
+        {
+            <div class="login-text">
+                <h1 id="confirm-heading">Verifierar...</h1>
+            </div>
+        }
+        else if (isConfirmed)
+        {
+            <div class="login-text">
+                <h1 id="confirm-heading">Registrering slutförd!</h1>
+                <p>Ditt konto har aktiverats. Du kan nu logga in.</p>
+            </div>
+            <div class="login-form">
+                <button type="button" class="login-button" @onclick="GoToLogin">
+                    Logga in
+                </button>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="login-text">
+                <h1 id="confirm-heading">Fel vid bekräftelse</h1>
+                <p>@errorMessage</p>
+            </div>
+            <div class="login-form">
+                @if (errorMessage.Contains("redan aktiverat"))
+                {
+                    <button type="button" class="login-button" @onclick="GoToLogin">
+                        Logga in
+                    </button>
+                }
+                else
+                {
+                    <p style="font-size: 14px; color: #666; text-align: left;">Länken kan ha gått ut eller redan använts. Kontakta produktägare <a href="mailto:henrik.kackur@sportadmin.se" style="color:#1761A5;">henrik.kackur@sportadmin.se</a> om du behöver en ny inbjudan.</p>
+                    <button type="button" class="login-button" @onclick="GoToLogin">
+                        Logga in
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="login-text">
+                <h1 id="confirm-heading">Slutför din registrering</h1>
+                <p>E-post: <strong>@email</strong></p>
+            </div>
+
+            <div class="login-form">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="error-message" role="alert">@errorMessage</div>
+                }
+
+                <form @onsubmit:preventDefault="true">
+                    <div class="form-group">
+                        <label for="password">Skapa lösenord</label>
+                        <input id="password" name="password" class="form-control" type="password" @bind="password" placeholder="Ange lösenord (minst 8 tecken)" required />
+                        <div style="font-size: 12px; color: #666; margin-top: 4px;">Minst 8 tecken.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmPassword">Bekräfta lösenord</label>
+                        <input id="confirmPassword" name="confirmPassword" class="form-control" type="password" @bind="confirmPassword" placeholder="Bekräfta lösenord" required />
+                    </div>
+
+                    <button type="button" class="login-button" @onclick="ConfirmAndSetPassword" disabled="@(string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(confirmPassword) || password.Length < 8 || isProcessing)">
+                        @if (isProcessing)
+                        {
+                            <span>Bearbetar...</span>
+                        }
+                        else
+                        {
+                            <span>Slutför registrering</span>
+                        }
+                    </button>
+                </form>
+            </div>
+        }
+    </section>
+</div>
+
+
+@code {
+    [Parameter, SupplyParameterFromQuery] public string? Token { get; set; }
+    [Parameter, SupplyParameterFromQuery] public string? Email { get; set; }
+
+    private string email = string.Empty;
+    private string password = string.Empty;
+    private string confirmPassword = string.Empty;
+    private bool isLoading = true;
+    private bool isProcessing = false;
+    private bool isConfirmed = false;
+    private string errorMessage = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        UI.PageTitle = "Slutför registrering";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Force hide TopBar with JavaScript after render (same as Login page)
+            await JS.InvokeVoidAsync("eval", @"
+                (function() {
+                    const hideTopBar = () => {
+                        const topBar = document.querySelector('.sa-topbar');
+                        if (topBar) {
+                            topBar.style.cssText = 'display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;position:absolute!important;left:-99999px!important;opacity:0!important;';
+                        }
+                    };
+                    hideTopBar();
+                    // Also try after a short delay in case it renders later
+                    setTimeout(hideTopBar, 100);
+                    setTimeout(hideTopBar, 500);
+                })();
+            ");
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(Token) || string.IsNullOrEmpty(Email))
+        {
+            errorMessage = "Ogiltig bekräftelselänk. Token eller e-postadress saknas.";
+            isLoading = false;
+            return;
+        }
+
+        email = Uri.UnescapeDataString(Email);
+        
+        // Verify token is valid (but don't confirm yet - user needs to set password first)
+        try
+        {
+            var user = await UserManager.FindByEmailAsync(email);
+            if (user == null)
+            {
+                errorMessage = "Användare hittades inte. Kontakta produktägare för en ny inbjudan.";
+                isLoading = false;
+                return;
+            }
+
+            // Check if user already has a password (already confirmed)
+            if (!string.IsNullOrEmpty(user.PasswordHash))
+            {
+                errorMessage = "Detta konto är redan aktiverat. Du kan logga in direkt.";
+                isLoading = false;
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ett fel uppstod: {ex.Message}";
+            isLoading = false;
+            return;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task ConfirmAndSetPassword()
+    {
+        if (string.IsNullOrWhiteSpace(password) || string.IsNullOrWhiteSpace(confirmPassword))
+        {
+            errorMessage = "Fyll i båda lösenordsfälten.";
+            return;
+        }
+
+        if (password.Length < 8)
+        {
+            errorMessage = "Lösenordet måste vara minst 8 tecken.";
+            return;
+        }
+
+        if (password != confirmPassword)
+        {
+            errorMessage = "Lösenorden matchar inte.";
+            return;
+        }
+
+        isProcessing = true;
+        errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            var user = await UserManager.FindByEmailAsync(email);
+            if (user == null)
+            {
+                errorMessage = "Användare hittades inte.";
+                isProcessing = false;
+                return;
+            }
+
+            // Confirm email and set password in one operation
+            var decodedToken = Uri.UnescapeDataString(Token ?? string.Empty);
+            
+            // First confirm email
+            var confirmResult = await UserManager.ConfirmEmailAsync(user, decodedToken);
+            
+            if (!confirmResult.Succeeded)
+            {
+                errorMessage = string.Join(" ", confirmResult.Errors.Select(e => e.Description));
+                if (string.IsNullOrEmpty(errorMessage))
+                {
+                    errorMessage = "Bekräftelselänken är ogiltig eller har gått ut. Kontakta produktägare för en ny inbjudan.";
+                }
+                isProcessing = false;
+                return;
+            }
+
+            // Then set password
+            var addPasswordResult = await UserManager.AddPasswordAsync(user, password);
+            
+            if (!addPasswordResult.Succeeded)
+            {
+                errorMessage = string.Join(" ", addPasswordResult.Errors.Select(e => e.Description));
+                isProcessing = false;
+                return;
+            }
+
+            isConfirmed = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Ett fel uppstod: {ex.Message}";
+            isProcessing = false;
+        }
+        finally
+        {
+            isProcessing = false;
+            StateHasChanged();
+        }
+    }
+
+    private void GoToLogin()
+    {
+        Navigation.NavigateTo("/login");
+    }
+}
