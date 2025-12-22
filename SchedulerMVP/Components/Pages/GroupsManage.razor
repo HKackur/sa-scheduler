@@ -6,85 +6,280 @@
 @inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject SchedulerMVP.Services.UserContextService UserContext
 
-<div class="sa-panel" style="padding:16px; max-height: calc(100vh - 120px); overflow-y: auto; overflow-x: hidden;">
-    <h3 style="margin:0 0 8px 0; font-size:24px; font-weight:600; color:#374151;">Hantera grupper</h3>
-    <p style="margin:0 0 20px 0; color:#6b7280; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Här kan du skapa grupptyper och grupper. SportAdmin‑synk läggs till senare.</p>
-
-    <!-- Create group type -->
-    <div style="margin-bottom:20px; max-width:520px;">
-        <div style="display:flex; gap:8px; align-items:center;">
-            <input placeholder="Ange grupptyp" @bind="newTypeName" style="flex:1; padding:8px 10px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px;" />
-            <button @onclick="CreateType" style="padding:8px 12px; border:none; background:#eee; border-radius:6px; cursor:pointer; font-size:13px;">Skapa</button>
-        </div>
-        @if (types.Count > 0)
-        {
-            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
-                @foreach (var t in types)
-                {
-                    <div style="display:inline-flex; align-items:center; gap:6px; background:#f3f4f6; border-radius:999px; padding:4px 10px; font-size:12px;">
-                        @if (editingTypeId == t.Id)
-                        {
-                            <input @bind="editTypeName" style="border:1px solid #e5e7eb; border-radius:6px; padding:4px 6px; font-size:12px; width:140px;" />
-                            <button @onclick="SaveType" style="border:none; background:#e5e7eb; border-radius:6px; padding:4px 8px; cursor:pointer; font-size:12px;">Spara</button>
-                            <button @onclick="CancelTypeEdit" style="border:none; background:transparent; padding:4px 6px; cursor:pointer; font-size:12px;">Avbryt</button>
-                        }
-                        else
-                        {
-                            <span>@t.Name</span>
-                            <button @onclick="() => EditType(t)" title="Ändra" style="border:none; background:transparent; cursor:pointer; font-size:12px;">✎</button>
-                            <button @onclick="() => DeleteType(t.Id)" title="Radera" style="border:none; background:transparent; cursor:pointer; font-size:12px; color:#dc2626;">✕</button>
-                        }
-                    </div>
-                }
-            </div>
-        }
+<div class="sa-panel" style="padding:16px; overflow-y: auto; overflow-x: hidden; padding-bottom: 64px;">
+    <!-- Tab Navigation -->
+    <div class="nav-tabs" style="margin-bottom:20px;">
+        <button class="nav-tab @(activeTab == "groups" ? "active" : "")" @onclick='() => SetActiveTab("groups")'>Grupper</button>
+        <button class="nav-tab @(activeTab == "grouptypes" ? "active" : "")" @onclick='() => SetActiveTab("grouptypes")'>Grupptyper</button>
     </div>
 
-    @if (types.Count > 0)
+    @if (activeTab == "groups")
     {
-        <!-- Create group -->
-        <div style="margin-top:20px; max-width:520px;">
-            <div style="display:flex; gap:8px; align-items:center;">
-                <input placeholder="Gruppnamn" @bind="newGroupName" style="flex:1; padding:8px 10px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px;" />
-                <select @bind="selectedTypeId" style="padding:8px 10px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px;">
-                    <option value="">Välj grupptyp</option>
+        <!-- Filters and Create Group Button -->
+    <div style="display:flex; align-items:flex-end; gap:12px; margin-bottom:20px; flex-wrap:wrap;">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:11px; color:#6b7280; font-weight:400;">Grupptyp</label>
+            <select class="tb-select" @bind="filterGroupType" @bind:event="onchange" style="min-width:150px; height:38px; padding-top:10px; padding-bottom:10px; line-height:1.2;">
+                <option value="">Alla</option>
+                @foreach (var t in types)
+                {
+                    <option value="@t.Name">@t.Name</option>
+                }
+            </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:11px; color:#6b7280; font-weight:400;">Källa</label>
+            <select class="tb-select" @bind="filterSource" @bind:event="onchange" style="min-width:150px; height:38px; padding-top:10px; padding-bottom:10px; line-height:1.2;">
+                <option value="">Alla</option>
+                <option value="Egen">Egen</option>
+                <option value="Sportadmin">Sportadmin</option>
+            </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+            <label style="font-size:11px; color:#6b7280; font-weight:400;">Visningsfärg</label>
+            <select class="tb-select" @bind="filterDisplayColor" @bind:event="onchange" style="min-width:150px; height:38px; padding-top:10px; padding-bottom:10px; line-height:1.2;">
+                <option value="">Alla</option>
+                @foreach (var color in SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.Keys)
+                {
+                    <option value="@color">@color</option>
+                }
+            </select>
+        </div>
+        <button @onclick="ClearFilters" style="padding:8px 12px; border:none; background:#f3f4f6; border-radius:6px; cursor:pointer; font-size:13px; color:#111827; height:34px; align-self:flex-end;">Rensa</button>
+        <button class="tb-btn" @onclick="OpenCreateGroupModal" style="margin-left:auto; align-self:flex-end;" disabled="@(types.Count == 0)">
+            <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+            Ny grupp
+        </button>
+    </div>
+
+    <!-- Groups table -->
+        <h3 class="groups-table-title" style="margin-bottom:12px;">Grupper</h3>
+        <div class="groups-table-container">
+            <table class="groups-table">
+                <thead>
+                    <tr>
+                        <th>Grupp</th>
+                        <th>Grupptyp</th>
+                        <th>Källa</th>
+                        <th>Visningsfärg</th>
+                        <th style="width: 40px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var g in filteredGroups)
+                    {
+                        <tr>
+                            <td>@g.Name</td>
+                            <td>@g.GroupType</td>
+                            <td>@g.Source</td>
+                            <td>
+                                @{
+                                    var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(g.DisplayColor, 
+                                        SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
+                                }
+                                <span class="color-tag" style="background:@colorInfo.Background; border:1px solid @colorInfo.Border; color:@colorInfo.Text;">
+                                    @g.DisplayColor
+                                </span>
+                            </td>
+                            <td style="position:relative;">
+                                <button class="action-menu-trigger" @onclick="() => ToggleActionMenu(g.Id)" @onclick:stopPropagation="true">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                                @if (actionMenuOpenForGroupId == g.Id)
+                                {
+                                    <div class="action-menu" @onclick:stopPropagation="true">
+                                        <button class="action-menu-item" @onclick="() => OpenEditModal(g)">Redigera</button>
+                                        <button class="action-menu-item" @onclick="() => OpenDeleteModal(g)">Ta bort</button>
+                                    </div>
+                                    <div class="menu-overlay" @onclick="CloseActionMenu"></div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else if (activeTab == "grouptypes")
+    {
+        <!-- Create Group Type Button -->
+        <div style="display:flex; justify-content:flex-end; margin-bottom:20px;">
+            <button class="tb-btn" @onclick="OpenCreateGroupTypeModal">
+                <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+                Ny grupptyp
+            </button>
+        </div>
+
+        <!-- Group Types table -->
+        <h3 class="groups-table-title" style="margin-bottom:12px;">Grupptyper</h3>
+        <div class="groups-table-container">
+            <table class="groups-table">
+                <thead>
+                    <tr>
+                        <th>Grupptyp</th>
+                        <th>Standard visningsfärg</th>
+                        <th style="width: 40px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
                     @foreach (var t in types)
                     {
-                        <option value="@t.Id">@t.Name</option>
-                    }
-                </select>
-                <button @onclick="CreateGroup" style="padding:8px 12px; border:none; background:#eee; border-radius:6px; cursor:pointer; font-size:13px;">Skapa</button>
-            </div>
-
-            <ul style="list-style:none; padding:0; margin-top:12px; padding-bottom:32px;">
-                @foreach (var g in groups)
-                {
-                    <li style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6;">
-                        @if (editingGroupId == g.Id)
-                        {
-                            <input @bind="editGroupName" style="flex:1; padding:6px 8px; border:1px solid #e5e7eb; border-radius:6px; font-size:13px;" />
-                            <select @bind="editGroupTypeId" style="padding:6px 8px; border:1px solid #e5e7eb; border-radius:6px; font-size:13px;">
-                                @foreach (var t in types)
-                                {
-                                    <option value="@t.Id">@t.Name</option>
+                        <tr>
+                            <td>@t.Name</td>
+                            <td>
+                                @{
+                                    var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
+                                        t.StandardDisplayColor ?? "Ljusblå", 
+                                        SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
                                 }
-                            </select>
-                            <button @onclick="SaveGroup" style="border:none; background:#e5e7eb; border-radius:6px; padding:6px 8px; cursor:pointer; font-size:12px;">Spara</button>
-                            <button @onclick="CancelGroupEdit" style="border:none; background:transparent; padding:6px 6px; cursor:pointer; font-size:12px;">Avbryt</button>
-                        }
-                        else
-                        {
-                            <span style="flex:1;">@g.Name</span>
-                            <span style="color:#6b7280; font-size:12px;">@g.GroupType</span>
-                            <button @onclick="() => EditGroup(g)" title="Ändra" style="border:none; background:transparent; cursor:pointer; font-size:12px;">✎</button>
-                            <button @onclick="() => DeleteGroup(g.Id)" title="Radera" style="border:none; background:transparent; cursor:pointer; font-size:12px; color:#dc2626;">✕</button>
-                        }
-                    </li>
-                }
-            </ul>
+                                <span class="color-tag" style="background:@colorInfo.Background; border:1px solid @colorInfo.Border; color:@colorInfo.Text;">
+                                    @(t.StandardDisplayColor ?? "Ljusblå")
+                                </span>
+                            </td>
+                            <td style="position:relative;">
+                                <button class="action-menu-trigger" @onclick="() => ToggleGroupTypeActionMenu(t.Id)" @onclick:stopPropagation="true">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                                @if (groupTypeActionMenuOpenForId == t.Id)
+                                {
+                                    <div class="action-menu" @onclick:stopPropagation="true">
+                                        <button class="action-menu-item" @onclick="() => OpenEditGroupTypeModal(t)">Redigera</button>
+                                        <button class="action-menu-item" @onclick="() => OpenDeleteGroupTypeModal(t)">Ta bort</button>
+                                    </div>
+                                    <div class="menu-overlay" @onclick="CloseGroupTypeActionMenu"></div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
 </div>
+
+<GroupEditModal IsOpen="@editModalOpen" Group="@selectedGroupForEdit" OnClose="CloseEditModal" OnSaved="AfterGroupSaved" />
+<GroupDeleteModal IsOpen="@deleteModalOpen" Group="@selectedGroupForDelete" OnClose="CloseDeleteModal" OnDeleted="AfterGroupDeleted" />
+<CreateGroupModal IsOpen="@createGroupModalOpen" OnClose="CloseCreateGroupModal" OnCreated="AfterGroupCreated" />
+<GroupTypeManageModal IsOpen="@groupTypeModalOpen" EditingGroupType="@selectedGroupTypeForEdit" OnClose="CloseGroupTypeModal" OnSaved="AfterGroupTypeSaved" />
+<GroupTypeDeleteModal IsOpen="@groupTypeDeleteModalOpen" GroupType="@selectedGroupTypeForDelete" OnClose="CloseGroupTypeDeleteModal" OnDeleted="AfterGroupTypeDeleted" />
+
+<style>
+    .groups-table-container {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        overflow: visible !important;
+        min-height: fit-content;
+    }
+
+    .groups-table-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #111827;
+        margin: 0;
+        padding: 0;
+    }
+
+    .groups-table {
+        width: 100%;
+        border-collapse: collapse;
+        display: table;
+    }
+
+    .groups-table thead {
+        background: #F9FAFB;
+    }
+
+    .groups-table th {
+        padding: 12px 20px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 600;
+        color: #6B7280;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .groups-table tbody tr {
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .groups-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .groups-table td {
+        padding: 12px 20px;
+        font-size: 14px;
+        color: #111827;
+    }
+
+    .color-tag {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .action-menu-trigger {
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6B7280;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+
+    .action-menu-trigger:hover {
+        background: #f3f4f6;
+    }
+
+    .action-menu-trigger .material-symbols-outlined {
+        font-size: 20px;
+    }
+
+    .action-menu {
+        position: absolute;
+        top: 32px;
+        right: 0;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        padding: 8px;
+        min-width: 160px;
+        z-index: 1000;
+    }
+
+    .action-menu-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        font-size: 13px;
+        cursor: pointer;
+        text-align: left;
+        color: #111827;
+        transition: background 0.2s;
+    }
+
+    .action-menu-item:hover {
+        background: #f1f5f9;
+    }
+
+    .menu-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+    }
+</style>
 
 @code {
     protected override void OnInitialized()
@@ -92,17 +287,39 @@
         UI.PageTitle = "Hantera grupper";
     }
 
-    private string newTypeName = string.Empty;
     private List<SchedulerMVP.Data.Entities.GroupType> types = new();
-    private Guid? editingTypeId;
-    private string editTypeName = string.Empty;
-
-    private string newGroupName = string.Empty;
-    private string? selectedTypeId;
     private List<SchedulerMVP.Data.Entities.Group> groups = new();
-    private Guid? editingGroupId;
-    private string editGroupName = string.Empty;
-    private string? editGroupTypeId;
+    
+    // Tab state
+    private string activeTab = "groups";
+    
+    // Filter states
+    private string filterGroupType = string.Empty;
+    private string filterSource = string.Empty;
+    private string filterDisplayColor = string.Empty;
+    
+    // Modal states
+    private bool editModalOpen = false;
+    private bool deleteModalOpen = false;
+    private bool createGroupModalOpen = false;
+    private bool groupTypeModalOpen = false;
+    private bool groupTypeDeleteModalOpen = false;
+    private SchedulerMVP.Data.Entities.Group? selectedGroupForEdit;
+    private SchedulerMVP.Data.Entities.Group? selectedGroupForDelete;
+    private SchedulerMVP.Data.Entities.GroupType? selectedGroupTypeForEdit;
+    private SchedulerMVP.Data.Entities.GroupType? selectedGroupTypeForDelete;
+    
+    // Action menu state
+    private Guid? actionMenuOpenForGroupId;
+    private Guid? groupTypeActionMenuOpenForId;
+    
+    // Filtered groups based on filter selections
+    private IEnumerable<SchedulerMVP.Data.Entities.Group> filteredGroups => 
+        groups.Where(g =>
+            (string.IsNullOrEmpty(filterGroupType) || g.GroupType == filterGroupType) &&
+            (string.IsNullOrEmpty(filterSource) || g.Source == filterSource) &&
+            (string.IsNullOrEmpty(filterDisplayColor) || g.DisplayColor == filterDisplayColor))
+        .OrderBy(g => g.Name);
 
     protected override async Task OnInitializedAsync()
     {
@@ -117,9 +334,12 @@
             var userId = await UserContext.GetCurrentUserIdAsync();
             var isAdmin = await UserContext.IsAdminAsync();
             await using var db = await DbFactory.CreateDbContextAsync();
-            var gq = db.Groups.AsQueryable();
-            if (!isAdmin && !string.IsNullOrEmpty(userId)) gq = gq.Where(x => x.UserId == userId);
-            groups = await gq.OrderBy(x => x.Name).ToListAsync();
+            var query = db.Groups.AsQueryable();
+            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            {
+                query = query.Where(g => g.UserId == userId);
+            }
+            groups = await query.OrderBy(g => g.Name).ToListAsync();
         }
         catch (Exception ex)
         {
@@ -128,131 +348,165 @@
         }
     }
 
-    private async Task CreateType()
+    private void SetActiveTab(string tab)
     {
-        try
+        activeTab = tab;
+        StateHasChanged();
+    }
+    
+    private void OpenCreateGroupTypeModal()
+    {
+        selectedGroupTypeForEdit = null;
+        groupTypeModalOpen = true;
+        StateHasChanged();
+    }
+    
+    private void OpenEditGroupTypeModal(SchedulerMVP.Data.Entities.GroupType groupType)
+    {
+        selectedGroupTypeForEdit = groupType;
+        groupTypeModalOpen = true;
+        groupTypeActionMenuOpenForId = null;
+        StateHasChanged();
+    }
+    
+    private void CloseGroupTypeModal()
+    {
+        groupTypeModalOpen = false;
+        selectedGroupTypeForEdit = null;
+        StateHasChanged();
+    }
+    
+    private async Task AfterGroupTypeSaved()
+    {
+        await LoadData();
+        CloseGroupTypeModal();
+    }
+    
+    private void ToggleGroupTypeActionMenu(Guid groupTypeId)
+    {
+        if (groupTypeActionMenuOpenForId == groupTypeId)
         {
-            var name = (newTypeName ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(name)) return;
-            await GroupTypes.CreateAsync(name);
-            newTypeName = string.Empty;
-            await LoadData();
-            StateHasChanged();
+            groupTypeActionMenuOpenForId = null;
         }
-        catch (Exception ex)
+        else
         {
-            Console.WriteLine($"[GroupsManage] Error creating type: {ex.Message}");
+            groupTypeActionMenuOpenForId = groupTypeId;
         }
+        StateHasChanged();
+    }
+    
+    private void CloseGroupTypeActionMenu()
+    {
+        groupTypeActionMenuOpenForId = null;
+        StateHasChanged();
+    }
+    
+    private void OpenDeleteGroupTypeModal(SchedulerMVP.Data.Entities.GroupType groupType)
+    {
+        selectedGroupTypeForDelete = groupType;
+        groupTypeDeleteModalOpen = true;
+        groupTypeActionMenuOpenForId = null;
+        StateHasChanged();
+    }
+    
+    private void CloseGroupTypeDeleteModal()
+    {
+        groupTypeDeleteModalOpen = false;
+        selectedGroupTypeForDelete = null;
+        StateHasChanged();
+    }
+    
+    private async Task AfterGroupTypeDeleted()
+    {
+        await LoadData();
+        CloseGroupTypeDeleteModal();
     }
 
-    private void EditType(SchedulerMVP.Data.Entities.GroupType t)
+    private void OpenCreateGroupModal()
     {
-        editingTypeId = t.Id;
-        editTypeName = t.Name;
+        createGroupModalOpen = true;
+        StateHasChanged();
     }
-    private async Task SaveType()
+    
+    private void CloseCreateGroupModal()
     {
-        try
-        {
-            if (editingTypeId is Guid id)
-            {
-                await GroupTypes.UpdateAsync(id, editTypeName);
-                editingTypeId = null;
-                editTypeName = string.Empty;
-                await LoadData();
-                StateHasChanged();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[GroupsManage] Error saving type: {ex.Message}");
-        }
+        createGroupModalOpen = false;
+        StateHasChanged();
     }
-    private void CancelTypeEdit() { editingTypeId = null; editTypeName = string.Empty; }
-    private async Task DeleteType(Guid id)
+    
+    private async Task AfterGroupCreated()
     {
-        try
-        {
-            await GroupTypes.DeleteAsync(id);
-            await LoadData();
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[GroupsManage] Error deleting type: {ex.Message}");
-        }
+        await LoadData();
+        CloseCreateGroupModal();
+    }
+    
+    private void ClearFilters()
+    {
+        filterGroupType = string.Empty;
+        filterSource = string.Empty;
+        filterDisplayColor = string.Empty;
+        StateHasChanged();
     }
 
-    private async Task CreateGroup()
+    private void ToggleActionMenu(Guid groupId)
     {
-        try
+        if (actionMenuOpenForGroupId == groupId)
         {
-            var name = (newGroupName ?? string.Empty).Trim();
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(selectedTypeId)) return;
-            var type = types.FirstOrDefault(x => x.Id.ToString() == selectedTypeId);
-            if (type == null) return;
-            var userId = await UserContext.GetCurrentUserIdAsync();
-            var g = new SchedulerMVP.Data.Entities.Group { Id = Guid.NewGuid(), Name = name, GroupType = type.Name, UserId = userId };
-            await using var db = await DbFactory.CreateDbContextAsync();
-            db.Groups.Add(g);
-            await db.SaveChangesAsync();
-            newGroupName = string.Empty; selectedTypeId = null;
-            await LoadData();
-            StateHasChanged();
+            actionMenuOpenForGroupId = null;
         }
-        catch (Exception ex)
+        else
         {
-            Console.WriteLine($"[GroupsManage] Error creating group: {ex.Message}");
+            actionMenuOpenForGroupId = groupId;
         }
+        StateHasChanged();
     }
 
-    private void EditGroup(SchedulerMVP.Data.Entities.Group g)
+    private void CloseActionMenu()
     {
-        editingGroupId = g.Id;
-        editGroupName = g.Name;
-        editGroupTypeId = types.FirstOrDefault(x => x.Name == g.GroupType)?.Id.ToString();
+        actionMenuOpenForGroupId = null;
+        StateHasChanged();
     }
-    private async Task SaveGroup()
+
+    private void OpenEditModal(SchedulerMVP.Data.Entities.Group group)
     {
-        try
-        {
-            if (editingGroupId is Guid id)
-            {
-                await using var db = await DbFactory.CreateDbContextAsync();
-                var g = await db.Groups.FindAsync(id);
-                if (g != null)
-                {
-                    g.Name = editGroupName;
-                    g.GroupType = types.FirstOrDefault(x => x.Id.ToString() == editGroupTypeId)?.Name;
-                    await db.SaveChangesAsync();
-                }
-                editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null;
-                await LoadData();
-                StateHasChanged();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[GroupsManage] Error saving group: {ex.Message}");
-        }
+        selectedGroupForEdit = group;
+        editModalOpen = true;
+        actionMenuOpenForGroupId = null;
+        StateHasChanged();
     }
-    private void CancelGroupEdit(){ editingGroupId = null; editGroupName = string.Empty; editGroupTypeId = null; }
-    private async Task DeleteGroup(Guid id)
+
+    private void CloseEditModal()
     {
-        try
-        {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var g = await db.Groups.FindAsync(id);
-            if (g == null) return;
-            db.Groups.Remove(g);
-            await db.SaveChangesAsync();
-            await LoadData();
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[GroupsManage] Error deleting group: {ex.Message}");
-        }
+        editModalOpen = false;
+        selectedGroupForEdit = null;
+        StateHasChanged();
+    }
+
+    private async Task AfterGroupSaved()
+    {
+        await LoadData();
+        CloseEditModal();
+    }
+
+    private void OpenDeleteModal(SchedulerMVP.Data.Entities.Group group)
+    {
+        selectedGroupForDelete = group;
+        deleteModalOpen = true;
+        actionMenuOpenForGroupId = null;
+        StateHasChanged();
+    }
+
+    private void CloseDeleteModal()
+    {
+        deleteModalOpen = false;
+        selectedGroupForDelete = null;
+        StateHasChanged();
+    }
+
+    private async Task AfterGroupDeleted()
+    {
+        await LoadData();
+        CloseDeleteModal();
     }
 }
 

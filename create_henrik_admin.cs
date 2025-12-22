@@ -1,5 +1,5 @@
-// Script to reset henrik.kackur@sportadmin.se password for LOCAL SQLite database
-// Run: dotnet script reset_henrik_user.cs
+// Script to create admin user for henrik.kackur@gmail.com in LOCAL SQLite database
+// Run: dotnet script create_henrik_admin.cs
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -30,17 +30,29 @@ services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 
 var provider = services.BuildServiceProvider();
 var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
+var roleManager = provider.GetRequiredService<RoleManager<IdentityRole>>();
 
-Console.WriteLine("🔧 Resetting henrik.kackur@sportadmin.se password for LOCAL database...");
+Console.WriteLine("🔧 Creating admin user for henrik.kackur@gmail.com in LOCAL database...");
 
-const string henrikEmail = "henrik.kackur@sportadmin.se";
+// Create Admin role if it doesn't exist
+if (!await roleManager.RoleExistsAsync("Admin"))
+{
+    await roleManager.CreateAsync(new IdentityRole("Admin"));
+    Console.WriteLine("✅ Created Admin role");
+}
+else
+{
+    Console.WriteLine("ℹ️  Admin role already exists");
+}
+
+const string henrikEmail = "henrik.kackur@gmail.com";
 const string henrikPassword = "vårloggaärgrön";
 
 var henrikUser = await userManager.FindByEmailAsync(henrikEmail);
 
 if (henrikUser == null)
 {
-    Console.WriteLine("❌ User not found! Creating...");
+    Console.WriteLine($"Creating new user: {henrikEmail}");
     henrikUser = new ApplicationUser
     {
         UserName = henrikEmail,
@@ -50,17 +62,31 @@ if (henrikUser == null)
     var result = await userManager.CreateAsync(henrikUser, henrikPassword);
     if (result.Succeeded)
     {
-        Console.WriteLine($"✅ Created user: {henrikEmail}");
+        await userManager.AddToRoleAsync(henrikUser, "Admin");
+        Console.WriteLine($"✅ Created admin user: {henrikEmail}");
     }
     else
     {
         Console.WriteLine($"❌ Failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
-        return;
+        Environment.Exit(1);
     }
 }
 else
 {
-    Console.WriteLine($"✅ User found: {henrikEmail}");
+    Console.WriteLine($"✅ User already exists: {henrikEmail}");
+    
+    // Ensure user is in Admin role
+    if (!await userManager.IsInRoleAsync(henrikUser, "Admin"))
+    {
+        await userManager.AddToRoleAsync(henrikUser, "Admin");
+        Console.WriteLine("✅ Added user to Admin role");
+    }
+    else
+    {
+        Console.WriteLine("ℹ️  User already in Admin role");
+    }
+    
+    // Reset password
     var token = await userManager.GeneratePasswordResetTokenAsync(henrikUser);
     var resetResult = await userManager.ResetPasswordAsync(henrikUser, token, henrikPassword);
     if (resetResult.Succeeded)
@@ -70,15 +96,11 @@ else
     else
     {
         Console.WriteLine($"❌ Password reset failed: {string.Join(", ", resetResult.Errors.Select(e => e.Description))}");
-        return;
+        Environment.Exit(1);
     }
 }
 
 Console.WriteLine($"\n📋 Login credentials for LOCAL database:");
 Console.WriteLine($"   Email: {henrikEmail}");
 Console.WriteLine($"   Password: {henrikPassword}");
-Console.WriteLine($"\n✅ Done! You can now log in to your local app.");
-
-
-
-
+Console.WriteLine($"\n✅ Done! You can now log in to your local app as admin.");

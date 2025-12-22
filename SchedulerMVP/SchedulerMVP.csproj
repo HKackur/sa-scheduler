@@ -19,6 +19,7 @@
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Connections.Common" Version="9.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="9.0.0" />
+    <PackageReference Include="MailKit" Version="4.8.0" />
   </ItemGroup>
 
 </Project>

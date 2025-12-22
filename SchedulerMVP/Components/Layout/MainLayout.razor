@@ -23,7 +23,7 @@ else
         <Authorized>
             <div class="app-root" style="display: flex; flex-direction: column; height: 100vh;">
                 <TopBar />
-                <div style="flex: 1; overflow: @(_isWhatsNewPage ? "auto" : "hidden"); display: flex; flex-direction: column;">
+                <div style="flex: 1; overflow: @((_isWhatsNewPage || _isGroupsManagePage) ? "auto" : "hidden"); display: flex; flex-direction: column;">
                     @Body
                 </div>
                 <Toast />
@@ -38,6 +38,7 @@ else
 @code {
     private bool _isLoginPage = false;
     private bool _isWhatsNewPage = false;
+    private bool _isGroupsManagePage = false;
 
     protected override void OnInitialized()
     {
@@ -53,11 +54,13 @@ else
             var path = new Uri(uri).AbsolutePath.ToLower();
             _isLoginPage = path == "/login" || path.EndsWith("/login");
             _isWhatsNewPage = path == "/vad-ar-nytt" || path.EndsWith("/vad-ar-nytt");
+            _isGroupsManagePage = path == "/grupper" || path.EndsWith("/grupper");
         }
         catch
         {
             _isLoginPage = false;
             _isWhatsNewPage = false;
+            _isGroupsManagePage = false;
         }
     }
 
