@@ -671,8 +671,8 @@ app.MapGet("/admin/fix-db-columns", async (AppDbContext context) =>
         ");
         
         // Check how many groups exist
-        var groupCount = await context.Database.ExecuteSqlRawAsync(@"SELECT COUNT(*) FROM ""Groups""");
-        var groupsWithUserId = await context.Database.ExecuteSqlRawAsync(@"SELECT COUNT(*) FROM ""Groups"" WHERE ""UserId"" IS NOT NULL AND ""UserId"" != ''");
+        var groupCount = await context.Database.SqlQueryRaw<int>(@"SELECT COUNT(*) FROM ""Groups""").FirstOrDefaultAsync();
+        var groupsWithUserId = await context.Database.SqlQueryRaw<int>(@"SELECT COUNT(*) FROM ""Groups"" WHERE ""UserId"" IS NOT NULL AND ""UserId"" != ''").FirstOrDefaultAsync();
         
         return Results.Ok(new { 
             success = true, 
