@@ -670,9 +670,15 @@ app.MapGet("/admin/fix-db-columns", async (AppDbContext context) =>
             WHERE ""StandardDisplayColor"" IS NULL
         ");
         
+        // Check how many groups exist
+        var groupCount = await context.Database.ExecuteSqlRawAsync(@"SELECT COUNT(*) FROM ""Groups""");
+        var groupsWithUserId = await context.Database.ExecuteSqlRawAsync(@"SELECT COUNT(*) FROM ""Groups"" WHERE ""UserId"" IS NOT NULL AND ""UserId"" != ''");
+        
         return Results.Ok(new { 
             success = true, 
-            message = $"Fixed! Updated {updated} groups and {updatedTypes} group types." 
+            message = $"Fixed! Updated {updated} groups and {updatedTypes} group types.",
+            totalGroups = groupCount,
+            groupsWithUserId = groupsWithUserId
         });
     }
     catch (Exception ex)
