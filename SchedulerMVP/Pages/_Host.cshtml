@@ -22,6 +22,12 @@
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
 </head>
 <body>
+    <!-- Loading indicator - shown until Blazor is ready -->
+    <div id="blazor-loading" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 10000; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+        <div style="font-size: 18px; color: #1f2937; margin-bottom: 16px;">Laddar...</div>
+        <div class="spinner"></div>
+    </div>
+
     <component type="typeof(SchedulerMVP.Components.App)" render-mode="Server" />
 
     <!-- Blazor reconnection UI (hidden by default, shown when connection issues occur) -->
@@ -46,6 +52,11 @@
             }
         }).then(function() {
             console.log('[Blazor] Started successfully with auto-reload support');
+            // Hide loading indicator once Blazor is ready
+            var loadingEl = document.getElementById('blazor-loading');
+            if (loadingEl) {
+                loadingEl.style.display = 'none';
+            }
         }).catch(function(error) {
             console.error('[Blazor] Failed to start:', error);
             // Auto-reload if Blazor fails to start
