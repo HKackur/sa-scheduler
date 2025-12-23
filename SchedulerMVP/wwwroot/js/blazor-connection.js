@@ -426,15 +426,15 @@ window.blazorConnection = {
         modal.innerHTML = `
             <div style="text-align: center; margin-bottom: 24px;">
                 <div style="margin-bottom: 16px;">
-                    <span class="material-symbols-outlined" style="font-size: 48px; color: #dc2626; font-variation-settings: 'FILL' 0;">
-                        wifi_off
+                    <span class="material-symbols-outlined" style="font-size: 48px; color: #1976d2; font-variation-settings: 'FILL' 0;">
+                        refresh
                     </span>
                 </div>
                 <h2 style="margin: 0 0 12px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
-                    Anslutningen har brutits
+                    Ladda om sidan
                 </h2>
                 <p style="margin: 0; color: #6b7280; font-size: 16px; line-height: 1.5;">
-                    Appen har förlorat anslutningen till servern. För att fortsätta använda appen behöver du ladda om sidan.
+                    För att fortsätta använda appen behöver du ladda om sidan.
                 </p>
             </div>
             <div style="display: flex; gap: 12px; justify-content: center;">
