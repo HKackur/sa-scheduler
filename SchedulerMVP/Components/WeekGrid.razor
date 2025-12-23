@@ -454,9 +454,6 @@
         }
         
         // Initialize drag and drop - reuse DotNetObjectReference to avoid disposal issues
-        // Wait for JavaScript to be fully loaded, especially in production
-        await Task.Delay(300);
-        
         try
         {
             // Only create new reference if it doesn't exist or was disposed
@@ -467,41 +464,9 @@
             
             if (!_dragDropInitialized)
             {
-                // Retry logic for production reliability - check if JS is loaded first
-                var retries = 0;
-                var maxRetries = 5;
-                while (retries < maxRetries)
-                {
-                    try
-                    {
-                        // First check if SchedulerMVP object exists
-                        var jsExists = await JSRuntime.InvokeAsync<bool>("eval", "typeof SchedulerMVP !== 'undefined'");
-                        if (!jsExists)
-                        {
-                            retries++;
-                            await Task.Delay(300 * retries);
-                            continue;
-                        }
-                        
-                        // Now try to initialize
-                        await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
-                        _dragDropInitialized = true;
-                        Console.WriteLine($"[WeekGrid] Drag and drop initialized successfully after {retries} retries");
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        retries++;
-                        Console.WriteLine($"[WeekGrid] Drag and drop init attempt {retries}/{maxRetries} failed: {ex.Message}");
-                        if (retries >= maxRetries)
-                        {
-                            Console.WriteLine($"Error initializing drag and drop after {maxRetries} retries: {ex.Message}");
-                            // Don't throw - just log and continue, will retry on next render
-                            break;
-                        }
-                        await Task.Delay(300 * retries); // Exponential backoff
-                    }
-                }
+                // Simple initialization - same as local version that works
+                await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
+                _dragDropInitialized = true;
             }
             else
             {
