@@ -78,16 +78,37 @@ var SchedulerMVP = {
     },
 
     // Drag and Drop functionality
-    initDragDrop: function (dotNetHelper) {
+    initDragDrop: function (dotNetHelper, retryCount) {
+        retryCount = retryCount || 0;
+        const maxRetries = 10; // Max 10 retries = ~2 seconds total
+        
         try {
+            // Check if DOM elements exist - critical for production where rendering can be delayed
+            var bookingBlocks = document.querySelectorAll('.booking-block');
+            var dayContents = document.querySelectorAll('.day-content');
+            
+            // If no elements found and we haven't exceeded retries, wait and retry
+            if ((bookingBlocks.length === 0 || dayContents.length === 0) && retryCount < maxRetries) {
+                console.log('[DragDrop] DOM not ready (found ' + bookingBlocks.length + ' blocks, ' + dayContents.length + ' day columns), retrying in 200ms... (attempt ' + (retryCount + 1) + '/' + maxRetries + ')');
+                setTimeout(function() {
+                    SchedulerMVP.initDragDrop(dotNetHelper, retryCount + 1);
+                }, 200);
+                return;
+            }
+            
+            // If still no elements after retries, log warning but continue (might be empty grid)
+            if (bookingBlocks.length === 0 && dayContents.length === 0) {
+                console.warn('[DragDrop] No DOM elements found after ' + maxRetries + ' retries - grid might be empty');
+            }
+            
             // Remove existing listeners to avoid duplicates
-            document.querySelectorAll('.booking-block').forEach(block => {
+            bookingBlocks.forEach(block => {
                 block.removeEventListener('dragstart', SchedulerMVP.handleDragStart);
                 block.removeEventListener('dragend', SchedulerMVP.handleDragEnd);
                 block.removeEventListener('click', SchedulerMVP.handleBookingBlockClick, true);
             });
 
-            document.querySelectorAll('.day-content').forEach(day => {
+            dayContents.forEach(day => {
                 day.removeEventListener('dragover', SchedulerMVP.handleDragOver);
                 day.removeEventListener('drop', SchedulerMVP.handleDrop);
                 day.removeEventListener('dragenter', SchedulerMVP.handleDragEnter);
@@ -95,7 +116,8 @@ var SchedulerMVP = {
             });
 
             // Add drag listeners to booking blocks (only primary bookings, not ghosts)
-            document.querySelectorAll('.booking-block').forEach(block => {
+            var initializedBlocks = 0;
+            bookingBlocks.forEach(block => {
                 // Only make primary bookings draggable (not ghost bookings)
                 if (block.classList.contains('booking--primary')) {
                     // Make sure resize handles are not draggable
@@ -105,6 +127,7 @@ var SchedulerMVP = {
                     block.setAttribute('draggable', 'true');
                     block.addEventListener('dragstart', SchedulerMVP.handleDragStart);
                     block.addEventListener('dragend', SchedulerMVP.handleDragEnd);
+                    initializedBlocks++;
                 } else {
                     block.setAttribute('draggable', 'false');
                 }
@@ -115,7 +138,7 @@ var SchedulerMVP = {
             });
 
             // Add drop listeners to day columns
-            document.querySelectorAll('.day-content').forEach(day => {
+            dayContents.forEach(day => {
                 day.addEventListener('dragover', SchedulerMVP.handleDragOver);
                 day.addEventListener('drop', SchedulerMVP.handleDrop);
                 day.addEventListener('dragenter', SchedulerMVP.handleDragEnter);
@@ -125,10 +148,18 @@ var SchedulerMVP = {
             // Store DotNetHelper for callbacks
             SchedulerMVP.dotNetHelper = dotNetHelper;
             
+            console.log('[DragDrop] Initialized successfully - ' + initializedBlocks + ' draggable blocks, ' + bookingBlocks.length + ' total blocks, ' + dayContents.length + ' day columns');
+            
             // Also initialize resize - COMMENTED OUT: Resize functionality disabled
             // SchedulerMVP.initResize(dotNetHelper);
         } catch (error) {
             console.error('Error initializing drag and drop:', error);
+            // If error and we haven't exceeded retries, try again
+            if (retryCount < maxRetries) {
+                setTimeout(function() {
+                    SchedulerMVP.initDragDrop(dotNetHelper, retryCount + 1);
+                }, 200);
+            }
         }
     },
     
@@ -1090,14 +1121,15 @@ var SchedulerMVP = {
         // Update the DotNetHelper reference immediately
         SchedulerMVP.dotNetHelper = dotNetHelper;
         
-        // Small delay to ensure DOM is updated
+        // Small delay to ensure DOM is updated (increased for production reliability)
         setTimeout(() => {
             // Double-check drag is not in progress before refreshing
             if (!SchedulerMVP.isDragging) {
-                SchedulerMVP.initDragDrop(dotNetHelper);
+                // initDragDrop will handle DOM readiness internally with retries
+                SchedulerMVP.initDragDrop(dotNetHelper, 0); // Start with retry count 0
                 SchedulerMVP.refreshResize(dotNetHelper); // Enable resize functionality
             }
-        }, 100);
+        }, 150); // Increased from 100ms to 150ms for production
     },
     
     // Initialize drag drop state

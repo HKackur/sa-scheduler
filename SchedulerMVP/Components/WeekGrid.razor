@@ -464,9 +464,53 @@
             
             if (!_dragDropInitialized)
             {
-                // Simple initialization - same as local version that works
-                await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
-                _dragDropInitialized = true;
+                // CRITICAL: In production, DOM elements may not exist immediately after OnAfterRenderAsync
+                // ResourceView uses Task.Delay(500) - we'll do similar but let initDragDrop handle retries
+                if (firstRender)
+                {
+                    // Wait a bit longer on first render to ensure DOM is ready (especially in production)
+                    await Task.Delay(300);
+                }
+                
+                // Wait for both Blazor to be ready AND SchedulerMVP object to exist
+                var maxWait = 10; // Reduced from 15 - initDragDrop will handle DOM retries
+                var attempt = 0;
+                while (attempt < maxWait)
+                {
+                    try
+                    {
+                        // Check if Blazor is ready AND SchedulerMVP exists
+                        var isReady = await JSRuntime.InvokeAsync<bool>("eval", 
+                            "typeof Blazor !== 'undefined' && " +
+                            "typeof SchedulerMVP !== 'undefined' && " +
+                            "typeof SchedulerMVP.initDragDrop === 'function'");
+                        
+                        if (isReady)
+                        {
+                            // Now initialize - initDragDrop will handle DOM readiness internally
+                            await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
+                            _dragDropInitialized = true;
+                            Console.WriteLine($"[WeekGrid] Drag and drop initialization started (attempt {attempt + 1})");
+                            break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // Not ready yet, wait and retry
+                        Console.WriteLine($"[WeekGrid] JS not ready yet (attempt {attempt + 1}): {ex.Message}");
+                    }
+                    
+                    attempt++;
+                    if (attempt < maxWait)
+                    {
+                        await Task.Delay(200); // Wait 200ms between attempts
+                    }
+                }
+                
+                if (!_dragDropInitialized)
+                {
+                    Console.WriteLine("[WeekGrid] Warning: Failed to initialize drag and drop - JS not available");
+                }
             }
             else
             {
