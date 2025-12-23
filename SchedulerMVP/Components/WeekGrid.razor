@@ -454,8 +454,8 @@
         }
         
         // Initialize drag and drop - reuse DotNetObjectReference to avoid disposal issues
-        // Wait a bit for DOM to be fully ready, especially in production
-        await Task.Delay(100);
+        // Wait for JavaScript to be fully loaded, especially in production
+        await Task.Delay(300);
         
         try
         {
@@ -467,26 +467,39 @@
             
             if (!_dragDropInitialized)
             {
-                // Retry logic for production reliability
+                // Retry logic for production reliability - check if JS is loaded first
                 var retries = 0;
-                var maxRetries = 3;
+                var maxRetries = 5;
                 while (retries < maxRetries)
                 {
                     try
                     {
+                        // First check if SchedulerMVP object exists
+                        var jsExists = await JSRuntime.InvokeAsync<bool>("eval", "typeof SchedulerMVP !== 'undefined'");
+                        if (!jsExists)
+                        {
+                            retries++;
+                            await Task.Delay(300 * retries);
+                            continue;
+                        }
+                        
+                        // Now try to initialize
                         await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
                         _dragDropInitialized = true;
+                        Console.WriteLine($"[WeekGrid] Drag and drop initialized successfully after {retries} retries");
                         break;
                     }
                     catch (Exception ex)
                     {
                         retries++;
+                        Console.WriteLine($"[WeekGrid] Drag and drop init attempt {retries}/{maxRetries} failed: {ex.Message}");
                         if (retries >= maxRetries)
                         {
                             Console.WriteLine($"Error initializing drag and drop after {maxRetries} retries: {ex.Message}");
-                            throw;
+                            // Don't throw - just log and continue, will retry on next render
+                            break;
                         }
-                        await Task.Delay(200 * retries); // Exponential backoff
+                        await Task.Delay(300 * retries); // Exponential backoff
                     }
                 }
             }
