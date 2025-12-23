@@ -228,6 +228,25 @@ window.blazorConnection = {
         }
         
         console.log('[Blazor] Auto-reloading page. Reason:', reason);
+        
+        // Check if deploy notification should be shown first
+        // If version has changed, show deploy modal instead of just banner
+        if (window.deployNotification && typeof window.deployNotification.shouldShowModal === 'function') {
+            const shouldShowDeployModal = window.deployNotification.shouldShowModal();
+            if (shouldShowDeployModal) {
+                console.log('[Blazor] Connection lost AND version changed - showing deploy notification modal');
+                window.deployNotification.showModalForced(function() {
+                    // Callback when user clicks reload - then reload
+                    window.location.reload();
+                }, true); // true = this is a connection issue
+                return; // Don't auto-reload yet - wait for user to click button
+            }
+        }
+        
+        // Version hasn't changed - just reload directly (no modal needed)
+        console.log('[Blazor] Connection lost but version unchanged - reloading directly');
+        
+        // No deploy notification needed - just show banner and reload
         window.blazorConnection.showReloadMessage(reason);
         
         // Reload after a short delay to show the message

@@ -56,11 +56,62 @@ window.deployNotification = {
         }
     },
     
+    shouldShowModal: function() {
+        const versionMeta = document.querySelector('meta[name="app-version"]');
+        if (!versionMeta) return false;
+        
+        const currentVersion = versionMeta.getAttribute('content');
+        if (!currentVersion) return false;
+        
+        const lastReloadedVersion = localStorage.getItem('app-last-reloaded-version');
+        
+        // Should show if version changed and user hasn't reloaded for this version
+        return currentVersion !== lastReloadedVersion;
+    },
+    
     showModal: function(version) {
         // Don't show if modal already exists
         if (document.getElementById('deploy-notification-modal')) {
             return;
         }
+        
+        this.showModalInternal(version, function() {
+            // Default callback - mark as reloaded and reload
+            localStorage.setItem('app-last-reloaded-version', version);
+            window.location.reload();
+        });
+    },
+    
+    showModalForced: function(callback, isConnectionIssue) {
+        // Force show modal even if already shown (for connection health scenarios)
+        // isConnectionIssue = true if this is triggered by connection health monitoring
+        const versionMeta = document.querySelector('meta[name="app-version"]');
+        if (!versionMeta) {
+            // No version info - just use callback
+            if (callback) callback();
+            return;
+        }
+        
+        const currentVersion = versionMeta.getAttribute('content');
+        if (!currentVersion) {
+            if (callback) callback();
+            return;
+        }
+        
+        // Remove existing modal if any
+        const existing = document.getElementById('deploy-notification-modal');
+        if (existing) {
+            existing.remove();
+        }
+        
+        this.showModalInternal(currentVersion, callback || function() {
+            localStorage.setItem('app-last-reloaded-version', currentVersion);
+            window.location.reload();
+        }, isConnectionIssue || false);
+    },
+    
+    showModalInternal: function(version, onReloadCallback, isConnectionIssue) {
+        // isConnectionIssue = true if modal is shown due to connection problem
         
         // Create modal overlay
         const overlay = document.createElement('div');
@@ -95,10 +146,12 @@ window.deployNotification = {
             <div style="text-align: center; margin-bottom: 24px;">
                 <div style="font-size: 48px; margin-bottom: 16px;">🔄</div>
                 <h2 style="margin: 0 0 12px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
-                    Appen har uppdaterats
+                    ${isConnectionIssue ? 'Anslutningen har brutits' : 'Appen har uppdaterats'}
                 </h2>
                 <p style="margin: 0; color: #6b7280; font-size: 16px; line-height: 1.5;">
-                    Vi har gjort en uppdatering av appen. För att fortsätta använda den med de senaste funktionerna och förbättringarna behöver du ladda om sidan.
+                    ${isConnectionIssue 
+                        ? 'Anslutningen till servern har brutits och appen har uppdaterats. För att fortsätta använda appen med de senaste funktionerna behöver du ladda om sidan.' 
+                        : 'Vi har gjort en uppdatering av appen. För att fortsätta använda den med de senaste funktionerna och förbättringarna behöver du ladda om sidan.'}
                 </p>
             </div>
             <div style="display: flex; gap: 12px; justify-content: center;">
@@ -149,8 +202,10 @@ window.deployNotification = {
         reloadBtn.addEventListener('click', function() {
             // Mark this version as reloaded
             localStorage.setItem('app-last-reloaded-version', version);
-            // Reload page
-            window.location.reload();
+            // Call callback (which will reload)
+            if (onReloadCallback) {
+                onReloadCallback();
+            }
         });
         
         // Prevent closing by clicking outside (user must click reload)
