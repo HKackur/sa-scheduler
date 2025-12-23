@@ -238,9 +238,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
             npgsql.CommandTimeout(120); // 120 second timeout for Azure
-            // Configure connection pooling to prevent max connections errors
-            npgsql.MaxPoolSize(10); // Limit max pool size
-            npgsql.MinPoolSize(2); // Keep minimum connections
+            // Connection pooling is configured via connection string parameters:
+            // MaxPoolSize=10;MinPoolSize=2 (if needed, add to connection string)
         });
     }
     else
@@ -298,9 +297,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
             npgsql.CommandTimeout(120); // 120 second timeout for Azure
-            // Configure connection pooling to prevent max connections errors
-            npgsql.MaxPoolSize(10); // Limit max pool size
-            npgsql.MinPoolSize(2); // Keep minimum connections
+            // Connection pooling is configured via connection string parameters:
+            // MaxPoolSize=10;MinPoolSize=2 (if needed, add to connection string)
         });
     }
     else
@@ -322,9 +320,8 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
             npgsql.CommandTimeout(120); // 120 second timeout for Azure
-            // Configure connection pooling to prevent max connections errors
-            npgsql.MaxPoolSize(10); // Limit max pool size
-            npgsql.MinPoolSize(2); // Keep minimum connections
+            // Connection pooling is configured via connection string parameters:
+            // MaxPoolSize=10;MinPoolSize=2 (if needed, add to connection string)
         });
     }
     else
@@ -343,9 +340,8 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
             npgsql.CommandTimeout(120); // 120 second timeout for Azure
-            // Configure connection pooling to prevent max connections errors
-            npgsql.MaxPoolSize(10); // Limit max pool size
-            npgsql.MinPoolSize(2); // Keep minimum connections
+            // Connection pooling is configured via connection string parameters:
+            // MaxPoolSize=10;MinPoolSize=2 (if needed, add to connection string)
         });
     }
     else

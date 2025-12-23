@@ -495,7 +495,6 @@
         
         // Load areas sequentially to avoid max connection issues
         // Use caching to minimize database calls
-        var placeAreaData = new List<dynamic>();
         foreach (var p in sortedPlaces)
         {
             if (!_cachedAreasByPlace.TryGetValue(p.Id, out var placeAreas))
@@ -503,18 +502,14 @@
                 placeAreas = await PlaceService.GetAreasForPlaceAsync(p.Id);
                 _cachedAreasByPlace[p.Id] = placeAreas;
             }
-            placeAreaData.Add(new { Place = p, Areas = placeAreas });
-        }
-        
-        foreach (var data in placeAreaData)
-        {
-            var placeNode = new PlaceTreeNode(data.Place);
+            
+            var placeNode = new PlaceTreeNode(p);
             
             // Build area tree for this place
-            var idToNode = data.Areas.ToDictionary(a => a.Id, a => new TreeNode(a));
-            foreach (var a in data.Areas)
+            var idToNode = placeAreas.ToDictionary(a => a.Id, a => new TreeNode(a));
+            foreach (var a in placeAreas)
             {
-                if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out var parent))
+                if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out TreeNode? parent))
                 {
                     parent.Children.Add(idToNode[a.Id]);
                 }
