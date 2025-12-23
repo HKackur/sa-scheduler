@@ -23,8 +23,7 @@ public class PlaceService : IPlaceService
     public async Task<List<Place>> GetPlacesAsync()
     {
         var userId = await _userContext.GetCurrentUserIdAsync();
-        var isAdmin = await _userContext.IsAdminAsync();
-        var cacheKey = $"places:{userId ?? "anonymous"}:{isAdmin}";
+        var cacheKey = $"places:{userId ?? "anonymous"}";
 
         // Try to get from cache
         if (_cache.TryGetValue(cacheKey, out List<Place>? cachedPlaces) && cachedPlaces != null)
@@ -36,8 +35,8 @@ public class PlaceService : IPlaceService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var query = db.Places.AsQueryable();
 
-        // Admin can see all places, regular users only their own
-        if (!isAdmin && !string.IsNullOrEmpty(userId))
+        // All users (including admin) only see their own places
+        if (!string.IsNullOrEmpty(userId))
         {
             query = query.Where(p => p.UserId == userId);
         }
@@ -60,10 +59,9 @@ public class PlaceService : IPlaceService
         if (place == null) return null;
 
         var userId = await _userContext.GetCurrentUserIdAsync();
-        var isAdmin = await _userContext.IsAdminAsync();
 
-        // Check access rights
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && place.UserId != userId && place.UserId != null)
+        // All users (including admin) can only access their own places
+        if (!string.IsNullOrEmpty(userId) && place.UserId != userId && place.UserId != null)
         {
             return null; // User doesn't have access
         }
@@ -100,9 +98,9 @@ public class PlaceService : IPlaceService
         if (existingPlace == null) throw new InvalidOperationException("Place not found");
 
         var userId = await _userContext.GetCurrentUserIdAsync();
-        var isAdmin = await _userContext.IsAdminAsync();
 
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && existingPlace.UserId != userId && existingPlace.UserId != null)
+        // All users (including admin) can only update their own places
+        if (!string.IsNullOrEmpty(userId) && existingPlace.UserId != userId && existingPlace.UserId != null)
         {
             throw new UnauthorizedAccessException("You don't have permission to update this place");
         }
@@ -135,7 +133,7 @@ public class PlaceService : IPlaceService
     {
         // Remove all places cache entries by removing cache version key
         // Cache will expire naturally or be refreshed on next request
-        // Since we cache by userId+isAdmin, we'd need to track all keys
+        // Since we cache by userId, we'd need to track all keys
         // For simplicity, we let cache expire naturally (60s TTL)
     }
 
@@ -144,15 +142,14 @@ public class PlaceService : IPlaceService
         await using var db = await _dbFactory.CreateDbContextAsync();
         // Verify access
         var userId = await _userContext.GetCurrentUserIdAsync();
-        var isAdmin = await _userContext.IsAdminAsync();
 
         // Delete all related data in correct order due to foreign key constraints
         var place = await db.Places.FindAsync(placeId);
         
         if (place == null) return;
 
-        // Check access
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && place.UserId != userId && place.UserId != null)
+        // All users (including admin) can only delete their own places
+        if (!string.IsNullOrEmpty(userId) && place.UserId != userId && place.UserId != null)
         {
             throw new UnauthorizedAccessException("You don't have permission to delete this place");
         }

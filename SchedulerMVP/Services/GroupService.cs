@@ -22,8 +22,7 @@ public class GroupService : IGroupService
     public async Task<List<Group>> GetGroupsAsync()
     {
         var userId = await _userContext.GetCurrentUserIdAsync();
-        var isAdmin = await _userContext.IsAdminAsync();
-        var cacheKey = $"groups:{userId ?? "anonymous"}:{isAdmin}";
+        var cacheKey = $"groups:{userId ?? "anonymous"}";
 
         // Try to get from cache
         if (_cache.TryGetValue(cacheKey, out List<Group>? cachedGroups) && cachedGroups != null)
@@ -35,7 +34,8 @@ public class GroupService : IGroupService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var query = db.Groups.AsQueryable();
 
-        if (!isAdmin && !string.IsNullOrEmpty(userId))
+        // All users (including admin) only see their own groups
+        if (!string.IsNullOrEmpty(userId))
         {
             query = query.Where(g => g.UserId == userId);
         }
@@ -61,10 +61,9 @@ public class GroupService : IGroupService
         if (group == null) return null;
 
         var userId = await _userContext.GetCurrentUserIdAsync();
-        var isAdmin = await _userContext.IsAdminAsync();
 
-        // Check access rights
-        if (!isAdmin && !string.IsNullOrEmpty(userId) && group.UserId != userId && group.UserId != null)
+        // All users (including admin) can only access their own groups
+        if (!string.IsNullOrEmpty(userId) && group.UserId != userId && group.UserId != null)
         {
             return null; // User doesn't have access
         }
@@ -113,8 +112,9 @@ public class GroupService : IGroupService
     private void InvalidateGroupsCache()
     {
         // Cache will expire naturally (60s TTL) or be refreshed on next request
-        // Since we cache by userId+isAdmin, we'd need to track all keys to invalidate precisely
+        // Since we cache by userId, we'd need to track all keys to invalidate precisely
         // For simplicity, we let cache expire naturally - this is acceptable for write-heavy workloads
         // In a write-heavy scenario, consider using cache versioning or distributed cache tags
     }
 }
+

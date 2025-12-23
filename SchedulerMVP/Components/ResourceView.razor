@@ -195,25 +195,11 @@
     {
         try
         {
-            // Get current user and admin status
+            // Get current user
             var userId = await UserContext.GetCurrentUserIdAsync();
-            var isAdmin = await UserContext.IsAdminAsync();
             
-            // Load places
+            // Load places (already filtered by user in PlaceService)
             places = await PlaceService.GetPlacesAsync();
-            
-            // Filter places by user if not admin
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
-            {
-                await using var db = await DbFactory.CreateDbContextAsync();
-                var userPlaceIds = await db.Areas
-                    .Where(a => a.Place != null && a.Place.UserId == userId)
-                    .Select(a => a.Place!.Id)
-                    .Distinct()
-                    .ToListAsync();
-                
-                places = places.Where(p => userPlaceIds.Contains(p.Id)).ToList();
-            }
             
             // Load areas for each place
             areasByPlace.Clear();
