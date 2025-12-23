@@ -9,6 +9,8 @@ window.blazorConnection = {
     pendingClickTest: null,
     disconnectedSince: null,
     clickTestTimeout: 2000, // 2 seconds timeout for click test
+    lastClickTime: 0,
+    connectionDeadModalShown: false,
     
     init: function() {
         console.log('[Blazor] Initializing enhanced connection monitoring...');
@@ -41,15 +43,8 @@ window.blazorConnection = {
                 setTimeout(function() {
                     window.blazorConnection.testConnection(true).then(function(isAlive) {
                         if (!isAlive) {
-                            console.log('[Blazor] Connection dead after tab became visible - will auto-reload');
-                            // Give it a moment, then auto-reload if still dead
-                            setTimeout(function() {
-                                window.blazorConnection.testConnection(true).then(function(stillDead) {
-                                    if (!stillDead) {
-                                        window.blazorConnection.autoReload('Connection lost after inactivity');
-                                    }
-                                });
-                            }, 2000);
+                            console.log('[Blazor] Connection dead after tab became visible - showing modal');
+                            window.blazorConnection.showConnectionDeadModal();
                         }
                     });
                 }, 1000); // Wait 1 second for potential reconnection
@@ -62,17 +57,22 @@ window.blazorConnection = {
         }, 10000); // Check every 10 seconds (reduced from 15)
         
         // Track user activity AND test connection on interaction after inactivity
-        ['click', 'keydown'].forEach(function(event) {
-            document.addEventListener(event, function(e) {
-                window.blazorConnection.lastActivity = Date.now();
-                
-                // If user clicks after being away, test connection immediately
-                const timeSinceLastTest = Date.now() - window.blazorConnection.lastConnectionTest;
-                if (timeSinceLastTest > 5000) { // If last test was >5s ago
-                    window.blazorConnection.testConnectionOnInteraction(e);
-                }
-            }, { passive: true, capture: true }); // Use capture to catch early
-        });
+        // CRITICAL: Test connection on EVERY click to detect silent failures
+        document.addEventListener('click', function(e) {
+            window.blazorConnection.lastActivity = Date.now();
+            
+            // Always test connection on click if we haven't tested recently
+            // This catches "silent failures" where clicks don't work
+            const timeSinceLastTest = Date.now() - window.blazorConnection.lastConnectionTest;
+            if (timeSinceLastTest > 2000) { // Test if last test was >2s ago (more frequent)
+                window.blazorConnection.testConnectionOnInteraction(e);
+            }
+        }, { passive: true, capture: true }); // Use capture to catch early
+        
+        // Also track keydown for activity
+        document.addEventListener('keydown', function(e) {
+            window.blazorConnection.lastActivity = Date.now();
+        }, { passive: true });
         
         // Also test connection when user returns after long inactivity (mouse movement after being away)
         let lastMouseMove = Date.now();
@@ -86,15 +86,8 @@ window.blazorConnection = {
                 console.log('[Blazor] Mouse moved after long inactivity - testing connection');
                 window.blazorConnection.testConnection(true).then(function(isAlive) {
                     if (!isAlive) {
-                        console.log('[Blazor] Connection dead after inactivity - will auto-reload');
-                        // Test again after a moment to confirm
-                        setTimeout(function() {
-                            window.blazorConnection.testConnection(true).then(function(stillDead) {
-                                if (!stillDead) {
-                                    window.blazorConnection.autoReload('Connection lost after inactivity');
-                                }
-                            });
-                        }, 2000);
+                        console.log('[Blazor] Connection dead after inactivity - showing modal');
+                        window.blazorConnection.showConnectionDeadModal();
                     }
                 });
             }
@@ -117,10 +110,31 @@ window.blazorConnection = {
             return;
         }
         
+        // Mark that we're expecting a response
+        const clickTime = Date.now();
+        window.blazorConnection.lastClickTime = clickTime;
+        
+        // Test connection immediately (don't wait)
+        window.blazorConnection.testConnection(true).then(function(isAlive) {
+            // If connection is dead and user just clicked, show immediate feedback
+            if (!isAlive) {
+                console.log('[Blazor] Connection dead when user clicked - showing feedback immediately');
+                window.blazorConnection.showConnectionDeadModal();
+            }
+        });
+        
+        // Also set a timeout to check again after a moment (in case testConnection missed it)
         window.blazorConnection.pendingClickTest = setTimeout(function() {
             window.blazorConnection.pendingClickTest = null;
-            window.blazorConnection.testConnection(true);
-        }, 500); // Wait 500ms after click to see if Blazor responds
+            
+            // Double-check connection after click
+            window.blazorConnection.testConnection(true).then(function(isAlive) {
+                if (!isAlive && window.blazorConnection.lastClickTime === clickTime) {
+                    console.log('[Blazor] Connection still dead after click - showing feedback');
+                    window.blazorConnection.showConnectionDeadModal();
+                }
+            });
+        }, 1500); // Wait 1.5 seconds after click to double-check
     },
     
     // IMPROVED: Actually test JS interop with timeout
@@ -230,7 +244,7 @@ window.blazorConnection = {
         
         const timeSinceActivity = Date.now() - window.blazorConnection.lastActivity;
         
-        // If user has been inactive for > 10 minutes, don't auto-reload
+        // If user has been inactive for > 10 minutes, don't show modal (user might be away)
         if (timeSinceActivity > 10 * 60 * 1000) {
             return;
         }
@@ -238,12 +252,12 @@ window.blazorConnection = {
         // Actually test the connection instead of just checking state
         window.blazorConnection.testConnection(false).then(function(isAlive) {
             if (!isAlive && window.blazorConnection.connectionState === 'Disconnected') {
-                // If disconnected for more than 10 seconds, auto-reload
+                // If disconnected for more than 5 seconds and user is active, show modal
                 if (!window.blazorConnection.disconnectedSince) {
                     window.blazorConnection.disconnectedSince = Date.now();
-                } else if (Date.now() - window.blazorConnection.disconnectedSince > 10000) {
-                    console.log('[Blazor] Disconnected for >10s - auto-reloading...');
-                    window.blazorConnection.autoReload('Connection lost');
+                } else if (Date.now() - window.blazorConnection.disconnectedSince > 5000) {
+                    console.log('[Blazor] Disconnected for >5s - showing connection dead modal');
+                    window.blazorConnection.showConnectionDeadModal();
                 }
             }
         });
@@ -369,6 +383,117 @@ window.blazorConnection = {
         window.blazorConnection.autoReloadEnabled = true;
         console.log('[Blazor] Auto-reload enabled.');
         window.blazorConnection.hideBanner('blazor-autoreload-disabled');
+    },
+    
+    // NEW: Show modal when connection is dead and user tries to interact
+    showConnectionDeadModal: function() {
+        // Don't show if already shown
+        if (window.blazorConnection.connectionDeadModalShown || document.getElementById('connection-dead-modal')) {
+            return;
+        }
+        
+        window.blazorConnection.connectionDeadModalShown = true;
+        
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'connection-dead-modal';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        `;
+        
+        // Create modal content
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            max-width: 480px;
+            width: 90%;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            animation: slideUp 0.3s ease-out;
+        `;
+        
+        modal.innerHTML = `
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div style="margin-bottom: 16px;">
+                    <span class="material-symbols-outlined" style="font-size: 48px; color: #1976d2; font-variation-settings: 'FILL' 0;">
+                        refresh
+                    </span>
+                </div>
+                <h2 style="margin: 0 0 12px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
+                    Ladda om sidan
+                </h2>
+                <p style="margin: 0; color: #6b7280; font-size: 16px; line-height: 1.5;">
+                    För att fortsätta använda appen behöver du ladda om sidan.
+                </p>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button id="connection-reload-btn" style="
+                    background: #1976d2;
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                " onmouseover="this.style.background='#1565c0'" onmouseout="this.style.background='#1976d2'">
+                    Ladda om sidan
+                </button>
+            </div>
+        `;
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Add animations if not already added
+        if (!document.getElementById('connection-dead-modal-styles')) {
+            const style = document.createElement('style');
+            style.id = 'connection-dead-modal-styles';
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slideUp {
+                    from { 
+                        transform: translateY(20px);
+                        opacity: 0;
+                    }
+                    to { 
+                        transform: translateY(0);
+                        opacity: 1;
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // Handle reload button click
+        const reloadBtn = document.getElementById('connection-reload-btn');
+        reloadBtn.addEventListener('click', function() {
+            window.location.reload();
+        });
+        
+        // Prevent closing by clicking outside (user must click reload)
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) {
+                e.stopPropagation();
+            }
+        });
+        
+        console.log('[Blazor] Connection dead modal shown');
     }
 };
 
