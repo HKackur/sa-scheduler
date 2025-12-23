@@ -5,9 +5,13 @@ window.blazorConnection = {
     maxReconnectAttempts: 3,
     autoReloadEnabled: true,
     lastActivity: Date.now(),
+    lastConnectionTest: 0,
+    pendingClickTest: null,
+    disconnectedSince: null,
+    clickTestTimeout: 2000, // 2 seconds timeout for click test
     
     init: function() {
-        console.log('[Blazor] Initializing connection monitoring with auto-reload...');
+        console.log('[Blazor] Initializing enhanced connection monitoring...');
         
         // Monitor SignalR connection events
         if (window.Blazor) {
@@ -25,34 +29,170 @@ window.blazorConnection = {
             }, 1000);
         });
         
-        // Monitor page visibility (detect when tab is hidden/visible)
+        // Monitor page visibility - TEST CONNECTION IMMEDIATELY when tab becomes visible
         document.addEventListener('visibilitychange', function() {
             if (document.hidden) {
                 console.log('[Blazor] Page hidden');
             } else {
-                console.log('[Blazor] Page visible - checking connection...');
+                console.log('[Blazor] Page visible - testing connection immediately...');
                 window.blazorConnection.lastActivity = Date.now();
-                // Check if we've been away for a long time (> 5 minutes)
-                if (window.blazorConnection.connectionState === 'Disconnected') {
-                    console.log('[Blazor] Page was hidden and connection lost - auto-reloading...');
-                    window.blazorConnection.autoReload('Page became visible after disconnect');
-                }
+                // Test connection immediately when tab becomes visible
+                // Wait a moment for Blazor to potentially reconnect, then test
+                setTimeout(function() {
+                    window.blazorConnection.testConnection(true).then(function(isAlive) {
+                        if (!isAlive) {
+                            console.log('[Blazor] Connection dead after tab became visible - will auto-reload');
+                            // Give it a moment, then auto-reload if still dead
+                            setTimeout(function() {
+                                window.blazorConnection.testConnection(true).then(function(stillDead) {
+                                    if (!stillDead) {
+                                        window.blazorConnection.autoReload('Connection lost after inactivity');
+                                    }
+                                });
+                            }, 2000);
+                        }
+                    });
+                }, 1000); // Wait 1 second for potential reconnection
             }
         });
         
-        // Enhanced connection health check
+        // Enhanced connection health check with actual JS interop test
         setInterval(function() {
             window.blazorConnection.checkConnectionHealth();
-        }, 15000); // Check every 15 seconds
+        }, 10000); // Check every 10 seconds (reduced from 15)
         
-        // Track user activity
-        ['click', 'keydown', 'scroll', 'mousemove'].forEach(function(event) {
+        // Track user activity AND test connection on interaction after inactivity
+        ['click', 'keydown'].forEach(function(event) {
+            document.addEventListener(event, function(e) {
+                window.blazorConnection.lastActivity = Date.now();
+                
+                // If user clicks after being away, test connection immediately
+                const timeSinceLastTest = Date.now() - window.blazorConnection.lastConnectionTest;
+                if (timeSinceLastTest > 5000) { // If last test was >5s ago
+                    window.blazorConnection.testConnectionOnInteraction(e);
+                }
+            }, { passive: true, capture: true }); // Use capture to catch early
+        });
+        
+        // Also test connection when user returns after long inactivity (mouse movement after being away)
+        let lastMouseMove = Date.now();
+        document.addEventListener('mousemove', function() {
+            const now = Date.now();
+            const timeSinceLastMove = now - lastMouseMove;
+            lastMouseMove = now;
+            
+            // If mouse hasn't moved for >30 seconds, test connection when it moves again
+            if (timeSinceLastMove > 30000) {
+                console.log('[Blazor] Mouse moved after long inactivity - testing connection');
+                window.blazorConnection.testConnection(true).then(function(isAlive) {
+                    if (!isAlive) {
+                        console.log('[Blazor] Connection dead after inactivity - will auto-reload');
+                        // Test again after a moment to confirm
+                        setTimeout(function() {
+                            window.blazorConnection.testConnection(true).then(function(stillDead) {
+                                if (!stillDead) {
+                                    window.blazorConnection.autoReload('Connection lost after inactivity');
+                                }
+                            });
+                        }, 2000);
+                    }
+                });
+            }
+        }, { passive: true });
+        
+        // Track scroll and mousemove for activity (but don't test on these)
+        ['scroll', 'mousemove'].forEach(function(event) {
             document.addEventListener(event, function() {
                 window.blazorConnection.lastActivity = Date.now();
             }, { passive: true });
         });
         
-        console.log('[Blazor] Connection monitoring with auto-reload initialized');
+        console.log('[Blazor] Enhanced connection monitoring initialized');
+    },
+    
+    // NEW: Test connection on user interaction (click/keydown)
+    testConnectionOnInteraction: function(event) {
+        // Don't test on every click - debounce
+        if (window.blazorConnection.pendingClickTest) {
+            return;
+        }
+        
+        window.blazorConnection.pendingClickTest = setTimeout(function() {
+            window.blazorConnection.pendingClickTest = null;
+            window.blazorConnection.testConnection(true);
+        }, 500); // Wait 500ms after click to see if Blazor responds
+    },
+    
+    // IMPROVED: Actually test JS interop with timeout
+    testConnection: function(force) {
+        const now = Date.now();
+        const timeSinceLastTest = now - window.blazorConnection.lastConnectionTest;
+        
+        // Don't test too frequently unless forced
+        if (!force && timeSinceLastTest < 3000) {
+            return Promise.resolve(true);
+        }
+        
+        window.blazorConnection.lastConnectionTest = now;
+        
+        return new Promise(function(resolve) {
+            if (!window.Blazor) {
+                console.warn('[Blazor] Blazor not available for connection test');
+                window.blazorConnection.handleConnectionError('Blazor not available');
+                resolve(false);
+                return;
+            }
+            
+            // Try to access Blazor's circuit state to test if it's alive
+            // Use a timeout to detect if circuit is dead
+            const testTimeout = setTimeout(function() {
+                console.warn('[Blazor] Connection test timeout - circuit appears dead');
+                window.blazorConnection.handleConnectionError('Connection test timeout');
+                resolve(false);
+            }, window.blazorConnection.clickTestTimeout);
+            
+            try {
+                // Try to access Blazor's internal state
+                // If Blazor is loaded and circuit exists, this should work
+                if (window.Blazor._internal && window.Blazor._internal.navigationManager) {
+                    // Circuit seems alive
+                    clearTimeout(testTimeout);
+                    if (window.blazorConnection.connectionState === 'Disconnected') {
+                        console.log('[Blazor] Connection restored');
+                        window.blazorConnection.connectionState = 'Connected';
+                        window.blazorConnection.hideReconnectingMessage();
+                        window.blazorConnection.reconnectAttempts = 0;
+                        window.blazorConnection.disconnectedSince = null;
+                    }
+                    resolve(true);
+                } else {
+                    // Try alternative method - check if Blazor.start was called
+                    if (window.Blazor && typeof window.Blazor.reconnect === 'function') {
+                        clearTimeout(testTimeout);
+                        if (window.blazorConnection.connectionState === 'Disconnected') {
+                            console.log('[Blazor] Connection restored (alternative check)');
+                            window.blazorConnection.connectionState = 'Connected';
+                            window.blazorConnection.hideReconnectingMessage();
+                            window.blazorConnection.reconnectAttempts = 0;
+                            window.blazorConnection.disconnectedSince = null;
+                        }
+                        resolve(true);
+                    } else {
+                        clearTimeout(testTimeout);
+                        window.blazorConnection.handleConnectionError('Circuit state unavailable');
+                        resolve(false);
+                    }
+                }
+            } catch (e) {
+                clearTimeout(testTimeout);
+                console.warn('[Blazor] Connection test failed:', e);
+                // Don't treat this as an error if we're just checking - might be normal
+                if (window.blazorConnection.connectionState === 'Disconnected') {
+                    window.blazorConnection.handleConnectionError('Connection test failed: ' + e.message);
+                }
+                resolve(false);
+            }
+        });
     },
     
     setupReconnectionHandling: function() {
@@ -71,37 +211,14 @@ window.blazorConnection = {
                 console.log('[Blazor] Browser came online - checking connection...');
                 // Give Blazor a moment to reconnect, then check
                 setTimeout(function() {
-                    if (window.blazorConnection.connectionState === 'Disconnected') {
-                        console.log('[Blazor] Still disconnected after coming online - auto-reloading...');
-                        window.blazorConnection.autoReload('Failed to reconnect after coming online');
-                    }
+                    window.blazorConnection.testConnection(true).then(function(isAlive) {
+                        if (!isAlive) {
+                            console.log('[Blazor] Still disconnected after coming online - auto-reloading...');
+                            window.blazorConnection.autoReload('Failed to reconnect after coming online');
+                        }
+                    });
                 }, 5000);
             });
-            
-            // Monitor for Blazor circuit failures
-            const checkBlazorHealth = function() {
-                try {
-                    // Try to access Blazor's internal state
-                    if (window.Blazor && typeof window.Blazor.reconnect === 'function') {
-                        // Blazor is loaded and functional
-                        if (window.blazorConnection.connectionState === 'Disconnected') {
-                            console.log('[Blazor] Connection restored');
-                            window.blazorConnection.connectionState = 'Connected';
-                            window.blazorConnection.hideReconnectingMessage();
-                            window.blazorConnection.reconnectAttempts = 0;
-                            window.blazorConnection.disconnectedSince = null;
-                        }
-                    }
-                } catch (e) {
-                    console.warn('[Blazor] Health check error:', e);
-                    if (window.blazorConnection.connectionState === 'Connected') {
-                        window.blazorConnection.handleConnectionError('Health check failed');
-                    }
-                }
-            };
-            
-            // Check Blazor health every 10 seconds
-            setInterval(checkBlazorHealth, 10000);
             
             console.log('[Blazor] Reconnection handling configured');
             window.blazorConnection.connectionState = 'Connected';
@@ -118,25 +235,18 @@ window.blazorConnection = {
             return;
         }
         
-        // Check if Blazor is responsive
-        try {
-            if (window.Blazor && window.blazorConnection.connectionState === 'Connected') {
-                // Try to invoke a simple JS interop to test connection
-                console.log('[Blazor] Connection health check: OK');
-            } else if (window.blazorConnection.connectionState === 'Disconnected') {
-                console.log('[Blazor] Connection health check: Disconnected');
-                // If disconnected for more than 30 seconds, auto-reload
+        // Actually test the connection instead of just checking state
+        window.blazorConnection.testConnection(false).then(function(isAlive) {
+            if (!isAlive && window.blazorConnection.connectionState === 'Disconnected') {
+                // If disconnected for more than 10 seconds, auto-reload
                 if (!window.blazorConnection.disconnectedSince) {
                     window.blazorConnection.disconnectedSince = Date.now();
-                } else if (Date.now() - window.blazorConnection.disconnectedSince > 30000) {
-                    console.log('[Blazor] Disconnected for >30s - auto-reloading...');
-                    window.blazorConnection.autoReload('Prolonged disconnection');
+                } else if (Date.now() - window.blazorConnection.disconnectedSince > 10000) {
+                    console.log('[Blazor] Disconnected for >10s - auto-reloading...');
+                    window.blazorConnection.autoReload('Connection lost');
                 }
             }
-        } catch (e) {
-            console.warn('[Blazor] Connection health check failed:', e);
-            window.blazorConnection.handleConnectionError('Health check failed');
-        }
+        });
     },
     
     handleConnectionError: function(reason) {
