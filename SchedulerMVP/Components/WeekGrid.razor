@@ -454,6 +454,9 @@
         }
         
         // Initialize drag and drop - reuse DotNetObjectReference to avoid disposal issues
+        // Wait a bit for DOM to be fully ready, especially in production
+        await Task.Delay(100);
+        
         try
         {
             // Only create new reference if it doesn't exist or was disposed
@@ -464,8 +467,28 @@
             
             if (!_dragDropInitialized)
             {
-                await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
-                _dragDropInitialized = true;
+                // Retry logic for production reliability
+                var retries = 0;
+                var maxRetries = 3;
+                while (retries < maxRetries)
+                {
+                    try
+                    {
+                        await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
+                        _dragDropInitialized = true;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        retries++;
+                        if (retries >= maxRetries)
+                        {
+                            Console.WriteLine($"Error initializing drag and drop after {maxRetries} retries: {ex.Message}");
+                            throw;
+                        }
+                        await Task.Delay(200 * retries); // Exponential backoff
+                    }
+                }
             }
             else
             {

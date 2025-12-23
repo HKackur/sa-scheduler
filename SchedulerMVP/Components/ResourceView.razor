@@ -1082,12 +1082,11 @@
         flex-shrink: 0; /* Don't shrink */
         width: 10080px; /* Exact width to match grid - 7 days * 24 hours * 60px */
         align-self: flex-start; /* Don't stretch */
-        left: 0; /* Controlled by JS for horizontal scroll */
+        /* Horizontal position controlled by JS transform */
     }
     
     .resource-scroll-container > .resource-time-axis-header {
-        /* Remove margin-left as JS will control 'left' property */
-        margin-left: 0;
+        margin-left: 300px; /* Offset for list column width */
     }
     
     .resource-time-axis-day-names {
