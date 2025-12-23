@@ -57,17 +57,22 @@ window.blazorConnection = {
         }, 10000); // Check every 10 seconds (reduced from 15)
         
         // Track user activity AND test connection on interaction after inactivity
-        ['click', 'keydown'].forEach(function(event) {
-            document.addEventListener(event, function(e) {
-                window.blazorConnection.lastActivity = Date.now();
-                
-                // If user clicks after being away, test connection immediately
-                const timeSinceLastTest = Date.now() - window.blazorConnection.lastConnectionTest;
-                if (timeSinceLastTest > 5000) { // If last test was >5s ago
-                    window.blazorConnection.testConnectionOnInteraction(e);
-                }
-            }, { passive: true, capture: true }); // Use capture to catch early
-        });
+        // CRITICAL: Test connection on EVERY click to detect silent failures
+        document.addEventListener('click', function(e) {
+            window.blazorConnection.lastActivity = Date.now();
+            
+            // Always test connection on click if we haven't tested recently
+            // This catches "silent failures" where clicks don't work
+            const timeSinceLastTest = Date.now() - window.blazorConnection.lastConnectionTest;
+            if (timeSinceLastTest > 2000) { // Test if last test was >2s ago (more frequent)
+                window.blazorConnection.testConnectionOnInteraction(e);
+            }
+        }, { passive: true, capture: true }); // Use capture to catch early
+        
+        // Also track keydown for activity
+        document.addEventListener('keydown', function(e) {
+            window.blazorConnection.lastActivity = Date.now();
+        }, { passive: true });
         
         // Also test connection when user returns after long inactivity (mouse movement after being away)
         let lastMouseMove = Date.now();
@@ -109,18 +114,27 @@ window.blazorConnection = {
         const clickTime = Date.now();
         window.blazorConnection.lastClickTime = clickTime;
         
+        // Test connection immediately (don't wait)
+        window.blazorConnection.testConnection(true).then(function(isAlive) {
+            // If connection is dead and user just clicked, show immediate feedback
+            if (!isAlive) {
+                console.log('[Blazor] Connection dead when user clicked - showing feedback immediately');
+                window.blazorConnection.showConnectionDeadModal();
+            }
+        });
+        
+        // Also set a timeout to check again after a moment (in case testConnection missed it)
         window.blazorConnection.pendingClickTest = setTimeout(function() {
             window.blazorConnection.pendingClickTest = null;
             
-            // Test connection and check if it's responsive
+            // Double-check connection after click
             window.blazorConnection.testConnection(true).then(function(isAlive) {
-                // If connection is dead and user just clicked, show immediate feedback
                 if (!isAlive && window.blazorConnection.lastClickTime === clickTime) {
-                    console.log('[Blazor] Connection dead after user click - showing feedback');
+                    console.log('[Blazor] Connection still dead after click - showing feedback');
                     window.blazorConnection.showConnectionDeadModal();
                 }
             });
-        }, 1000); // Wait 1 second after click to see if Blazor responds
+        }, 1500); // Wait 1.5 seconds after click to double-check
     },
     
     // IMPROVED: Actually test JS interop with timeout
