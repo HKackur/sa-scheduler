@@ -33,6 +33,7 @@ namespace SchedulerMVP.Services
             }
 
             return await query
+                .AsNoTracking()
                 .OrderBy(cb => cb.Date)
                 .ThenBy(cb => cb.StartMin)
                 .ToListAsync();
@@ -56,6 +57,7 @@ namespace SchedulerMVP.Services
             }
 
             return await query
+                .AsNoTracking()
                 .OrderBy(cb => cb.Date)
                 .ThenBy(cb => cb.StartMin)
                 .ToListAsync();

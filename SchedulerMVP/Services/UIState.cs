@@ -8,9 +8,6 @@ public class UIState
     public event Action? OnChanged;
     public event Action? OnTestOpenModal;
     
-    // Removed debouncing - caused threading issues (Dispatcher crash)
-    // Components handle state changes correctly without debouncing
-    
     private Guid? _selectedPlaceId;
     private Guid? _selectedAreaId;
     private Guid? _selectedGroupId;

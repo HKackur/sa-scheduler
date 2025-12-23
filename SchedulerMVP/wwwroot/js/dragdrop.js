@@ -99,8 +99,8 @@ var SchedulerMVP = {
                     block.setAttribute('draggable', 'false');
                 }
                 
-                // Add click listener to prevent popover from opening after resize
-                // This uses capture phase (true) to intercept before Blazor's handler
+                // Add click listener to handle clicks (since we removed Blazor's @onclick)
+                // This uses capture phase (true) to intercept
                 block.addEventListener('click', SchedulerMVP.handleBookingBlockClick, true);
             });
 
@@ -124,7 +124,7 @@ var SchedulerMVP = {
     
     // Handle click on booking block - prevent if resize just finished
     handleBookingBlockClick: function (e) {
-        // Don't prevent clicks on resize handles (they have their own handlers)
+        // Don't handle clicks on resize handles (they have their own handlers)
         if (e.target.classList.contains('resize-handle') || e.target.closest('.resize-handle')) {
             return; // Let resize handle handle it
         }
@@ -132,7 +132,16 @@ var SchedulerMVP = {
         // Find the booking block
         const bookingBlock = e.target.closest('.booking-block');
         if (!bookingBlock) {
-            return; // Not a booking block, allow click
+            return; // Not a booking block
+        }
+        
+        // CRITICAL: If drag just happened, prevent click from firing
+        // This prevents popover from opening after drag
+        if (SchedulerMVP.isDragging || bookingBlock.classList.contains('dragging')) {
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            e.preventDefault();
+            return false;
         }
         
         // Check if resize just finished - check flag, data attribute, and timestamp
@@ -143,8 +152,6 @@ var SchedulerMVP = {
                                   (hasJustResizedAttr && timeSinceResize < 500); // Within 500ms of resize
         
         if (justFinishedResize) {
-            // CRITICAL: Prevent the click from propagating to Blazor's onclick handler
-            // Use all methods to ensure it doesn't reach Blazor
             e.stopPropagation();
             e.stopImmediatePropagation();
             e.preventDefault();
@@ -153,11 +160,29 @@ var SchedulerMVP = {
             bookingBlock.removeAttribute('data-just-resized');
             bookingBlock.removeAttribute('data-resize-end-time');
             
-            // Return false to prevent default action
             return false;
         }
         
-        // Allow normal clicks to proceed
+        // Trigger Blazor handler via DotNetHelper
+        // Get booking data from attributes
+        const bookingId = bookingBlock.getAttribute('data-booking-id');
+        const bookingType = bookingBlock.getAttribute('data-booking-type');
+        
+        if (SchedulerMVP.dotNetHelper && bookingId) {
+            // Call the appropriate Blazor method based on booking type
+            if (bookingType === 'calendar') {
+                SchedulerMVP.dotNetHelper.invokeMethodAsync('OnCalendarBookingClickFromJS', bookingId, e.clientX, e.clientY)
+                    .catch(err => console.error('Error calling OnCalendarBookingClickFromJS:', err));
+            } else {
+                SchedulerMVP.dotNetHelper.invokeMethodAsync('OnTemplateClickFromJS', bookingId, e.clientX, e.clientY)
+                    .catch(err => console.error('Error calling OnTemplateClickFromJS:', err));
+            }
+        }
+        
+        // Prevent default to avoid any other handlers
+        e.stopPropagation();
+        e.preventDefault();
+        return false;
     },
 
     handleDragStart: function (e) {
@@ -169,7 +194,16 @@ var SchedulerMVP = {
         }
         
         const bookingBlock = e.target.closest('.booking-block');
-        if (!bookingBlock) return;
+        if (!bookingBlock) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // CRITICAL: Mark that drag is in progress to prevent refreshDragDrop from removing listeners
+        SchedulerMVP.isDragging = true;
+        
+        // CRITICAL: Stop propagation to prevent any click handlers from firing
+        e.stopPropagation();
 
         // Store booking data
         const bookingId = bookingBlock.getAttribute('data-booking-id');
@@ -324,6 +358,9 @@ var SchedulerMVP = {
             // Original block keeps its time - server will update it after successful drop
             // No need to restore time as original block was never modified
         }
+
+        // CRITICAL: Mark that drag is finished - allow refreshDragDrop again
+        SchedulerMVP.isDragging = false;
 
         // Clean up floating drag element
         SchedulerMVP.cleanupDragElement();
@@ -1033,13 +1070,23 @@ var SchedulerMVP = {
 
     // Re-initialize after DOM updates
     refreshDragDrop: function (dotNetHelper) {
+        // CRITICAL: Don't refresh if drag is in progress - this would remove event listeners!
+        if (SchedulerMVP.isDragging) {
+            // Just update the helper reference, don't reinitialize
+            SchedulerMVP.dotNetHelper = dotNetHelper;
+            return;
+        }
+        
         // Update the DotNetHelper reference immediately
         SchedulerMVP.dotNetHelper = dotNetHelper;
         
         // Small delay to ensure DOM is updated
         setTimeout(() => {
-            SchedulerMVP.initDragDrop(dotNetHelper);
-            SchedulerMVP.refreshResize(dotNetHelper); // Enable resize functionality
+            // Double-check drag is not in progress before refreshing
+            if (!SchedulerMVP.isDragging) {
+                SchedulerMVP.initDragDrop(dotNetHelper);
+                SchedulerMVP.refreshResize(dotNetHelper); // Enable resize functionality
+            }
         }, 100);
     },
     
@@ -1050,6 +1097,12 @@ var SchedulerMVP = {
     hasConflict: false,
     pendingConflictCheck: null, // Timeout ID for debouncing conflict checks
     lastConflictKey: null, // Last conflict check key to avoid duplicate checks
+    isDragging: false, // Track if drag operation is in progress
+    
+    // Check if drag operation is currently in progress
+    isDragging: function() {
+        return SchedulerMVP.isDragging === true;
+    },
     
     // Resize functionality
     initResize: function (dotNetHelper) {

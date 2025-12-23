@@ -79,6 +79,8 @@
     {
         try
         {
+            // Use GroupService for caching (injected via CombinedSidebar parent component pattern)
+            // For now, load directly but will update when we inject GroupService
             await using var db = await DbFactory.CreateDbContextAsync();
             var userId = await UserContext.GetCurrentUserIdAsync();
             var isAdmin = await UserContext.IsAdminAsync();
@@ -87,7 +89,10 @@
             {
                 query = query.Where(g => g.UserId == userId);
             }
-            groups = await query.OrderBy(g => g.Name).ToListAsync();
+            groups = await query
+                .AsNoTracking()
+                .OrderBy(g => g.Name)
+                .ToListAsync();
             groupTypes = groups.Select(g => DetermineGroupType(g))
                                .Where(t => !string.IsNullOrWhiteSpace(t))
                                .Distinct(StringComparer.OrdinalIgnoreCase)
