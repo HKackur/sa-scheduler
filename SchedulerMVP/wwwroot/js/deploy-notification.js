@@ -1,6 +1,14 @@
 // Deploy notification - shows modal when app has been updated
 window.deployNotification = {
+    modalShown: false, // Flag to prevent showing modal multiple times
+    
     init: function() {
+        // Prevent multiple initializations
+        if (window.deployNotification._initialized) {
+            return;
+        }
+        window.deployNotification._initialized = true;
+        
         // Get app version from meta tag
         const versionMeta = document.querySelector('meta[name="app-version"]');
         if (!versionMeta) {
@@ -33,6 +41,13 @@ window.deployNotification = {
         
         // If version changed and user hasn't reloaded for this version yet
         if (currentVersion !== lastReloadedVersion) {
+            // Check if modal was already shown for this version (prevent duplicates)
+            const modalShownForVersion = localStorage.getItem('app-modal-shown-version');
+            if (modalShownForVersion === currentVersion) {
+                console.log('[DeployNotification] Modal already shown for this version - skipping');
+                return;
+            }
+            
             // Check if we should show modal
             // If user has already seen this version but not reloaded, show modal
             // If this is first time seeing this version, mark as seen and show modal after delay
@@ -40,14 +55,18 @@ window.deployNotification = {
                 // User has seen this version before but not reloaded - show modal immediately
                 console.log('[DeployNotification] Version changed - showing notification modal');
                 setTimeout(function() {
-                    window.deployNotification.showModal(currentVersion);
+                    if (!window.deployNotification.modalShown) {
+                        window.deployNotification.showModal(currentVersion);
+                    }
                 }, 2000); // Wait 2 seconds after page load
             } else {
                 // First time seeing this version - mark as seen and show modal after delay
                 localStorage.setItem('app-last-seen-version', currentVersion);
                 console.log('[DeployNotification] New version detected - will show notification');
                 setTimeout(function() {
-                    window.deployNotification.showModal(currentVersion);
+                    if (!window.deployNotification.modalShown) {
+                        window.deployNotification.showModal(currentVersion);
+                    }
                 }, 3000); // Wait 3 seconds after page load for first detection
             }
         } else {
@@ -70,10 +89,14 @@ window.deployNotification = {
     },
     
     showModal: function(version) {
-        // Don't show if modal already exists
-        if (document.getElementById('deploy-notification-modal')) {
+        // Don't show if modal already exists or was already shown
+        if (window.deployNotification.modalShown || document.getElementById('deploy-notification-modal')) {
             return;
         }
+        
+        // Mark as shown to prevent duplicates
+        window.deployNotification.modalShown = true;
+        localStorage.setItem('app-modal-shown-version', version);
         
         this.showModalInternal(version, function() {
             // Default callback - mark as reloaded and reload
@@ -97,6 +120,18 @@ window.deployNotification = {
             if (callback) callback();
             return;
         }
+        
+        // Check if modal was already shown for this version
+        const modalShownForVersion = localStorage.getItem('app-modal-shown-version');
+        if (modalShownForVersion === currentVersion && !isConnectionIssue) {
+            // Already shown for this version and not a connection issue - skip
+            console.log('[DeployNotification] Modal already shown for this version - skipping forced show');
+            return;
+        }
+        
+        // Mark as shown
+        window.deployNotification.modalShown = true;
+        localStorage.setItem('app-modal-shown-version', currentVersion);
         
         // Remove existing modal if any
         const existing = document.getElementById('deploy-notification-modal');
@@ -144,7 +179,11 @@ window.deployNotification = {
         
         modal.innerHTML = `
             <div style="text-align: center; margin-bottom: 24px;">
-                <div style="font-size: 48px; margin-bottom: 16px;">🔄</div>
+                <div style="margin-bottom: 16px;">
+                    <span class="material-symbols-outlined" style="font-size: 48px; color: #1976d2; font-variation-settings: 'FILL' 0;">
+                        system_update
+                    </span>
+                </div>
                 <h2 style="margin: 0 0 12px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
                     ${isConnectionIssue ? 'Anslutningen har brutits' : 'Appen har uppdaterats'}
                 </h2>
