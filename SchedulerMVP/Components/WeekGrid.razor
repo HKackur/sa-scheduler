@@ -454,6 +454,7 @@
         }
         
         // Initialize drag and drop - reuse DotNetObjectReference to avoid disposal issues
+        // In production, we need to wait for both Blazor and JavaScript to be ready
         try
         {
             // Only create new reference if it doesn't exist or was disposed
@@ -464,9 +465,39 @@
             
             if (!_dragDropInitialized)
             {
-                // Simple initialization - same as local version that works
-                await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
-                _dragDropInitialized = true;
+                // Wait for SchedulerMVP object to be available (production safety)
+                var maxWait = 10; // Max 10 attempts = ~2 seconds
+                var attempt = 0;
+                while (attempt < maxWait)
+                {
+                    try
+                    {
+                        // Check if SchedulerMVP exists
+                        var exists = await JSRuntime.InvokeAsync<bool>("eval", "typeof SchedulerMVP !== 'undefined' && typeof SchedulerMVP.initDragDrop === 'function'");
+                        if (exists)
+                        {
+                            // Now initialize
+                            await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
+                            _dragDropInitialized = true;
+                            break;
+                        }
+                    }
+                    catch
+                    {
+                        // SchedulerMVP not ready yet, wait and retry
+                    }
+                    
+                    attempt++;
+                    if (attempt < maxWait)
+                    {
+                        await Task.Delay(200); // Wait 200ms between attempts
+                    }
+                }
+                
+                if (!_dragDropInitialized)
+                {
+                    Console.WriteLine("[WeekGrid] Warning: Failed to initialize drag and drop - SchedulerMVP not available");
+                }
             }
             else
             {
