@@ -37,7 +37,22 @@ window.blazorConnection = {
                 console.log('[Blazor] Page visible - testing connection immediately...');
                 window.blazorConnection.lastActivity = Date.now();
                 // Test connection immediately when tab becomes visible
-                window.blazorConnection.testConnection(true); // true = force test
+                // Wait a moment for Blazor to potentially reconnect, then test
+                setTimeout(function() {
+                    window.blazorConnection.testConnection(true).then(function(isAlive) {
+                        if (!isAlive) {
+                            console.log('[Blazor] Connection dead after tab became visible - will auto-reload');
+                            // Give it a moment, then auto-reload if still dead
+                            setTimeout(function() {
+                                window.blazorConnection.testConnection(true).then(function(stillDead) {
+                                    if (!stillDead) {
+                                        window.blazorConnection.autoReload('Connection lost after inactivity');
+                                    }
+                                });
+                            }, 2000);
+                        }
+                    });
+                }, 1000); // Wait 1 second for potential reconnection
             }
         });
         
@@ -58,6 +73,32 @@ window.blazorConnection = {
                 }
             }, { passive: true, capture: true }); // Use capture to catch early
         });
+        
+        // Also test connection when user returns after long inactivity (mouse movement after being away)
+        let lastMouseMove = Date.now();
+        document.addEventListener('mousemove', function() {
+            const now = Date.now();
+            const timeSinceLastMove = now - lastMouseMove;
+            lastMouseMove = now;
+            
+            // If mouse hasn't moved for >30 seconds, test connection when it moves again
+            if (timeSinceLastMove > 30000) {
+                console.log('[Blazor] Mouse moved after long inactivity - testing connection');
+                window.blazorConnection.testConnection(true).then(function(isAlive) {
+                    if (!isAlive) {
+                        console.log('[Blazor] Connection dead after inactivity - will auto-reload');
+                        // Test again after a moment to confirm
+                        setTimeout(function() {
+                            window.blazorConnection.testConnection(true).then(function(stillDead) {
+                                if (!stillDead) {
+                                    window.blazorConnection.autoReload('Connection lost after inactivity');
+                                }
+                            });
+                        }, 2000);
+                    }
+                });
+            }
+        }, { passive: true });
         
         // Track scroll and mousemove for activity (but don't test on these)
         ['scroll', 'mousemove'].forEach(function(event) {
@@ -228,25 +269,6 @@ window.blazorConnection = {
         }
         
         console.log('[Blazor] Auto-reloading page. Reason:', reason);
-        
-        // Check if deploy notification should be shown first
-        // If version has changed, show deploy modal instead of just banner
-        if (window.deployNotification && typeof window.deployNotification.shouldShowModal === 'function') {
-            const shouldShowDeployModal = window.deployNotification.shouldShowModal();
-            if (shouldShowDeployModal) {
-                console.log('[Blazor] Connection lost AND version changed - showing deploy notification modal');
-                window.deployNotification.showModalForced(function() {
-                    // Callback when user clicks reload - then reload
-                    window.location.reload();
-                }, true); // true = this is a connection issue
-                return; // Don't auto-reload yet - wait for user to click button
-            }
-        }
-        
-        // Version hasn't changed - just reload directly (no modal needed)
-        console.log('[Blazor] Connection lost but version unchanged - reloading directly');
-        
-        // No deploy notification needed - just show banner and reload
         window.blazorConnection.showReloadMessage(reason);
         
         // Reload after a short delay to show the message
