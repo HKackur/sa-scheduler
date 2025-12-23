@@ -76,9 +76,9 @@
             {
                 await using var db = await DbFactory.CreateDbContextAsync();
                 var authUserId = await UserContext.GetCurrentUserIdAsync();
-                var isAdmin = await UserContext.IsAdminAsync();
                 var groupsQuery = db.Groups.AsQueryable();
-                if (!isAdmin && !string.IsNullOrEmpty(authUserId))
+                // All users (including admin) only see their own groups
+                if (!string.IsNullOrEmpty(authUserId))
                 {
                     groupsQuery = groupsQuery.Where(g => g.UserId == authUserId);
                 }
@@ -237,9 +237,9 @@
             {
                 await using var db = await DbFactory.CreateDbContextAsync();
                 var userId = await UserContext.GetCurrentUserIdAsync();
-                var isAdmin = await UserContext.IsAdminAsync();
                 var groupsQuery = db.Groups.AsQueryable();
-                if (!isAdmin && !string.IsNullOrEmpty(userId))
+                // All users (including admin) only see their own groups
+                if (!string.IsNullOrEmpty(userId))
                 {
                     groupsQuery = groupsQuery.Where(g => g.UserId == userId);
                 }
