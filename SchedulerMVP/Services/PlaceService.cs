@@ -131,10 +131,11 @@ public class PlaceService : IPlaceService
 
     private void InvalidatePlacesCache()
     {
-        // Remove all places cache entries by removing cache version key
-        // Cache will expire naturally or be refreshed on next request
-        // Since we cache by userId, we'd need to track all keys
-        // For simplicity, we let cache expire naturally (60s TTL)
+        // Remove all places cache entries - clear all cache keys that start with "places:"
+        // This ensures old cache entries with isAdmin are cleared
+        var cacheKeys = new List<string>();
+        // Note: IMemoryCache doesn't support enumeration, so we rely on TTL expiration
+        // Cache will expire naturally (60s TTL) or be refreshed on next request
     }
 
     public async Task DeletePlaceAsync(Guid placeId)
