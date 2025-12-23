@@ -1,13 +1,21 @@
 // Deploy notification - shows modal when app has been updated
 window.deployNotification = {
     modalShown: false, // Flag to prevent showing modal multiple times
+    initTimeout: null, // Store timeout to cancel if needed
     
     init: function() {
         // Prevent multiple initializations
         if (window.deployNotification._initialized) {
+            console.log('[DeployNotification] Already initialized - skipping');
             return;
         }
         window.deployNotification._initialized = true;
+        
+        // Cancel any existing timeout
+        if (window.deployNotification.initTimeout) {
+            clearTimeout(window.deployNotification.initTimeout);
+            window.deployNotification.initTimeout = null;
+        }
         
         // Get app version from meta tag
         const versionMeta = document.querySelector('meta[name="app-version"]');
@@ -25,26 +33,28 @@ window.deployNotification = {
         // Get last seen version from localStorage
         const lastSeenVersion = localStorage.getItem('app-last-seen-version');
         const lastReloadedVersion = localStorage.getItem('app-last-reloaded-version');
+        const modalShownForVersion = localStorage.getItem('app-modal-shown-version');
         
         console.log('[DeployNotification] Current version:', currentVersion);
         console.log('[DeployNotification] Last seen version:', lastSeenVersion);
         console.log('[DeployNotification] Last reloaded version:', lastReloadedVersion);
+        console.log('[DeployNotification] Modal shown for version:', modalShownForVersion);
         
         // If this is first time user visits (no lastSeenVersion), just save current version and don't show modal
         if (!lastSeenVersion && !lastReloadedVersion) {
             // First visit - save version as both seen and reloaded (user is on latest version)
             localStorage.setItem('app-last-seen-version', currentVersion);
             localStorage.setItem('app-last-reloaded-version', currentVersion);
+            localStorage.setItem('app-modal-shown-version', currentVersion); // Mark as shown to prevent showing
             console.log('[DeployNotification] First visit - saved version, no notification needed');
             return;
         }
         
         // If version changed and user hasn't reloaded for this version yet
         if (currentVersion !== lastReloadedVersion) {
-            // Check if modal was already shown for this version (prevent duplicates)
-            const modalShownForVersion = localStorage.getItem('app-modal-shown-version');
-            if (modalShownForVersion === currentVersion) {
-                console.log('[DeployNotification] Modal already shown for this version - skipping');
+            // CRITICAL: Check if modal was already shown for this version OR if modal already exists in DOM
+            if (modalShownForVersion === currentVersion || document.getElementById('deploy-notification-modal')) {
+                console.log('[DeployNotification] Modal already shown for this version or exists in DOM - skipping');
                 return;
             }
             
@@ -54,8 +64,11 @@ window.deployNotification = {
             if (currentVersion === lastSeenVersion) {
                 // User has seen this version before but not reloaded - show modal immediately
                 console.log('[DeployNotification] Version changed - showing notification modal');
-                setTimeout(function() {
-                    if (!window.deployNotification.modalShown) {
+                window.deployNotification.initTimeout = setTimeout(function() {
+                    // Double-check modal doesn't exist and hasn't been shown
+                    if (!document.getElementById('deploy-notification-modal') && 
+                        !window.deployNotification.modalShown &&
+                        localStorage.getItem('app-modal-shown-version') !== currentVersion) {
                         window.deployNotification.showModal(currentVersion);
                     }
                 }, 2000); // Wait 2 seconds after page load
@@ -63,8 +76,11 @@ window.deployNotification = {
                 // First time seeing this version - mark as seen and show modal after delay
                 localStorage.setItem('app-last-seen-version', currentVersion);
                 console.log('[DeployNotification] New version detected - will show notification');
-                setTimeout(function() {
-                    if (!window.deployNotification.modalShown) {
+                window.deployNotification.initTimeout = setTimeout(function() {
+                    // Double-check modal doesn't exist and hasn't been shown
+                    if (!document.getElementById('deploy-notification-modal') && 
+                        !window.deployNotification.modalShown &&
+                        localStorage.getItem('app-modal-shown-version') !== currentVersion) {
                         window.deployNotification.showModal(currentVersion);
                     }
                 }, 3000); // Wait 3 seconds after page load for first detection
@@ -89,14 +105,27 @@ window.deployNotification = {
     },
     
     showModal: function(version) {
-        // Don't show if modal already exists or was already shown
-        if (window.deployNotification.modalShown || document.getElementById('deploy-notification-modal')) {
+        // CRITICAL: Multiple checks to prevent duplicates
+        if (window.deployNotification.modalShown) {
+            console.log('[DeployNotification] Modal already shown (flag) - skipping');
             return;
         }
         
-        // Mark as shown to prevent duplicates
+        if (document.getElementById('deploy-notification-modal')) {
+            console.log('[DeployNotification] Modal already exists in DOM - skipping');
+            return;
+        }
+        
+        const modalShownForVersion = localStorage.getItem('app-modal-shown-version');
+        if (modalShownForVersion === version) {
+            console.log('[DeployNotification] Modal already shown for this version - skipping');
+            return;
+        }
+        
+        // Mark as shown IMMEDIATELY to prevent duplicates
         window.deployNotification.modalShown = true;
         localStorage.setItem('app-modal-shown-version', version);
+        console.log('[DeployNotification] Showing modal for version:', version);
         
         this.showModalInternal(version, function() {
             // Default callback - mark as reloaded and reload
@@ -181,7 +210,7 @@ window.deployNotification = {
             <div style="text-align: center; margin-bottom: 24px;">
                 <div style="margin-bottom: 16px;">
                     <span class="material-symbols-outlined" style="font-size: 48px; color: #1976d2; font-variation-settings: 'FILL' 0;">
-                        system_update
+                        system_update_alt
                     </span>
                 </div>
                 <h2 style="margin: 0 0 12px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
