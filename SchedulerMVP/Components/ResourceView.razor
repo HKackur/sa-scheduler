@@ -1089,6 +1089,7 @@
         background: white;
         position: sticky;
         top: 0; /* Sticky vertically - stays at top when scrolling vertically in resource-scroll-container */
+        left: 300px; /* Initial offset for list column width - will be adjusted by JavaScript */
         z-index: 15; /* Högre z-index för att vara ovanpå innehåll */
         height: 40px;
         min-height: 40px;
@@ -1101,7 +1102,7 @@
     
     .resource-scroll-container > .resource-time-axis-header {
         /* Header is now direct child of scroll container, so sticky works */
-        margin-left: 300px; /* Offset for list column width */
+        /* left position controlled by JavaScript for scroll sync */
     }
     
     .resource-time-axis-day-names {

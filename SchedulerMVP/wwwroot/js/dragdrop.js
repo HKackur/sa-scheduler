@@ -29,11 +29,17 @@ var SchedulerMVP = {
             const listColumn = document.querySelector('.resource-list-column');
             const gridColumn = document.querySelector('.resource-grid-column');
             const timeAxisHeader = document.querySelector('.resource-time-axis-header');
+            const scrollContainer = document.querySelector('.resource-scroll-container');
             
-            if (!listColumn || !gridColumn || !timeAxisHeader) {
+            if (!listColumn || !gridColumn || !timeAxisHeader || !scrollContainer) {
                 console.log('[ResourceView] Elements not found, retrying...');
                 setTimeout(() => SchedulerMVP.initResourceViewScroll(), 100);
                 return;
+            }
+            
+            // Clean up any existing listeners
+            if (SchedulerMVP._resourceScrollCleanup) {
+                SchedulerMVP._resourceScrollCleanup();
             }
             
             // Header is outside scroll column but needs horizontal sync
@@ -42,24 +48,29 @@ var SchedulerMVP = {
                 if (gridColumn && timeAxisHeader) {
                     const scrollLeft = gridColumn.scrollLeft;
                     // Sync header horizontal position with grid scroll
-                    timeAxisHeader.style.transform = `translateX(-${scrollLeft}px)`;
+                    // Use left instead of transform for better compatibility
+                    timeAxisHeader.style.left = `${300 - scrollLeft}px`;
                 }
             };
             
             // Initial sync
             syncHeaderScroll();
             
-            // Sync on scroll
+            // Sync on scroll - use both scroll and input events for better compatibility
             gridColumn.addEventListener('scroll', syncHeaderScroll, { passive: true });
+            gridColumn.addEventListener('scrollend', syncHeaderScroll, { passive: true });
+            
+            // Also listen to wheel events for smoother sync
+            gridColumn.addEventListener('wheel', syncHeaderScroll, { passive: true });
             
             // Store cleanup function
-            if (!SchedulerMVP._resourceScrollCleanup) {
-                SchedulerMVP._resourceScrollCleanup = () => {
-                    if (gridColumn) {
-                        gridColumn.removeEventListener('scroll', syncHeaderScroll);
-                    }
-                };
-            }
+            SchedulerMVP._resourceScrollCleanup = () => {
+                if (gridColumn) {
+                    gridColumn.removeEventListener('scroll', syncHeaderScroll);
+                    gridColumn.removeEventListener('scrollend', syncHeaderScroll);
+                    gridColumn.removeEventListener('wheel', syncHeaderScroll);
+                }
+            };
             
             console.log('[ResourceView] Scroll synchronization initialized');
         } catch (error) {

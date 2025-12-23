@@ -184,7 +184,7 @@ body .app-root .sa-topbar,
 .nav-tab.active {
     color: #1976d2;
     border-bottom-color: #1976d2;
-    background: transparent;
+    background: transparent !important;
 }
 
 /* Calendar navigation */

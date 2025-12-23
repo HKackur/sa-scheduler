@@ -14,6 +14,7 @@
 @inject IHttpContextAccessor HttpContextAccessor
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthStateProvider
+@inject SchedulerMVP.Services.UserContextService UserContextService
 @implements IDisposable
 
 @{
@@ -207,7 +208,7 @@
         try {
             var user = HttpContextAccessor?.HttpContext?.User;
             currentUserEmail = user?.FindFirstValue(ClaimTypes.Email) ?? user?.Identity?.Name;
-            isCurrentUserAdmin = user?.IsInRole("Admin") == true;
+            // Don't check admin status here - do it async in OnInitializedAsync to avoid blocking
         } catch {}
     }
 
@@ -231,6 +232,20 @@
 
     protected override async Task OnInitializedAsync() {
         await LoadBreadcrumbsAsync();
+        // Load admin status asynchronously to avoid blocking
+        try {
+            if (string.IsNullOrEmpty(currentUserEmail))
+            {
+                var user = HttpContextAccessor?.HttpContext?.User;
+                currentUserEmail = user?.FindFirstValue(ClaimTypes.Email) ?? user?.Identity?.Name;
+            }
+            // Use UserContext service for reliable admin check
+            isCurrentUserAdmin = await UserContextService.IsAdminAsync();
+            StateHasChanged();
+        } catch (Exception ex) {
+            Console.WriteLine($"[TopBar] Error loading admin status: {ex.Message}");
+            isCurrentUserAdmin = false;
+        }
     }
 
     private void SetCalendarMode(bool isCalendar) {
