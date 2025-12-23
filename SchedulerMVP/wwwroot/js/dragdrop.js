@@ -47,9 +47,8 @@ var SchedulerMVP = {
             const syncHeaderScroll = () => {
                 if (gridColumn && timeAxisHeader) {
                     const scrollLeft = gridColumn.scrollLeft;
-                    // Sync header horizontal position with grid scroll
-                    // Use left instead of transform for better compatibility
-                    timeAxisHeader.style.left = `${300 - scrollLeft}px`;
+                    // Sync header horizontal position with grid scroll using 'left'
+                    timeAxisHeader.style.left = `-${scrollLeft}px`;
                 }
             };
             
