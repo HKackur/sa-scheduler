@@ -1075,7 +1075,6 @@
         background: white;
         position: sticky;
         top: 0; /* Sticky vertically - stays at top when scrolling vertically in resource-scroll-container */
-        left: 300px; /* Initial offset for list column width - will be adjusted by JavaScript */
         z-index: 15; /* Högre z-index för att vara ovanpå innehåll */
         height: 40px;
         min-height: 40px;
@@ -1083,12 +1082,12 @@
         flex-shrink: 0; /* Don't shrink */
         width: 10080px; /* Exact width to match grid - 7 days * 24 hours * 60px */
         align-self: flex-start; /* Don't stretch */
-        /* Horizontal position synced via JavaScript to match grid scroll */
+        left: 0; /* Controlled by JS for horizontal scroll */
     }
     
     .resource-scroll-container > .resource-time-axis-header {
-        /* Header is now direct child of scroll container, so sticky works */
-        /* left position controlled by JavaScript for scroll sync */
+        /* Remove margin-left as JS will control 'left' property */
+        margin-left: 0;
     }
     
     .resource-time-axis-day-names {
