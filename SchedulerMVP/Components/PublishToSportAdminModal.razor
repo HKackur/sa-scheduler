@@ -45,6 +45,11 @@
                             <span style="font-size: 14px; color: #374151;">@PublishedCount publicerade bokningar</span>
                         </div>
                     }
+                    @* Info text about publishing not being active yet *@
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: #fef3c7; border: 1px solid #fbbf24; border-radius: 6px;">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: #d97706;">info</span>
+                        <span style="font-size: 13px; color: #92400e;">Publicering till Sportadmin är inte aktivt än. Funktionen kommer inom kort.</span>
+                    </div>
                 </div>
             </div>
         }
@@ -52,7 +57,7 @@
         @* Action Buttons *@
         <div class="bm-actions">
             <button type="button" @onclick="CloseModal" class="btn-outline">Avbryt</button>
-            <button type="button" @onclick="PublishBookings" class="btn-primary" disabled="@(!CanPublish())">Publicera till SportAdmin</button>
+            <button type="button" @onclick="PublishBookings" class="btn-primary" disabled="true">Publicera till SportAdmin</button>
         </div>
     </div>
     

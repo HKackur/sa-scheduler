@@ -4,6 +4,8 @@
 @inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject SchedulerMVP.Services.UserContextService UserContext
 @inject SchedulerMVP.Services.UIState UI
+@inject SchedulerMVP.Services.IGroupService GroupService
+@inject SchedulerMVP.Services.IPlaceService PlaceService
 @inject SchedulerMVP.Services.IConflictService ConflictService
 @inject SchedulerMVP.Services.ToastService ToastService
 
@@ -521,16 +523,8 @@
     {
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var userId = await UserContext.GetCurrentUserIdAsync();
-            var isAdmin = await UserContext.IsAdminAsync();
-            var query = db.Groups.AsQueryable();
-            // Filter by user - only show groups created by the current user (unless admin)
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
-            {
-                query = query.Where(g => g.UserId == userId);
-            }
-            Groups = await query.OrderBy(g => g.Name).ToListAsync();
+            // Use GroupService for caching and consistent filtering
+            Groups = await GroupService.GetGroupsAsync();
         }
         catch (Exception ex)
         {
@@ -542,16 +536,8 @@
     {
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var userId = await UserContext.GetCurrentUserIdAsync();
-            var isAdmin = await UserContext.IsAdminAsync();
-            var query = db.Places.AsQueryable();
-            // Filter by user - only show places created by the current user (unless admin)
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
-            {
-                query = query.Where(p => p.UserId == userId);
-            }
-            AvailablePlaces = await query.OrderBy(p => p.Name).ToListAsync();
+            // Use PlaceService for caching
+            AvailablePlaces = await PlaceService.GetPlacesAsync();
         }
         catch (Exception ex)
         {
@@ -565,12 +551,8 @@
         
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            // Load all areas for the current place, ordered by path for hierarchical display
-            AvailableAreas = await db.Areas
-                .Where(a => a.PlaceId == SelectedPlaceId.Value)
-                .OrderBy(a => a.Path)
-                .ToListAsync();
+            // Use PlaceService for caching
+            AvailableAreas = await PlaceService.GetAreasForPlaceAsync(SelectedPlaceId.Value);
             
             // Check availability for all areas
             await CheckAllAreasAvailabilityAsync();

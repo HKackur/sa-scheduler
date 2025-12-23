@@ -64,6 +64,23 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<BookingTemplate>()
             .HasIndex(b => new { b.ScheduleTemplateId, b.DayOfWeek, b.StartMin });
 
+        // Performance indexes for user filtering
+        modelBuilder.Entity<Group>()
+            .HasIndex(g => g.UserId);
+        
+        modelBuilder.Entity<Place>()
+            .HasIndex(p => p.UserId);
+        
+        modelBuilder.Entity<ScheduleTemplate>()
+            .HasIndex(st => st.UserId);
+
+        // Performance indexes for CalendarBookings queries
+        modelBuilder.Entity<CalendarBooking>()
+            .HasIndex(cb => cb.Date);
+        
+        modelBuilder.Entity<CalendarBooking>()
+            .HasIndex(cb => new { cb.Date, cb.AreaId });
+
         modelBuilder.Entity<Area>()
             .HasOne(a => a.ParentArea)
             .WithMany()

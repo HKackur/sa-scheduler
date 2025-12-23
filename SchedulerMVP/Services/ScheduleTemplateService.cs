@@ -39,7 +39,10 @@ public class ScheduleTemplateService : IScheduleTemplateService
             query = query.Where(t => t.UserId == userId);
         }
 
-        return await query.OrderBy(t => t.Name).ToListAsync();
+        return await query
+            .AsNoTracking()
+            .OrderBy(t => t.Name)
+            .ToListAsync();
     }
 
     // Global accessors (forward-compatible for global templates)
@@ -62,7 +65,10 @@ public class ScheduleTemplateService : IScheduleTemplateService
             query = query.Where(t => t.UserId == userId);
         }
 
-        return await query.OrderBy(t => t.Name).ToListAsync();
+        return await query
+            .AsNoTracking()
+            .OrderBy(t => t.Name)
+            .ToListAsync();
     }
 
     public async Task<ScheduleTemplate?> GetByIdAsync(Guid templateId)

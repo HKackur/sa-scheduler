@@ -331,15 +331,19 @@
         try
         {
             types = await GroupTypes.GetTypesAsync();
+            // Use GroupService when available, otherwise load directly with AsNoTracking
+            await using var db = await DbFactory.CreateDbContextAsync();
             var userId = await UserContext.GetCurrentUserIdAsync();
             var isAdmin = await UserContext.IsAdminAsync();
-            await using var db = await DbFactory.CreateDbContextAsync();
             var query = db.Groups.AsQueryable();
             if (!isAdmin && !string.IsNullOrEmpty(userId))
             {
                 query = query.Where(g => g.UserId == userId);
             }
-            groups = await query.OrderBy(g => g.Name).ToListAsync();
+            groups = await query
+                .AsNoTracking()
+                .OrderBy(g => g.Name)
+                .ToListAsync();
         }
         catch (Exception ex)
         {

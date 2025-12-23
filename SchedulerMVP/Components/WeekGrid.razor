@@ -73,7 +73,7 @@
                             {
                                 var template = (TemplateView)positioned.Booking;
                             var isPrimaryT = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
-                                var clsT = "booking-block"; // Keep base class, colors come from inline style
+                                var clsT = isPrimaryT ? "booking-block booking--primary" : "booking-block"; // Add booking--primary class for draggable bookings
                                 var templateCapture = template; // Capture for onclick
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
                                 var colorStyle = GetBookingColorStyle(template, positioned.IsGhost);
@@ -85,9 +85,7 @@
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
                                      style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle @colorStyle"
-                                     title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
-                                 @onclick="@((MouseEventArgs e) => { OnTemplateClick(templateCapture, e); })"
-                                     @onclick:stopPropagation="true">
+                                     title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")">
                                     @* Always render resize handles for ALL booking blocks *@
                                     <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
                                     <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
@@ -115,7 +113,7 @@
                             {
                                 var template = (TemplateView)positioned.Booking;
                                 var isPrimary = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
-                                var cls = "booking-block"; // Keep base class, colors come from inline style
+                                var cls = isPrimary ? "booking-block booking--primary" : "booking-block"; // Add booking--primary class for draggable bookings
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
                                 var colorStyle = GetBookingColorStyle(template, positioned.IsGhost);
                                 var calBooking = weekBookings.FirstOrDefault(b => b.Id == template.Id);
@@ -130,9 +128,7 @@
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
                                      style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle @colorStyle"
-                                     title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
-                                 @onclick="@((MouseEventArgs e) => { if (isPrimary && calBooking != null) OnCalendarBookingClick(calBooking, e); else OnTemplateClick(templateCapture, e); })"
-                                     @onclick:stopPropagation="true">
+                                     title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")">
                                     @* Always render resize handles for ALL booking blocks *@
                                     <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
                                     <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
@@ -200,7 +196,7 @@
                             {
                                 var template = (TemplateView)positioned.Booking;
                                 var isPrimaryT = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
-                                var clsT = "booking-block"; // Keep base class, colors come from inline style
+                                var clsT = isPrimaryT ? "booking-block booking--primary" : "booking-block"; // Add booking--primary class for draggable bookings
                                 var templateCapture = template; // Capture for onclick
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
                                 var colorStyle = GetBookingColorStyle(template, positioned.IsGhost);
@@ -212,9 +208,7 @@
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
                                      style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle @colorStyle"
-                                     title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
-                                 @onclick="@((MouseEventArgs e) => { OnTemplateClick(templateCapture, e); })"
-                                     @onclick:stopPropagation="true">
+                                     title="@(isPrimaryT ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")">
                                     @* Always render resize handles for ALL booking blocks *@
                                     <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
                                     <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
@@ -242,7 +236,7 @@
                             {
                                 var template = (TemplateView)positioned.Booking;
                                 var isPrimary = UI.IsGroupFilterActive ? true : (!positioned.IsGhost && (!UI.SelectedAreaId.HasValue || (UI.SelectedAreaId.HasValue && template.AreaId == UI.SelectedAreaId.Value)));
-                                var cls = "booking-block"; // Keep base class, colors come from inline style
+                                var cls = isPrimary ? "booking-block booking--primary" : "booking-block"; // Add booking--primary class for draggable bookings
                                 var posStyle = GetPositionStyle(positioned.WidthPercent, positioned.LeftPercent);
                                 var colorStyle = GetBookingColorStyle(template, positioned.IsGhost);
                                 var calBooking = weekBookings.FirstOrDefault(b => b.Id == template.Id);
@@ -257,9 +251,7 @@
                                      data-start-min="@template.StartMin"
                                      data-end-min="@template.EndMin"
                                      style="top: @(template.StartMin)px; height: @(Math.Max(template.EndMin - template.StartMin, 15))px; @posStyle @colorStyle"
-                                     title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")"
-                                 @onclick="@((MouseEventArgs e) => { if (isPrimary && calBooking != null) OnCalendarBookingClick(calBooking, e); else OnTemplateClick(templateCapture, e); })"
-                                     @onclick:stopPropagation="true">
+                                     title="@(isPrimary ? $"Klicka för att redigera {template.Group?.Name}" : $"{template.Group?.Name} ({template.SourceAreaName})")">
                                     @* Always render resize handles for ALL booking blocks *@
                                     <div class="resize-handle resize-handle-top" data-resize-type="start"></div>
                                     <div class="resize-handle resize-handle-bottom" data-resize-type="end"></div>
@@ -477,8 +469,22 @@
             }
             else
             {
-                // Refresh drag and drop after DOM updates - reuse same reference
-                await JSRuntime.InvokeVoidAsync("SchedulerMVP.refreshDragDrop", _dotNetRef);
+                // CRITICAL: Only refresh drag and drop if NOT currently dragging
+                // This prevents removing event listeners while user is dragging
+                try
+                {
+                    var isDragging = await JSRuntime.InvokeAsync<bool>("SchedulerMVP.isDragging");
+                    if (!isDragging)
+                    {
+                        // Refresh drag and drop after DOM updates - reuse same reference
+                        await JSRuntime.InvokeVoidAsync("SchedulerMVP.refreshDragDrop", _dotNetRef);
+                    }
+                }
+                catch
+                {
+                    // If isDragging check fails, refresh anyway (fallback)
+                    await JSRuntime.InvokeVoidAsync("SchedulerMVP.refreshDragDrop", _dotNetRef);
+                }
             }
         }
         catch (Exception ex)
@@ -1968,6 +1974,32 @@
         popoverY = e.ClientY;
         popoverOpen = true;
         StateHasChanged();
+    }
+    
+    [JSInvokable]
+    public async Task OnCalendarBookingClickFromJS(string bookingId, double clientX, double clientY)
+    {
+        if (Guid.TryParse(bookingId, out var id))
+        {
+            var booking = weekBookings.FirstOrDefault(b => b.Id == id);
+            if (booking != null)
+            {
+                await OnCalendarBookingClick(booking, new MouseEventArgs { ClientX = clientX, ClientY = clientY });
+            }
+        }
+    }
+    
+    [JSInvokable]
+    public async Task OnTemplateClickFromJS(string templateId, double clientX, double clientY)
+    {
+        if (Guid.TryParse(templateId, out var id))
+        {
+            var template = allTemplates.FirstOrDefault(t => t.Id == id);
+            if (template != null)
+            {
+                await OnTemplateClick(template, new MouseEventArgs { ClientX = clientX, ClientY = clientY });
+            }
+        }
     }
     
     private void ClosePopover()

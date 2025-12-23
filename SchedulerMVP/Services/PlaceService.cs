@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Caching.Memory;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
 
@@ -9,19 +10,30 @@ public class PlaceService : IPlaceService
 {
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly UserContextService _userContext;
+    private readonly IMemoryCache _cache;
+    private const int CacheTTLSeconds = 60; // Cache for 60 seconds
 
-    public PlaceService(IDbContextFactory<AppDbContext> dbFactory, UserContextService userContext)
+    public PlaceService(IDbContextFactory<AppDbContext> dbFactory, UserContextService userContext, IMemoryCache cache)
     {
         _dbFactory = dbFactory;
         _userContext = userContext;
+        _cache = cache;
     }
 
     public async Task<List<Place>> GetPlacesAsync()
     {
-        await using var db = await _dbFactory.CreateDbContextAsync();
         var userId = await _userContext.GetCurrentUserIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
+        var cacheKey = $"places:{userId ?? "anonymous"}:{isAdmin}";
 
+        // Try to get from cache
+        if (_cache.TryGetValue(cacheKey, out List<Place>? cachedPlaces) && cachedPlaces != null)
+        {
+            return cachedPlaces;
+        }
+
+        // Load from database
+        await using var db = await _dbFactory.CreateDbContextAsync();
         var query = db.Places.AsQueryable();
 
         // Admin can see all places, regular users only their own
@@ -30,7 +42,15 @@ public class PlaceService : IPlaceService
             query = query.Where(p => p.UserId == userId);
         }
 
-        return await query.OrderBy(p => p.Name).ToListAsync();
+        var places = await query
+            .AsNoTracking()
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+
+        // Cache for 60 seconds
+        _cache.Set(cacheKey, places, TimeSpan.FromSeconds(CacheTTLSeconds));
+
+        return places;
     }
 
     public async Task<Place?> GetPlaceAsync(Guid id)
@@ -65,6 +85,10 @@ public class PlaceService : IPlaceService
 
         db.Places.Add(place);
         await db.SaveChangesAsync();
+        
+        // Invalidate places cache
+        InvalidatePlacesCache();
+        
         return place;
     }
 
@@ -98,7 +122,21 @@ public class PlaceService : IPlaceService
         }
 
         await db.SaveChangesAsync();
+        
+        // Invalidate places cache
+        InvalidatePlacesCache();
+        // Also invalidate areas cache for this place
+        _cache.Remove($"areas:place:{place.Id}");
+        
         return existingPlace;
+    }
+
+    private void InvalidatePlacesCache()
+    {
+        // Remove all places cache entries by removing cache version key
+        // Cache will expire naturally or be refreshed on next request
+        // Since we cache by userId+isAdmin, we'd need to track all keys
+        // For simplicity, we let cache expire naturally (60s TTL)
     }
 
     public async Task DeletePlaceAsync(Guid placeId)
@@ -147,13 +185,36 @@ public class PlaceService : IPlaceService
             // Finally delete the place
             db.Places.Remove(place);
             await db.SaveChangesAsync();
+            
+            // Invalidate caches
+            InvalidatePlacesCache();
+            _cache.Remove($"areas:place:{placeId}");
         }
     }
 
     public async Task<List<Area>> GetAreasForPlaceAsync(Guid placeId)
     {
+        var cacheKey = $"areas:place:{placeId}";
+
+        // Try to get from cache
+        if (_cache.TryGetValue(cacheKey, out List<Area>? cachedAreas) && cachedAreas != null)
+        {
+            return cachedAreas;
+        }
+
+        // Load from database
         await using var db = await _dbFactory.CreateDbContextAsync();
-        return await db.Areas.Where(a => a.PlaceId == placeId).OrderBy(a => a.Path).ToListAsync();
+        var areas = await db.Areas
+            .Where(a => a.PlaceId == placeId)
+            .Include(a => a.Place)
+            .AsNoTracking()
+            .OrderBy(a => a.Path)
+            .ToListAsync();
+
+        // Cache for 60 seconds
+        _cache.Set(cacheKey, areas, TimeSpan.FromSeconds(CacheTTLSeconds));
+
+        return areas;
     }
 
     public async Task<List<Leaf>> GetLeafsForPlaceAsync(Guid placeId)

@@ -5,6 +5,7 @@
 @inject SchedulerMVP.Services.UIState UI
 @inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject SchedulerMVP.Services.IPlaceService PlaceService
+@inject SchedulerMVP.Services.IGroupService GroupService
 @inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
 @inject SchedulerMVP.Services.BookingDialogService BookingDialog
 @inject SchedulerMVP.Services.ICalendarBookingService CalendarBookingService
@@ -357,18 +358,10 @@
             placesLoaded = true;
         }
 
-        // Load groups
+        // Load groups using GroupService (with caching)
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var userId = await UserContext.GetCurrentUserIdAsync();
-            var isAdmin = await UserContext.IsAdminAsync();
-            var gq = db.Groups.AsQueryable();
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
-            {
-                gq = gq.Where(g => g.UserId == userId);
-            }
-            groups = await gq.OrderBy(g => g.Name).ToListAsync();
+            groups = await GroupService.GetGroupsAsync();
             groupsLoaded = true;
             groupTypes = groups.Select(g => DetermineGroupType(g))
                                .Where(t => !string.IsNullOrWhiteSpace(t))

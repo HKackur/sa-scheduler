@@ -182,16 +182,19 @@ else
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+
+// Add memory cache for performance optimization (caching Groups, Places, Areas)
+builder.Services.AddMemoryCache();
 // CRITICAL: Configure SignalR BEFORE AddServerSideBlazor for Blazor Server on Fly.io
 // This ensures proper connection handling behind proxy
 builder.Services.AddSignalR(options =>
 {
-    // Increased timeouts for Fly.io proxy/network latency
+    // Optimized timeouts for better performance
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.KeepAliveInterval = TimeSpan.FromSeconds(10); // Reduced from 15s for faster disconnect detection
     options.HandshakeTimeout = TimeSpan.FromSeconds(15);
     options.EnableDetailedErrors = builder.Environment.IsDevelopment(); // Enable in development for debugging
-    options.MaximumReceiveMessageSize = 32 * 1024; // 32KB max message size
+    options.MaximumReceiveMessageSize = 64 * 1024; // Increased to 64KB for larger render batches
 });
 
 builder.Services.AddServerSideBlazor(options =>
@@ -201,7 +204,7 @@ builder.Services.AddServerSideBlazor(options =>
     options.DisconnectedCircuitMaxRetained = 100;
     options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
-    options.MaxBufferedUnacknowledgedRenderBatches = 20;
+    options.MaxBufferedUnacknowledgedRenderBatches = 30; // Increased from 20 for better performance
 });
 
 // Get connection string - try both Azure Connection String format and App Settings format
@@ -344,6 +347,7 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
 builder.Services.AddScoped<IConflictService, ConflictService>();
 builder.Services.AddScoped<IScheduleTemplateService, ScheduleTemplateService>();
 builder.Services.AddScoped<IPlaceService, PlaceService>();
+builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ICalendarBookingService, CalendarBookingService>();
 builder.Services.AddScoped<BookingDialogService>();
 builder.Services.AddScoped<UIState>();

@@ -11,6 +11,9 @@ public class UserContextService
     private readonly AuthenticationStateProvider _authenticationStateProvider;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly UserManager<ApplicationUser> _userManager;
+    
+    private const string UserIdCacheKey = "UserContextService_UserId";
+    private const string IsAdminCacheKey = "UserContextService_IsAdmin";
 
     public UserContextService(AuthenticationStateProvider authenticationStateProvider, IHttpContextAccessor httpContextAccessor, UserManager<ApplicationUser> userManager)
     {
@@ -84,20 +87,37 @@ public class UserContextService
 
     public async Task<string?> GetCurrentUserIdAsync()
     {
+        // Cache userId in HttpContext.Items for request lifetime (performance optimization)
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.Items.TryGetValue(UserIdCacheKey, out var cachedUserId) == true)
+        {
+            return cachedUserId as string;
+        }
+
         // Async version that properly awaits AuthenticationStateProvider
         // Use this in async methods for reliable user ID retrieval
         try
         {
-            var httpUser = _httpContextAccessor.HttpContext?.User;
+            var httpUser = httpContext?.User;
             if (httpUser?.Identity?.IsAuthenticated == true)
             {
                 var httpUserId = httpUser.FindFirstValue(ClaimTypes.NameIdentifier);
                 if (!string.IsNullOrEmpty(httpUserId))
+                {
+                    // Cache for request lifetime
+                    if (httpContext != null)
+                        httpContext.Items[UserIdCacheKey] = httpUserId;
                     return httpUserId;
+                }
             }
 
             var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
             var authUserId = authState?.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            // Cache for request lifetime
+            if (httpContext != null && !string.IsNullOrEmpty(authUserId))
+                httpContext.Items[UserIdCacheKey] = authUserId;
+            
             return authUserId;
         }
         catch
@@ -108,33 +128,46 @@ public class UserContextService
 
     public async Task<bool> IsAdminAsync()
     {
+        // Cache isAdmin in HttpContext.Items for request lifetime (performance optimization)
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.Items.TryGetValue(IsAdminCacheKey, out var cachedIsAdmin) == true)
+        {
+            return cachedIsAdmin is bool isAdmin && isAdmin;
+        }
+
         try
         {
-            // Use AuthenticationStateProvider first (works in Blazor Server)
-            var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
-            var user = authState?.User;
-            
-            // Fallback to HttpContext if AuthenticationStateProvider didn't work
-            if (user == null || user.Identity?.IsAuthenticated != true)
+            // Get userId first (will use cache if available)
+            var userId = await GetCurrentUserIdAsync();
+            if (string.IsNullOrEmpty(userId))
             {
-                user = _httpContextAccessor.HttpContext?.User;
-                if (user == null || user.Identity?.IsAuthenticated != true)
-                    return false;
+                if (httpContext != null)
+                    httpContext.Items[IsAdminCacheKey] = false;
+                return false;
             }
 
-            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrEmpty(userId))
-                return false;
-
+            // Check if user is admin (this still requires DB call, but we cache the result)
             var appUser = await _userManager.FindByIdAsync(userId);
             if (appUser == null)
+            {
+                if (httpContext != null)
+                    httpContext.Items[IsAdminCacheKey] = false;
                 return false;
+            }
 
-            return await _userManager.IsInRoleAsync(appUser, "Admin");
+            var isAdmin = await _userManager.IsInRoleAsync(appUser, "Admin");
+            
+            // Cache result for request lifetime
+            if (httpContext != null)
+                httpContext.Items[IsAdminCacheKey] = isAdmin;
+            
+            return isAdmin;
         }
         catch
         {
             // If there's any error (e.g., database issue), assume not admin
+            if (httpContext != null)
+                httpContext.Items[IsAdminCacheKey] = false;
             return false;
         }
     }
