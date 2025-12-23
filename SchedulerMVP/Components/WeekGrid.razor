@@ -465,26 +465,33 @@
             
             if (!_dragDropInitialized)
             {
-                // Wait for SchedulerMVP object to be available (production safety)
-                var maxWait = 10; // Max 10 attempts = ~2 seconds
+                // Wait for both Blazor to be ready AND SchedulerMVP object to exist
+                // In production, Blazor.start() may not be complete when OnAfterRenderAsync runs
+                var maxWait = 15; // Max 15 attempts = ~3 seconds
                 var attempt = 0;
                 while (attempt < maxWait)
                 {
                     try
                     {
-                        // Check if SchedulerMVP exists
-                        var exists = await JSRuntime.InvokeAsync<bool>("eval", "typeof SchedulerMVP !== 'undefined' && typeof SchedulerMVP.initDragDrop === 'function'");
-                        if (exists)
+                        // Check if Blazor is ready AND SchedulerMVP exists
+                        var isReady = await JSRuntime.InvokeAsync<bool>("eval", 
+                            "typeof Blazor !== 'undefined' && " +
+                            "typeof SchedulerMVP !== 'undefined' && " +
+                            "typeof SchedulerMVP.initDragDrop === 'function'");
+                        
+                        if (isReady)
                         {
-                            // Now initialize
+                            // Now initialize - both Blazor and JavaScript are ready
                             await JSRuntime.InvokeVoidAsync("SchedulerMVP.initDragDrop", _dotNetRef);
                             _dragDropInitialized = true;
+                            Console.WriteLine($"[WeekGrid] Drag and drop initialized successfully (attempt {attempt + 1})");
                             break;
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // SchedulerMVP not ready yet, wait and retry
+                        // Not ready yet, wait and retry
+                        Console.WriteLine($"[WeekGrid] Drag and drop not ready yet (attempt {attempt + 1}): {ex.Message}");
                     }
                     
                     attempt++;
@@ -496,7 +503,7 @@
                 
                 if (!_dragDropInitialized)
                 {
-                    Console.WriteLine("[WeekGrid] Warning: Failed to initialize drag and drop - SchedulerMVP not available");
+                    Console.WriteLine("[WeekGrid] Warning: Failed to initialize drag and drop after all retries");
                 }
             }
             else
