@@ -493,28 +493,23 @@
         var nonFavs = places.Where(p => !favoritePlaceIds.Contains(p.Id)).OrderBy(p => p.Name).ToList();
         var sortedPlaces = favs.Concat(nonFavs).ToList();
         
-        // PERF: Load all areas in parallel for all places (one query per place, but parallel)
-        var areaTasks = sortedPlaces.Select(async p =>
+        // Load areas sequentially to avoid max connection issues
+        // Use caching to minimize database calls
+        foreach (var p in sortedPlaces)
         {
             if (!_cachedAreasByPlace.TryGetValue(p.Id, out var placeAreas))
             {
                 placeAreas = await PlaceService.GetAreasForPlaceAsync(p.Id);
                 _cachedAreasByPlace[p.Id] = placeAreas;
             }
-            return new { Place = p, Areas = placeAreas };
-        });
-        
-        var placeAreaData = await Task.WhenAll(areaTasks);
-        
-        foreach (var data in placeAreaData)
-        {
-            var placeNode = new PlaceTreeNode(data.Place);
+            
+            var placeNode = new PlaceTreeNode(p);
             
             // Build area tree for this place
-            var idToNode = data.Areas.ToDictionary(a => a.Id, a => new TreeNode(a));
-            foreach (var a in data.Areas)
+            var idToNode = placeAreas.ToDictionary(a => a.Id, a => new TreeNode(a));
+            foreach (var a in placeAreas)
             {
-                if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out var parent))
+                if (a.ParentAreaId is Guid pid && idToNode.TryGetValue(pid, out TreeNode? parent))
                 {
                     parent.Children.Add(idToNode[a.Id]);
                 }

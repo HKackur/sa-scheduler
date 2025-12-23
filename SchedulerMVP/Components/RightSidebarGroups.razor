@@ -83,9 +83,9 @@
             // For now, load directly but will update when we inject GroupService
             await using var db = await DbFactory.CreateDbContextAsync();
             var userId = await UserContext.GetCurrentUserIdAsync();
-            var isAdmin = await UserContext.IsAdminAsync();
             var query = db.Groups.AsQueryable();
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            // All users (including admin) only see their own groups
+            if (!string.IsNullOrEmpty(userId))
             {
                 query = query.Where(g => g.UserId == userId);
             }

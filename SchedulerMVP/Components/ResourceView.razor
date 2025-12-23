@@ -195,25 +195,11 @@
     {
         try
         {
-            // Get current user and admin status
+            // Get current user
             var userId = await UserContext.GetCurrentUserIdAsync();
-            var isAdmin = await UserContext.IsAdminAsync();
             
-            // Load places
+            // Load places (already filtered by user in PlaceService)
             places = await PlaceService.GetPlacesAsync();
-            
-            // Filter places by user if not admin
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
-            {
-                await using var db = await DbFactory.CreateDbContextAsync();
-                var userPlaceIds = await db.Areas
-                    .Where(a => a.Place != null && a.Place.UserId == userId)
-                    .Select(a => a.Place!.Id)
-                    .Distinct()
-                    .ToListAsync();
-                
-                places = places.Where(p => userPlaceIds.Contains(p.Id)).ToList();
-            }
             
             // Load areas for each place
             areasByPlace.Clear();
@@ -1089,6 +1075,7 @@
         background: white;
         position: sticky;
         top: 0; /* Sticky vertically - stays at top when scrolling vertically in resource-scroll-container */
+        left: 300px; /* Initial offset for list column width - will be adjusted by JavaScript */
         z-index: 15; /* Högre z-index för att vara ovanpå innehåll */
         height: 40px;
         min-height: 40px;
@@ -1101,7 +1088,7 @@
     
     .resource-scroll-container > .resource-time-axis-header {
         /* Header is now direct child of scroll container, so sticky works */
-        margin-left: 300px; /* Offset for list column width */
+        /* left position controlled by JavaScript for scroll sync */
     }
     
     .resource-time-axis-day-names {

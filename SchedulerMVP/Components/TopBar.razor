@@ -14,6 +14,7 @@
 @inject IHttpContextAccessor HttpContextAccessor
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthStateProvider
+@inject SchedulerMVP.Services.UserContextService UserContextService
 @implements IDisposable
 
 @{
@@ -110,7 +111,7 @@
                         <div class="tb-menu">
                             <div class="tb-item user-email">@currentUserEmail</div>
                             <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
-                            @if (isCurrentUserAdmin)
+                            @if (isCurrentUserAdmin == true)
                             {
                                 <a href="/admin" class="tb-item" style="text-decoration:none;">Admin</a>
                             }
@@ -198,7 +199,7 @@
     private List<ScheduleTemplate> templates = new();
     private bool userMenuOpen;
     private string? currentUserEmail;
-    private bool isCurrentUserAdmin;
+    private bool? isCurrentUserAdmin; // Nullable to track if loaded
     private List<BreadcrumbItem> breadcrumbItems = new();
 
     protected override void OnInitialized() {
@@ -207,7 +208,7 @@
         try {
             var user = HttpContextAccessor?.HttpContext?.User;
             currentUserEmail = user?.FindFirstValue(ClaimTypes.Email) ?? user?.Identity?.Name;
-            isCurrentUserAdmin = user?.IsInRole("Admin") == true;
+            // Don't check admin status here - do it async in OnInitializedAsync to avoid blocking
         } catch {}
     }
 
@@ -231,6 +232,24 @@
 
     protected override async Task OnInitializedAsync() {
         await LoadBreadcrumbsAsync();
+        // Load admin status asynchronously to avoid blocking
+        // Only load if not already loaded to avoid multiple calls
+        if (!isCurrentUserAdmin.HasValue)
+        {
+            try {
+                if (string.IsNullOrEmpty(currentUserEmail))
+                {
+                    var user = HttpContextAccessor?.HttpContext?.User;
+                    currentUserEmail = user?.FindFirstValue(ClaimTypes.Email) ?? user?.Identity?.Name;
+                }
+                // Use UserContext service for reliable admin check - it has built-in caching
+                isCurrentUserAdmin = await UserContextService.IsAdminAsync();
+                StateHasChanged();
+            } catch (Exception ex) {
+                Console.WriteLine($"[TopBar] Error loading admin status: {ex.Message}");
+                isCurrentUserAdmin = false;
+            }
+        }
     }
 
     private void SetCalendarMode(bool isCalendar) {
@@ -297,7 +316,28 @@
 
     private void NavigateBack() => Navigation.NavigateTo("/");
     private void PerformLogout() => Navigation.NavigateTo("/auth/logout", true);
-    private void ToggleUserMenu() => userMenuOpen = !userMenuOpen;
+    private void ToggleUserMenu() 
+    { 
+        userMenuOpen = !userMenuOpen;
+        // Ensure admin status is loaded when menu opens (only if not already loaded)
+        if (userMenuOpen && !isCurrentUserAdmin.HasValue)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    isCurrentUserAdmin = await UserContextService.IsAdminAsync();
+                    StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[TopBar] Error loading admin status in menu: {ex.Message}");
+                    isCurrentUserAdmin = false;
+                    StateHasChanged();
+                }
+            });
+        }
+    }
     private void CloseUserMenu() => userMenuOpen = false;
     private void NavigateToPreviousWeek() { UI.CurrentWeekStart = UI.CurrentWeekStart.AddDays(-7); UI.RaiseChanged(); }
     private void NavigateToNextWeek() { UI.CurrentWeekStart = UI.CurrentWeekStart.AddDays(7); UI.RaiseChanged(); }

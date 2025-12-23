@@ -334,9 +334,9 @@
             // Use GroupService when available, otherwise load directly with AsNoTracking
             await using var db = await DbFactory.CreateDbContextAsync();
             var userId = await UserContext.GetCurrentUserIdAsync();
-            var isAdmin = await UserContext.IsAdminAsync();
             var query = db.Groups.AsQueryable();
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            // All users (including admin) only see their own groups
+            if (!string.IsNullOrEmpty(userId))
             {
                 query = query.Where(g => g.UserId == userId);
             }
