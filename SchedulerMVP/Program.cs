@@ -238,6 +238,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
             npgsql.CommandTimeout(120); // 120 second timeout for Azure
+            // Configure connection pooling to prevent max connections errors
+            npgsql.MaxPoolSize(10); // Limit max pool size
+            npgsql.MinPoolSize(2); // Keep minimum connections
         });
     }
     else
@@ -295,6 +298,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
             npgsql.CommandTimeout(120); // 120 second timeout for Azure
+            // Configure connection pooling to prevent max connections errors
+            npgsql.MaxPoolSize(10); // Limit max pool size
+            npgsql.MinPoolSize(2); // Keep minimum connections
         });
     }
     else
@@ -316,6 +322,9 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
             npgsql.CommandTimeout(120); // 120 second timeout for Azure
+            // Configure connection pooling to prevent max connections errors
+            npgsql.MaxPoolSize(10); // Limit max pool size
+            npgsql.MinPoolSize(2); // Keep minimum connections
         });
     }
     else
@@ -334,6 +343,9 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
         {
             npgsql.MigrationsAssembly("SchedulerMVP");
             npgsql.CommandTimeout(120); // 120 second timeout for Azure
+            // Configure connection pooling to prevent max connections errors
+            npgsql.MaxPoolSize(10); // Limit max pool size
+            npgsql.MinPoolSize(2); // Keep minimum connections
         });
     }
     else
