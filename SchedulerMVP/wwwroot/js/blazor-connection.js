@@ -16,6 +16,22 @@ window.blazorConnection = {
     init: function() {
         console.log('[Blazor] Initializing enhanced connection monitoring...');
         
+        // CRITICAL: Catch uncaught errors that indicate circuit is dead
+        // "No interop methods are registered" is thrown as uncaught error, not Blazor event
+        window.addEventListener('error', function(event) {
+            const errorMessage = event.message?.toString() || '';
+            const errorStack = event.error?.stack?.toString() || '';
+            
+            // Detect circuit dead errors
+            if (errorMessage.includes('No interop methods are registered') ||
+                errorMessage.includes('Circuit not initialized') ||
+                errorStack.includes('No interop methods are registered')) {
+                window.blazorConnection.circuitDead = true;
+                window.blazorConnection.connectionState = 'Disconnected';
+                console.log('[Blazor] Circuit dead error detected via uncaught error handler:', errorMessage);
+            }
+        }, true); // Use capture phase to catch early
+        
         // Monitor SignalR connection events
         if (window.Blazor) {
             // Listen for circuit errors - especially "Circuit not initialized"
@@ -101,8 +117,20 @@ window.blazorConnection = {
             // If mouse hasn't moved for >30 seconds, test connection when it moves again
             if (timeSinceLastMove > 30000) {
                 console.log('[Blazor] Mouse moved after long inactivity - testing connection');
+                
+                // If circuit is already dead, don't test - just reload if needed
+                if (window.blazorConnection.circuitDead) {
+                    console.log('[Blazor] Circuit is dead - checking for deploy or reload');
+                    if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                        window.deployNotification.showModalForced(function() {
+                            window.location.reload();
+                        }, false);
+                    }
+                    return;
+                }
+                
                 window.blazorConnection.testConnection(true).then(function(isAlive) {
-                    if (!isAlive) {
+                    if (!isAlive || window.blazorConnection.circuitDead) {
                         console.log('[Blazor] Connection dead after inactivity - checking for deploy');
                         // Only show modal if there's a new version - otherwise let Blazor reconnect silently
                         if (window.deployNotification && window.deployNotification.shouldShowModal()) {
@@ -111,6 +139,10 @@ window.blazorConnection = {
                             }, false);
                         }
                     }
+                }).catch(function(error) {
+                    // If test throws, circuit is dead
+                    window.blazorConnection.circuitDead = true;
+                    console.log('[Blazor] Connection test threw error - circuit is dead');
                 });
             }
         }, { passive: true });
@@ -171,6 +203,25 @@ window.blazorConnection = {
             window.blazorConnection.pendingClickTest = null;
             
             // Test connection after giving reconnection a chance
+            // BUT: If circuit is already marked as dead, skip test and reload directly
+            if (window.blazorConnection.circuitDead) {
+                console.log('[Blazor] Circuit is dead - user clicked, auto-reloading immediately...');
+                
+                // Check for deploy first
+                if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                    console.log('[Blazor] Circuit dead and new version available - showing deploy modal');
+                    window.deployNotification.showModalForced(function() {
+                        window.location.reload();
+                    }, false);
+                } else {
+                    // No deploy, just reload automatically
+                    console.log('[Blazor] Circuit dead - auto-reloading page');
+                    window.location.reload();
+                }
+                return;
+            }
+            
+            // Try to test connection, but catch errors that indicate circuit is dead
             window.blazorConnection.testConnection(true).then(function(isAlive) {
                 if (isAlive) {
                     // Connection restored! Reset state
@@ -197,6 +248,19 @@ window.blazorConnection = {
                         console.log('[Blazor] Connection dead - auto-reloading page');
                         window.location.reload();
                     }
+                }
+            }).catch(function(error) {
+                // If testConnection throws (e.g., "No interop methods"), circuit is dead
+                console.log('[Blazor] Connection test threw error - circuit is dead, auto-reloading:', error);
+                window.blazorConnection.circuitDead = true;
+                
+                // Check for deploy first
+                if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                    window.deployNotification.showModalForced(function() {
+                        window.location.reload();
+                    }, false);
+                } else {
+                    window.location.reload();
                 }
             });
         }, 2000); // Wait 2 seconds after click to give reconnection time
@@ -262,9 +326,18 @@ window.blazorConnection = {
                     })
                     .catch(function(error) {
                         clearTimeout(testTimeout);
-                        console.warn('[Blazor] JS interop test failed:', error);
+                        const errorMessage = error?.message?.toString() || error?.toString() || '';
+                        console.warn('[Blazor] JS interop test failed:', errorMessage);
+                        
+                        // Detect circuit dead errors
+                        if (errorMessage.includes('No interop methods are registered') ||
+                            errorMessage.includes('Circuit not initialized')) {
+                            window.blazorConnection.circuitDead = true;
+                            console.log('[Blazor] Circuit dead detected in testConnection catch');
+                        }
+                        
                         // If JS interop fails, the circuit is likely dead
-                        window.blazorConnection.handleConnectionError('JS interop test failed: ' + error.message);
+                        window.blazorConnection.handleConnectionError('JS interop test failed: ' + errorMessage);
                         resolve(false);
                     });
             } catch (e) {
