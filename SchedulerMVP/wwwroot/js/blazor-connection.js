@@ -43,8 +43,13 @@ window.blazorConnection = {
                 setTimeout(function() {
                     window.blazorConnection.testConnection(true).then(function(isAlive) {
                         if (!isAlive) {
-                            console.log('[Blazor] Connection dead after tab became visible - showing modal');
-                            window.blazorConnection.showConnectionDeadModal();
+                            console.log('[Blazor] Connection dead after tab became visible - checking for deploy');
+                            // Only show modal if there's a new version - otherwise let Blazor reconnect silently
+                            if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                                window.deployNotification.showModalForced(function() {
+                                    window.location.reload();
+                                }, false);
+                            }
                         }
                     });
                 }, 1000); // Wait 1 second for potential reconnection
@@ -52,9 +57,10 @@ window.blazorConnection = {
         });
         
         // Enhanced connection health check with actual JS interop test
+        // Check less frequently - app should stay alive for 5 minutes
         setInterval(function() {
             window.blazorConnection.checkConnectionHealth();
-        }, 10000); // Check every 10 seconds (reduced from 15)
+        }, 30000); // Check every 30 seconds (less aggressive)
         
         // Track user activity AND test connection on interaction after inactivity
         // CRITICAL: Test connection on EVERY click to detect silent failures
@@ -86,8 +92,13 @@ window.blazorConnection = {
                 console.log('[Blazor] Mouse moved after long inactivity - testing connection');
                 window.blazorConnection.testConnection(true).then(function(isAlive) {
                     if (!isAlive) {
-                        console.log('[Blazor] Connection dead after inactivity - showing modal');
-                        window.blazorConnection.showConnectionDeadModal();
+                        console.log('[Blazor] Connection dead after inactivity - checking for deploy');
+                        // Only show modal if there's a new version - otherwise let Blazor reconnect silently
+                        if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                            window.deployNotification.showModalForced(function() {
+                                window.location.reload();
+                            }, false);
+                        }
                     }
                 });
             }
@@ -103,7 +114,7 @@ window.blazorConnection = {
         console.log('[Blazor] Enhanced connection monitoring initialized');
     },
     
-    // NEW: Test connection on user interaction (click/keydown)
+    // NEW: Test connection on user interaction (click/keydown) - try to wake up the app
     testConnectionOnInteraction: function(event) {
         // Don't test on every click - debounce
         if (window.blazorConnection.pendingClickTest) {
@@ -114,30 +125,54 @@ window.blazorConnection = {
         const clickTime = Date.now();
         window.blazorConnection.lastClickTime = clickTime;
         
-        // Test connection immediately (don't wait)
-        window.blazorConnection.testConnection(true).then(function(isAlive) {
-            // If connection is dead and user just clicked, show immediate feedback
-            if (!isAlive) {
-                console.log('[Blazor] Connection dead when user clicked - showing feedback immediately');
-                window.blazorConnection.showConnectionDeadModal();
+        // CRITICAL: First, try to wake up the app by attempting reconnection
+        // Blazor Server should automatically reconnect when user interacts
+        if (window.Blazor && typeof window.Blazor.reconnect === 'function') {
+            try {
+                console.log('[Blazor] User clicked - attempting to wake up app via reconnect');
+                window.Blazor.reconnect();
+            } catch (e) {
+                console.log('[Blazor] Reconnect not available, will test connection instead');
             }
-        });
+        }
         
-        // Also set a timeout to check again after a moment (in case testConnection missed it)
+        // Wait a moment for reconnection to happen, then test
         window.blazorConnection.pendingClickTest = setTimeout(function() {
             window.blazorConnection.pendingClickTest = null;
             
-            // Double-check connection after click
+            // Test connection after giving reconnection a chance
             window.blazorConnection.testConnection(true).then(function(isAlive) {
-                if (!isAlive && window.blazorConnection.lastClickTime === clickTime) {
-                    console.log('[Blazor] Connection still dead after click - showing feedback');
-                    window.blazorConnection.showConnectionDeadModal();
+                if (isAlive) {
+                    // Connection restored! Reset state
+                    if (window.blazorConnection.connectionState === 'Disconnected') {
+                        console.log('[Blazor] Connection restored after user click - app woke up!');
+                        window.blazorConnection.connectionState = 'Connected';
+                        window.blazorConnection.reconnectAttempts = 0;
+                        window.blazorConnection.disconnectedSince = null;
+                    }
+                } else if (window.blazorConnection.lastClickTime === clickTime) {
+                    // Still dead after click - but don't show modal immediately
+                    // Only show modal if disconnected for 5+ minutes OR if there's a new version
+                    const disconnectedFor = window.blazorConnection.disconnectedSince 
+                        ? Date.now() - window.blazorConnection.disconnectedSince 
+                        : 0;
+                    
+                    if (disconnectedFor > 5 * 60 * 1000) {
+                        // Disconnected for 5+ minutes - check for deploy
+                        if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                            console.log('[Blazor] Connection dead for 5+ minutes and new version - showing deploy modal');
+                            window.deployNotification.showModalForced(function() {
+                                window.location.reload();
+                            }, false);
+                        }
+                    }
+                    // Otherwise, just let Blazor continue trying to reconnect silently
                 }
             });
-        }, 1500); // Wait 1.5 seconds after click to double-check
+        }, 2000); // Wait 2 seconds after click to give reconnection time
     },
     
-    // IMPROVED: Actually test JS interop with timeout
+    // IMPROVED: Actually test JS interop with timeout - uses real JS interop call to PingAsync
     testConnection: function(force) {
         const now = Date.now();
         const timeSinceLastTest = now - window.blazorConnection.lastConnectionTest;
@@ -150,14 +185,13 @@ window.blazorConnection = {
         window.blazorConnection.lastConnectionTest = now;
         
         return new Promise(function(resolve) {
-            if (!window.Blazor) {
-                console.warn('[Blazor] Blazor not available for connection test');
+            if (!window.Blazor || !window.DotNet) {
+                console.warn('[Blazor] Blazor or DotNet not available for connection test');
                 window.blazorConnection.handleConnectionError('Blazor not available');
                 resolve(false);
                 return;
             }
             
-            // Try to access Blazor's circuit state to test if it's alive
             // Use a timeout to detect if circuit is dead
             const testTimeout = setTimeout(function() {
                 console.warn('[Blazor] Connection test timeout - circuit appears dead');
@@ -166,44 +200,46 @@ window.blazorConnection = {
             }, window.blazorConnection.clickTestTimeout);
             
             try {
-                // Try to access Blazor's internal state
-                // If Blazor is loaded and circuit exists, this should work
-                if (window.Blazor._internal && window.Blazor._internal.navigationManager) {
-                    // Circuit seems alive
+                // Try to call the PingAsync method via JS interop using DotNetObjectReference
+                // This is the most reliable way to test if the circuit is actually alive
+                const healthCheckRef = window.blazorConnection.healthCheckRef;
+                if (!healthCheckRef) {
                     clearTimeout(testTimeout);
-                    if (window.blazorConnection.connectionState === 'Disconnected') {
-                        console.log('[Blazor] Connection restored');
-                        window.blazorConnection.connectionState = 'Connected';
-                        window.blazorConnection.hideReconnectingMessage();
-                        window.blazorConnection.reconnectAttempts = 0;
-                        window.blazorConnection.disconnectedSince = null;
-                    }
-                    resolve(true);
-                } else {
-                    // Try alternative method - check if Blazor.start was called
-                    if (window.Blazor && typeof window.Blazor.reconnect === 'function') {
-                        clearTimeout(testTimeout);
-                        if (window.blazorConnection.connectionState === 'Disconnected') {
-                            console.log('[Blazor] Connection restored (alternative check)');
-                            window.blazorConnection.connectionState = 'Connected';
-                            window.blazorConnection.hideReconnectingMessage();
-                            window.blazorConnection.reconnectAttempts = 0;
-                            window.blazorConnection.disconnectedSince = null;
-                        }
-                        resolve(true);
-                    } else {
-                        clearTimeout(testTimeout);
-                        window.blazorConnection.handleConnectionError('Circuit state unavailable');
-                        resolve(false);
-                    }
+                    console.warn('[Blazor] Health check reference not available');
+                    window.blazorConnection.handleConnectionError('Health check reference not available');
+                    resolve(false);
+                    return;
                 }
+                
+                healthCheckRef.invokeMethodAsync('PingAsync')
+                    .then(function(result) {
+                        clearTimeout(testTimeout);
+                        if (result === true) {
+                            // Circuit is alive
+                            if (window.blazorConnection.connectionState === 'Disconnected') {
+                                console.log('[Blazor] Connection restored via JS interop test');
+                                window.blazorConnection.connectionState = 'Connected';
+                                window.blazorConnection.hideReconnectingMessage();
+                                window.blazorConnection.reconnectAttempts = 0;
+                                window.blazorConnection.disconnectedSince = null;
+                            }
+                            resolve(true);
+                        } else {
+                            window.blazorConnection.handleConnectionError('Ping returned false');
+                            resolve(false);
+                        }
+                    })
+                    .catch(function(error) {
+                        clearTimeout(testTimeout);
+                        console.warn('[Blazor] JS interop test failed:', error);
+                        // If JS interop fails, the circuit is likely dead
+                        window.blazorConnection.handleConnectionError('JS interop test failed: ' + error.message);
+                        resolve(false);
+                    });
             } catch (e) {
                 clearTimeout(testTimeout);
-                console.warn('[Blazor] Connection test failed:', e);
-                // Don't treat this as an error if we're just checking - might be normal
-                if (window.blazorConnection.connectionState === 'Disconnected') {
-                    window.blazorConnection.handleConnectionError('Connection test failed: ' + e.message);
-                }
+                console.warn('[Blazor] Connection test exception:', e);
+                window.blazorConnection.handleConnectionError('Connection test exception: ' + e.message);
                 resolve(false);
             }
         });
@@ -214,7 +250,14 @@ window.blazorConnection = {
         if (window.Blazor) {
             console.log('[Blazor] Setting up reconnection event listeners...');
             
-            // Listen for disconnection
+            // Listen for Blazor circuit events
+            // These are fired by Blazor Server when the SignalR connection state changes
+            window.addEventListener('beforeunload', function() {
+                // Clean up on page unload
+                window.blazorConnection.connectionState = 'Disconnected';
+            });
+            
+            // Listen for browser network events
             window.addEventListener('offline', function() {
                 console.log('[Blazor] Browser went offline');
                 window.blazorConnection.connectionState = 'Disconnected';
@@ -227,12 +270,23 @@ window.blazorConnection = {
                 setTimeout(function() {
                     window.blazorConnection.testConnection(true).then(function(isAlive) {
                         if (!isAlive) {
-                            console.log('[Blazor] Still disconnected after coming online - auto-reloading...');
-                            window.blazorConnection.autoReload('Failed to reconnect after coming online');
+                            console.log('[Blazor] Still disconnected after coming online - checking for deploy...');
+                            // Check if there's a new version deployed
+                            if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                                window.deployNotification.showModalForced(function() {
+                                    window.location.reload();
+                                }, false);
+                            } else {
+                                window.blazorConnection.autoReload('Failed to reconnect after coming online');
+                            }
                         }
                     });
                 }, 5000);
             });
+            
+            // REMOVED: Automatic reconnection monitoring that kept triggering modals
+            // Blazor Server handles reconnection automatically - we don't need to constantly check
+            // Only check when user interacts or when explicitly needed
             
             console.log('[Blazor] Reconnection handling configured');
             window.blazorConnection.connectionState = 'Connected';
@@ -241,6 +295,16 @@ window.blazorConnection = {
     
     checkConnectionHealth: function() {
         if (document.hidden) return; // Skip when tab is hidden
+        
+        // CRITICAL: Don't check if modal is already shown - prevents infinite loop
+        if (window.blazorConnection.connectionDeadModalShown || document.getElementById('connection-dead-modal')) {
+            return;
+        }
+        
+        // CRITICAL: Don't check if deploy modal is shown - prevents infinite loop
+        if (document.getElementById('deploy-notification-modal')) {
+            return;
+        }
         
         const timeSinceActivity = Date.now() - window.blazorConnection.lastActivity;
         
@@ -252,12 +316,19 @@ window.blazorConnection = {
         // Actually test the connection instead of just checking state
         window.blazorConnection.testConnection(false).then(function(isAlive) {
             if (!isAlive && window.blazorConnection.connectionState === 'Disconnected') {
-                // If disconnected for more than 5 seconds and user is active, show modal
+                // CRITICAL: Only show modal after 5 MINUTES of disconnection, not 10 seconds
+                // App should stay alive for up to 5 minutes before requiring reload
                 if (!window.blazorConnection.disconnectedSince) {
                     window.blazorConnection.disconnectedSince = Date.now();
-                } else if (Date.now() - window.blazorConnection.disconnectedSince > 5000) {
-                    console.log('[Blazor] Disconnected for >5s - showing connection dead modal');
-                    window.blazorConnection.showConnectionDeadModal();
+                } else if (Date.now() - window.blazorConnection.disconnectedSince > 5 * 60 * 1000) {
+                    // Only show modal if there's a new version - otherwise let Blazor handle reconnection silently
+                    if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                        console.log('[Blazor] Disconnected for 5+ minutes and new version available - showing deploy modal');
+                        window.deployNotification.showModalForced(function() {
+                            window.location.reload();
+                        }, false);
+                    }
+                    // Don't show connection dead modal - let Blazor handle reconnection silently
                 }
             }
         });
@@ -268,12 +339,23 @@ window.blazorConnection = {
         window.blazorConnection.connectionState = 'Disconnected';
         window.blazorConnection.reconnectAttempts++;
         
+        // Don't show reconnecting banner - it's annoying and keeps popping up
+        // Instead, silently try to reconnect and only show modal if it fails after a while
+        
         if (window.blazorConnection.reconnectAttempts >= window.blazorConnection.maxReconnectAttempts) {
-            console.log('[Blazor] Max reconnect attempts reached - auto-reloading...');
-            window.blazorConnection.autoReload('Max reconnect attempts reached');
-        } else {
-            window.blazorConnection.showReconnectingMessage();
+            console.log('[Blazor] Max reconnect attempts reached - checking for deploy...');
+            // Check if there's a new version deployed
+            if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                window.deployNotification.showModalForced(function() {
+                    window.location.reload();
+                }, false);
+            } else {
+                // No new version, but connection failed - don't show modal
+                // Let Blazor handle reconnection silently - app should wake up on user interaction
+                console.log('[Blazor] Connection failed but no new version - letting Blazor reconnect silently');
+            }
         }
+        // Don't show banner - let Blazor handle reconnection silently
     },
     
     autoReload: function(reason) {
@@ -292,10 +374,12 @@ window.blazorConnection = {
     },
     
     showReconnectingMessage: function() {
-        window.blazorConnection.showBanner('🔄 Återansluter...', '#f59e0b', 'blazor-reconnecting');
+        // REMOVED: Don't show annoying banner that keeps popping up
+        // Blazor handles reconnection automatically - no need to annoy user
     },
     
     hideReconnectingMessage: function() {
+        // REMOVED: No banner to hide
         window.blazorConnection.hideBanner('blazor-reconnecting');
     },
     

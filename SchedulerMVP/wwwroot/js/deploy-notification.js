@@ -52,9 +52,23 @@ window.deployNotification = {
         
         // If version changed and user hasn't reloaded for this version yet
         if (currentVersion !== lastReloadedVersion) {
-            // CRITICAL: Check if modal was already shown for this version OR if modal already exists in DOM
-            if (modalShownForVersion === currentVersion || document.getElementById('deploy-notification-modal')) {
-                console.log('[DeployNotification] Modal already shown for this version or exists in DOM - skipping');
+            // CRITICAL: Multiple checks to prevent infinite loop
+            // Check if modal was already shown for this version
+            if (modalShownForVersion === currentVersion) {
+                console.log('[DeployNotification] Modal already shown for this version - skipping init');
+                return;
+            }
+            
+            // Check if modal already exists in DOM
+            if (document.getElementById('deploy-notification-modal')) {
+                console.log('[DeployNotification] Modal already exists in DOM - skipping init');
+                return;
+            }
+            
+            // Check if user dismissed this version
+            const dismissedVersion = localStorage.getItem('app-modal-dismissed-version');
+            if (dismissedVersion === currentVersion) {
+                console.log('[DeployNotification] Modal dismissed for this version - skipping init');
                 return;
             }
             
@@ -62,25 +76,27 @@ window.deployNotification = {
             // If user has already seen this version but not reloaded, show modal
             // If this is first time seeing this version, mark as seen and show modal after delay
             if (currentVersion === lastSeenVersion) {
-                // User has seen this version before but not reloaded - show modal immediately
-                console.log('[DeployNotification] Version changed - showing notification modal');
+                // User has seen this version before but not reloaded - show modal once
+                console.log('[DeployNotification] Version changed - will show notification modal once');
                 window.deployNotification.initTimeout = setTimeout(function() {
-                    // Double-check modal doesn't exist and hasn't been shown
+                    // CRITICAL: Triple-check before showing
                     if (!document.getElementById('deploy-notification-modal') && 
                         !window.deployNotification.modalShown &&
-                        localStorage.getItem('app-modal-shown-version') !== currentVersion) {
+                        localStorage.getItem('app-modal-shown-version') !== currentVersion &&
+                        localStorage.getItem('app-modal-dismissed-version') !== currentVersion) {
                         window.deployNotification.showModal(currentVersion);
                     }
                 }, 2000); // Wait 2 seconds after page load
             } else {
                 // First time seeing this version - mark as seen and show modal after delay
                 localStorage.setItem('app-last-seen-version', currentVersion);
-                console.log('[DeployNotification] New version detected - will show notification');
+                console.log('[DeployNotification] New version detected - will show notification once');
                 window.deployNotification.initTimeout = setTimeout(function() {
-                    // Double-check modal doesn't exist and hasn't been shown
+                    // CRITICAL: Triple-check before showing
                     if (!document.getElementById('deploy-notification-modal') && 
                         !window.deployNotification.modalShown &&
-                        localStorage.getItem('app-modal-shown-version') !== currentVersion) {
+                        localStorage.getItem('app-modal-shown-version') !== currentVersion &&
+                        localStorage.getItem('app-modal-dismissed-version') !== currentVersion) {
                         window.deployNotification.showModal(currentVersion);
                     }
                 }, 3000); // Wait 3 seconds after page load for first detection
@@ -135,8 +151,19 @@ window.deployNotification = {
     },
     
     showModalForced: function(callback, isConnectionIssue) {
-        // Force show modal even if already shown (for connection health scenarios)
-        // isConnectionIssue = true if this is triggered by connection health monitoring
+        // CRITICAL: Multiple checks to prevent infinite loop
+        // Check if modal already exists in DOM
+        if (document.getElementById('deploy-notification-modal')) {
+            console.log('[DeployNotification] Modal already exists in DOM - skipping forced show');
+            return;
+        }
+        
+        // Check if modal flag is set
+        if (window.deployNotification.modalShown) {
+            console.log('[DeployNotification] Modal already shown (flag) - skipping forced show');
+            return;
+        }
+        
         const versionMeta = document.querySelector('meta[name="app-version"]');
         if (!versionMeta) {
             // No version info - just use callback
@@ -150,19 +177,25 @@ window.deployNotification = {
             return;
         }
         
-        // Check if modal was already shown for this version
+        // CRITICAL: Check if modal was already shown for this version
         const modalShownForVersion = localStorage.getItem('app-modal-shown-version');
-        if (modalShownForVersion === currentVersion && !isConnectionIssue) {
-            // Already shown for this version and not a connection issue - skip
+        if (modalShownForVersion === currentVersion) {
+            // Already shown for this version - check if dismissed
+            const dismissedVersion = localStorage.getItem('app-modal-dismissed-version');
+            if (dismissedVersion === currentVersion) {
+                console.log('[DeployNotification] Modal already dismissed for this version - skipping forced show');
+                return;
+            }
+            // Even if not dismissed, don't show again for same version
             console.log('[DeployNotification] Modal already shown for this version - skipping forced show');
             return;
         }
         
-        // Mark as shown
+        // Mark as shown IMMEDIATELY before creating modal
         window.deployNotification.modalShown = true;
         localStorage.setItem('app-modal-shown-version', currentVersion);
         
-        // Remove existing modal if any
+        // Remove existing modal if any (shouldn't happen, but just in case)
         const existing = document.getElementById('deploy-notification-modal');
         if (existing) {
             existing.remove();
@@ -171,115 +204,160 @@ window.deployNotification = {
         this.showModalInternal(currentVersion, callback || function() {
             localStorage.setItem('app-last-reloaded-version', currentVersion);
             window.location.reload();
-        }, isConnectionIssue || false);
+        }, false); // Always use false for isConnectionIssue - no connection error text
     },
     
     showModalInternal: function(version, onReloadCallback, isConnectionIssue) {
-        // isConnectionIssue = true if modal is shown due to connection problem
+        // isConnectionIssue parameter is kept for compatibility but not used in UI text
         
-        // Create modal overlay
+        // CRITICAL: Multiple checks to prevent infinite loop
+        // Check if modal already exists
+        if (document.getElementById('deploy-notification-modal')) {
+            console.log('[DeployNotification] Modal already exists in DOM (internal) - skipping');
+            return;
+        }
+        
+        // Check if modal flag is set
+        if (window.deployNotification.modalShown && localStorage.getItem('app-modal-shown-version') === version) {
+            console.log('[DeployNotification] Modal already shown for this version (internal) - skipping');
+            return;
+        }
+        
+        // CRITICAL: Check if user dismissed this version - prevent infinite loop
+        const dismissedVersion = localStorage.getItem('app-modal-dismissed-version');
+        const dismissedTimestamp = localStorage.getItem('app-modal-dismissed-timestamp');
+        if (dismissedVersion === version && dismissedTimestamp) {
+            const dismissedTime = parseInt(dismissedTimestamp, 10);
+            const timeSinceDismissal = Date.now() - dismissedTime;
+            // If dismissed, don't show again for this version (even if time passed)
+            console.log('[DeployNotification] Modal dismissed for this version - not showing again');
+            return;
+        }
+        
+        // Create modal overlay using app's existing modal-container style
         const overlay = document.createElement('div');
         overlay.id = 'deploy-notification-modal';
+        overlay.className = 'modal-container';
         overlay.style.cssText = `
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 10001;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 4000;
             display: flex;
-            align-items: center;
             justify-content: center;
-            animation: fadeIn 0.3s ease-out;
+            align-items: flex-start;
+            padding-top: 50px;
+            overflow-y: auto;
         `;
         
-        // Create modal content
+        // Create modal content using app's existing bm-modal style
         const modal = document.createElement('div');
+        modal.className = 'bm-modal';
         modal.style.cssText = `
-            background: white;
+            background: #fff;
+            color: #0f1720;
+            padding: 28px 28px 0 28px;
+            border: 1px solid #e6e7ea;
             border-radius: 12px;
-            padding: 32px;
-            max-width: 480px;
-            width: 90%;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            animation: slideUp 0.3s ease-out;
+            width: 480px;
+            box-shadow: 0 8px 28px rgba(16,24,40,.18);
+            max-height: 80vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         `;
         
-        modal.innerHTML = `
-            <div style="text-align: center; margin-bottom: 24px;">
-                <div style="margin-bottom: 16px;">
-                    <span class="material-symbols-outlined" style="font-size: 48px; color: #1976d2; font-variation-settings: 'FILL' 0;">
-                        system_update_alt
-                    </span>
-                </div>
-                <h2 style="margin: 0 0 12px 0; color: #1f2937; font-size: 24px; font-weight: 600;">
-                    ${isConnectionIssue ? 'Anslutningen har brutits' : 'Appen har uppdaterats'}
-                </h2>
-                <p style="margin: 0; color: #6b7280; font-size: 16px; line-height: 1.5;">
-                    ${isConnectionIssue 
-                        ? 'Anslutningen till servern har brutits och appen har uppdaterats. För att fortsätta använda appen med de senaste funktionerna behöver du ladda om sidan.' 
-                        : 'Vi har gjort en uppdatering av appen. För att fortsätta använda den med de senaste funktionerna och förbättringarna behöver du ladda om sidan.'}
-                </p>
-            </div>
-            <div style="display: flex; gap: 12px; justify-content: center;">
-                <button id="deploy-reload-btn" style="
-                    background: #1976d2;
-                    color: white;
-                    border: none;
-                    padding: 12px 24px;
-                    border-radius: 8px;
-                    font-size: 16px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    transition: background 0.2s;
-                " onmouseover="this.style.background='#1565c0'" onmouseout="this.style.background='#1976d2'">
-                    Ladda om sidan
-                </button>
-            </div>
+        // Create header using app's bm-header style
+        const header = document.createElement('div');
+        header.className = 'bm-header';
+        header.style.cssText = 'margin-bottom: 20px; text-align: center;';
+        
+        const iconDiv = document.createElement('div');
+        iconDiv.style.cssText = 'margin-bottom: 16px;';
+        const icon = document.createElement('span');
+        icon.className = 'material-symbols-outlined';
+        icon.style.cssText = 'font-size: 48px; color: #1976d2; font-variation-settings: "FILL" 0;';
+        icon.textContent = 'info';
+        iconDiv.appendChild(icon);
+        
+        const title = document.createElement('h2');
+        title.className = 'bm-title';
+        title.style.cssText = 'text-align: center; margin: 0 0 12px 0;';
+        title.textContent = 'En ny version av denna sida är tillgänglig';
+        
+        const text = document.createElement('p');
+        text.style.cssText = 'margin: 0; color: #6b7280; font-size: 14px; line-height: 1.5; text-align: center;';
+        text.textContent = 'Ladda om för att se de senaste ändringarna.';
+        
+        header.appendChild(iconDiv);
+        header.appendChild(title);
+        header.appendChild(text);
+        
+        // Create actions using app's bm-actions style
+        const actions = document.createElement('div');
+        actions.className = 'bm-actions';
+        actions.style.cssText = `
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 8px;
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+            border-top: 1px solid #e6e7ea;
+            padding-top: 12px;
+            padding-bottom: 28px;
+            z-index: 10;
         `;
         
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
+        // "Inte nu" button using app's btn-outline style
+        const notNowBtn = document.createElement('button');
+        notNowBtn.type = 'button';
+        notNowBtn.className = 'btn-outline';
+        notNowBtn.textContent = 'Inte nu';
+        notNowBtn.addEventListener('click', function() {
+            // CRITICAL: Save dismissal info to prevent infinite loop
+            localStorage.setItem('app-modal-dismissed-version', version);
+            localStorage.setItem('app-modal-dismissed-timestamp', Date.now().toString());
+            // Remove modal
+            overlay.remove();
+            window.deployNotification.modalShown = false;
+            console.log('[DeployNotification] Modal dismissed by user - will not show again for this version');
+        });
         
-        // Add animations if not already added
-        if (!document.getElementById('deploy-notification-styles')) {
-            const style = document.createElement('style');
-            style.id = 'deploy-notification-styles';
-            style.textContent = `
-                @keyframes fadeIn {
-                    from { opacity: 0; }
-                    to { opacity: 1; }
-                }
-                @keyframes slideUp {
-                    from { 
-                        transform: translateY(20px);
-                        opacity: 0;
-                    }
-                    to { 
-                        transform: translateY(0);
-                        opacity: 1;
-                    }
-                }
-            `;
-            document.head.appendChild(style);
-        }
-        
-        // Handle reload button click
-        const reloadBtn = document.getElementById('deploy-reload-btn');
+        // "Ladda om" button using app's btn-primary style
+        const reloadBtn = document.createElement('button');
+        reloadBtn.type = 'button';
+        reloadBtn.id = 'deploy-reload-btn';
+        reloadBtn.className = 'btn-primary';
+        reloadBtn.textContent = 'Ladda om';
         reloadBtn.addEventListener('click', function() {
-            // Mark this version as reloaded
+            // Mark this version as reloaded permanently
             localStorage.setItem('app-last-reloaded-version', version);
+            // Clear dismissal info since user is reloading
+            localStorage.removeItem('app-modal-dismissed-version');
+            localStorage.removeItem('app-modal-dismissed-timestamp');
             // Call callback (which will reload)
             if (onReloadCallback) {
                 onReloadCallback();
             }
         });
         
-        // Prevent closing by clicking outside (user must click reload)
+        actions.appendChild(notNowBtn);
+        actions.appendChild(reloadBtn);
+        
+        modal.appendChild(header);
+        modal.appendChild(actions);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Prevent closing by clicking outside (user must click a button)
         overlay.addEventListener('click', function(e) {
             if (e.target === overlay) {
-                // Don't close - user must click reload button
                 e.stopPropagation();
             }
         });

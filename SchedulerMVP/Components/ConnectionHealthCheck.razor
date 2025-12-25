@@ -1,0 +1,55 @@
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+@* Hidden component for connection health checking via JS interop *@
+<div style="display: none;"></div>
+
+@code {
+    private DotNetObjectReference<ConnectionHealthCheck>? _dotNetRef;
+
+    [JSInvokable]
+    public Task<bool> PingAsync()
+    {
+        // Simple ping method that returns true if the circuit is alive
+        // This is called from JavaScript to test if the Blazor circuit is responsive
+        return Task.FromResult(true);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Create DotNetObjectReference for JS interop
+            _dotNetRef = DotNetObjectReference.Create(this);
+            
+            // Register the component reference for JS interop
+            await JSRuntime.InvokeVoidAsync("eval", @"
+                (function() {
+                    if (window.blazorConnection && window.DotNet) {
+                        window.blazorConnection.healthCheckRef = arguments[0];
+                    }
+                })();
+            ", _dotNetRef);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dotNetRef != null)
+        {
+            try
+            {
+                _dotNetRef.Dispose();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+            _dotNetRef = null;
+        }
+        await Task.CompletedTask;
+    }
+}
+

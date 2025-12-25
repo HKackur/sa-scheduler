@@ -189,9 +189,9 @@ builder.Services.AddMemoryCache();
 // This ensures proper connection handling behind proxy
 builder.Services.AddSignalR(options =>
 {
-    // Optimized timeouts for better performance
-    options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-    options.KeepAliveInterval = TimeSpan.FromSeconds(10); // Reduced from 15s for faster disconnect detection
+    // Optimized timeouts for better performance and handling of inactivity
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60); // Increased from 30s to handle longer inactivity periods
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15); // Increased from 10s to reduce overhead while maintaining connection health
     options.HandshakeTimeout = TimeSpan.FromSeconds(15);
     options.EnableDetailedErrors = builder.Environment.IsDevelopment(); // Enable in development for debugging
     options.MaximumReceiveMessageSize = 64 * 1024; // Increased to 64KB for larger render batches
@@ -202,7 +202,7 @@ builder.Services.AddServerSideBlazor(options =>
     // Enable detailed errors to debug Azure issues
     options.DetailedErrors = true; // Enable in production to see what's causing crashes
     options.DisconnectedCircuitMaxRetained = 100;
-    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(3);
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(5); // Increased from 3 minutes to allow more time for reconnection
     options.JSInteropDefaultCallTimeout = TimeSpan.FromMinutes(1);
     options.MaxBufferedUnacknowledgedRenderBatches = 30; // Increased from 20 for better performance
 });
