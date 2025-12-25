@@ -11,16 +11,27 @@ window.blazorConnection = {
     clickTestTimeout: 2000, // 2 seconds timeout for click test
     lastClickTime: 0,
     connectionDeadModalShown: false,
+    circuitDead: false, // Track if circuit is completely dead (not initialized)
     
     init: function() {
         console.log('[Blazor] Initializing enhanced connection monitoring...');
         
         // Monitor SignalR connection events
         if (window.Blazor) {
-            // Listen for circuit errors
+            // Listen for circuit errors - especially "Circuit not initialized"
             Blazor.addEventListener('error', function(event) {
-                console.error('[Blazor] Circuit error:', event.detail);
-                window.blazorConnection.handleConnectionError('Circuit error: ' + event.detail);
+                const errorDetail = event.detail?.toString() || '';
+                console.error('[Blazor] Circuit error:', errorDetail);
+                
+                // Detect "Circuit not initialized" - this means circuit is completely dead
+                if (errorDetail.includes('Circuit not initialized') || 
+                    errorDetail.includes('No interop methods are registered')) {
+                    window.blazorConnection.circuitDead = true;
+                    window.blazorConnection.connectionState = 'Disconnected';
+                    console.log('[Blazor] Circuit not initialized detected - circuit is completely dead');
+                } else {
+                    window.blazorConnection.handleConnectionError('Circuit error: ' + errorDetail);
+                }
             });
         }
         
@@ -125,6 +136,25 @@ window.blazorConnection = {
         const clickTime = Date.now();
         window.blazorConnection.lastClickTime = clickTime;
         
+        // CRITICAL: If circuit is dead (not initialized), auto-reload immediately
+        // JavaScript can detect clicks even when circuit is dead
+        if (window.blazorConnection.circuitDead) {
+            console.log('[Blazor] Circuit is dead (not initialized) - user clicked, auto-reloading...');
+            
+            // Check for deploy first - if new version, show modal with "Inte nu" option
+            if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                console.log('[Blazor] Circuit dead and new version available - showing deploy modal');
+                window.deployNotification.showModalForced(function() {
+                    window.location.reload();
+                }, false);
+            } else {
+                // No deploy, just reload automatically
+                console.log('[Blazor] Circuit dead - auto-reloading page');
+                window.location.reload();
+            }
+            return; // Don't try to reconnect if circuit is dead
+        }
+        
         // CRITICAL: First, try to wake up the app by attempting reconnection
         // Blazor Server should automatically reconnect when user interacts
         if (window.Blazor && typeof window.Blazor.reconnect === 'function') {
@@ -149,24 +179,24 @@ window.blazorConnection = {
                         window.blazorConnection.connectionState = 'Connected';
                         window.blazorConnection.reconnectAttempts = 0;
                         window.blazorConnection.disconnectedSince = null;
+                        window.blazorConnection.circuitDead = false; // Reset circuit dead flag
                     }
                 } else if (window.blazorConnection.lastClickTime === clickTime) {
-                    // Still dead after click - but don't show modal immediately
-                    // Only show modal if disconnected for 5+ minutes OR if there's a new version
-                    const disconnectedFor = window.blazorConnection.disconnectedSince 
-                        ? Date.now() - window.blazorConnection.disconnectedSince 
-                        : 0;
+                    // Still dead after click - circuit is completely dead
+                    // Since we can detect the click, we can automatically reload
+                    console.log('[Blazor] Connection is dead and cannot reconnect - user clicked, auto-reloading...');
                     
-                    if (disconnectedFor > 5 * 60 * 1000) {
-                        // Disconnected for 5+ minutes - check for deploy
-                        if (window.deployNotification && window.deployNotification.shouldShowModal()) {
-                            console.log('[Blazor] Connection dead for 5+ minutes and new version - showing deploy modal');
-                            window.deployNotification.showModalForced(function() {
-                                window.location.reload();
-                            }, false);
-                        }
+                    // Check for deploy first
+                    if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+                        console.log('[Blazor] Connection dead and new version available - showing deploy modal');
+                        window.deployNotification.showModalForced(function() {
+                            window.location.reload();
+                        }, false);
+                    } else {
+                        // No deploy, but connection is dead - just reload automatically
+                        console.log('[Blazor] Connection dead - auto-reloading page');
+                        window.location.reload();
                     }
-                    // Otherwise, just let Blazor continue trying to reconnect silently
                 }
             });
         }, 2000); // Wait 2 seconds after click to give reconnection time
@@ -216,14 +246,15 @@ window.blazorConnection = {
                         clearTimeout(testTimeout);
                         if (result === true) {
                             // Circuit is alive
-                            if (window.blazorConnection.connectionState === 'Disconnected') {
-                                console.log('[Blazor] Connection restored via JS interop test');
-                                window.blazorConnection.connectionState = 'Connected';
-                                window.blazorConnection.hideReconnectingMessage();
-                                window.blazorConnection.reconnectAttempts = 0;
-                                window.blazorConnection.disconnectedSince = null;
-                            }
-                            resolve(true);
+                        if (window.blazorConnection.connectionState === 'Disconnected') {
+                            console.log('[Blazor] Connection restored via JS interop test');
+                            window.blazorConnection.connectionState = 'Connected';
+                            window.blazorConnection.hideReconnectingMessage();
+                            window.blazorConnection.reconnectAttempts = 0;
+                            window.blazorConnection.disconnectedSince = null;
+                            window.blazorConnection.circuitDead = false; // Reset circuit dead flag
+                        }
+                        resolve(true);
                         } else {
                             window.blazorConnection.handleConnectionError('Ping returned false');
                             resolve(false);
