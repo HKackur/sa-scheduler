@@ -12,6 +12,7 @@ window.blazorConnection = {
     lastClickTime: 0,
     connectionDeadModalShown: false,
     circuitDead: false, // Track if circuit is completely dead (not initialized)
+    reloadInProgress: false, // Prevent multiple reload attempts
     
     init: function() {
         console.log('[Blazor] Initializing enhanced connection monitoring...');
@@ -29,6 +30,16 @@ window.blazorConnection = {
                 window.blazorConnection.circuitDead = true;
                 window.blazorConnection.connectionState = 'Disconnected';
                 console.log('[Blazor] Circuit dead error detected via uncaught error handler:', errorMessage);
+                
+                // If user is interacting (click happened), trigger reload immediately
+                // This handles the case when dator comes from standby
+                if (window.blazorConnection.lastClickTime > 0) {
+                    const timeSinceClick = Date.now() - window.blazorConnection.lastClickTime;
+                    if (timeSinceClick < 5000) { // Click happened within last 5 seconds
+                        console.log('[Blazor] Circuit dead error detected right after click - triggering reload');
+                        window.blazorConnection.triggerReload();
+                    }
+                }
             }
         }, true); // Use capture phase to catch early
         
@@ -171,19 +182,8 @@ window.blazorConnection = {
         // CRITICAL: If circuit is dead (not initialized), auto-reload immediately
         // JavaScript can detect clicks even when circuit is dead
         if (window.blazorConnection.circuitDead) {
-            console.log('[Blazor] Circuit is dead (not initialized) - user clicked, auto-reloading...');
-            
-            // Check for deploy first - if new version, show modal with "Inte nu" option
-            if (window.deployNotification && window.deployNotification.shouldShowModal()) {
-                console.log('[Blazor] Circuit dead and new version available - showing deploy modal');
-                window.deployNotification.showModalForced(function() {
-                    window.location.reload();
-                }, false);
-            } else {
-                // No deploy, just reload automatically
-                console.log('[Blazor] Circuit dead - auto-reloading page');
-                window.location.reload();
-            }
+            console.log('[Blazor] Circuit is dead (not initialized) - user clicked, triggering reload...');
+            window.blazorConnection.triggerReload();
             return; // Don't try to reconnect if circuit is dead
         }
         
@@ -205,19 +205,8 @@ window.blazorConnection = {
             // Test connection after giving reconnection a chance
             // BUT: If circuit is already marked as dead, skip test and reload directly
             if (window.blazorConnection.circuitDead) {
-                console.log('[Blazor] Circuit is dead - user clicked, auto-reloading immediately...');
-                
-                // Check for deploy first
-                if (window.deployNotification && window.deployNotification.shouldShowModal()) {
-                    console.log('[Blazor] Circuit dead and new version available - showing deploy modal');
-                    window.deployNotification.showModalForced(function() {
-                        window.location.reload();
-                    }, false);
-                } else {
-                    // No deploy, just reload automatically
-                    console.log('[Blazor] Circuit dead - auto-reloading page');
-                    window.location.reload();
-                }
+                console.log('[Blazor] Circuit is dead - user clicked, triggering reload...');
+                window.blazorConnection.triggerReload();
                 return;
             }
             
@@ -235,33 +224,14 @@ window.blazorConnection = {
                 } else if (window.blazorConnection.lastClickTime === clickTime) {
                     // Still dead after click - circuit is completely dead
                     // Since we can detect the click, we can automatically reload
-                    console.log('[Blazor] Connection is dead and cannot reconnect - user clicked, auto-reloading...');
-                    
-                    // Check for deploy first
-                    if (window.deployNotification && window.deployNotification.shouldShowModal()) {
-                        console.log('[Blazor] Connection dead and new version available - showing deploy modal');
-                        window.deployNotification.showModalForced(function() {
-                            window.location.reload();
-                        }, false);
-                    } else {
-                        // No deploy, but connection is dead - just reload automatically
-                        console.log('[Blazor] Connection dead - auto-reloading page');
-                        window.location.reload();
-                    }
+                    console.log('[Blazor] Connection is dead and cannot reconnect - user clicked, triggering reload...');
+                    window.blazorConnection.triggerReload();
                 }
             }).catch(function(error) {
                 // If testConnection throws (e.g., "No interop methods"), circuit is dead
-                console.log('[Blazor] Connection test threw error - circuit is dead, auto-reloading:', error);
+                console.log('[Blazor] Connection test threw error - circuit is dead, triggering reload:', error);
                 window.blazorConnection.circuitDead = true;
-                
-                // Check for deploy first
-                if (window.deployNotification && window.deployNotification.shouldShowModal()) {
-                    window.deployNotification.showModalForced(function() {
-                        window.location.reload();
-                    }, false);
-                } else {
-                    window.location.reload();
-                }
+                window.blazorConnection.triggerReload();
             });
         }, 2000); // Wait 2 seconds after click to give reconnection time
     },
@@ -460,6 +430,33 @@ window.blazorConnection = {
             }
         }
         // Don't show banner - let Blazor handle reconnection silently
+    },
+    
+    // NEW: Centralized reload function that prevents multiple reload attempts
+    triggerReload: function() {
+        // Prevent multiple reload attempts
+        if (window.blazorConnection.reloadInProgress) {
+            console.log('[Blazor] Reload already in progress - skipping');
+            return;
+        }
+        
+        window.blazorConnection.reloadInProgress = true;
+        console.log('[Blazor] Triggering reload...');
+        
+        // Check for deploy first - if new version, show modal with "Inte nu" option
+        if (window.deployNotification && window.deployNotification.shouldShowModal()) {
+            console.log('[Blazor] New version available - showing deploy modal');
+            window.deployNotification.showModalForced(function() {
+                // Use more robust reload method
+                window.location.href = window.location.href;
+            }, false);
+        } else {
+            // No deploy, just reload automatically
+            // Use more robust reload method that works even when circuit is dead
+            console.log('[Blazor] No new version - reloading page immediately');
+            // Use location.href instead of reload() for better compatibility
+            window.location.href = window.location.href;
+        }
     },
     
     autoReload: function(reason) {
