@@ -269,9 +269,17 @@ window.blazorConnection = {
                 const healthCheckRef = window.blazorConnection.healthCheckRef;
                 if (!healthCheckRef) {
                     clearTimeout(testTimeout);
-                    console.warn('[Blazor] Health check reference not available');
-                    window.blazorConnection.handleConnectionError('Health check reference not available');
-                    resolve(false);
+                    // Health check ref not available - this is normal if component hasn't rendered yet
+                    // Don't log as error, just assume connection is OK for now (component will register later)
+                    // Only resolve as false if we're forcing a test (user interaction)
+                    if (force) {
+                        // If forcing and ref not available, circuit might be dead
+                        // But don't log error - just resolve as unknown
+                        resolve(false);
+                    } else {
+                        // Non-forced test - assume OK if ref not available yet
+                        resolve(true);
+                    }
                     return;
                 }
                 
@@ -409,6 +417,12 @@ window.blazorConnection = {
     },
     
     handleConnectionError: function(reason) {
+        // Don't log "Health check reference not available" as error - it's normal if component isn't ready yet
+        if (reason && reason.includes('Health check reference not available')) {
+            // This is not a real error - component just hasn't registered yet
+            return;
+        }
+        
         console.error('[Blazor] Connection error:', reason);
         window.blazorConnection.connectionState = 'Disconnected';
         window.blazorConnection.reconnectAttempts++;
