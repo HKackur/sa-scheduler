@@ -228,7 +228,7 @@ public class UIState
                 var exitingGroupFilter = _filteredGroupId.HasValue && !value.HasValue;
 
                 _filteredGroupId = value;
-
+                
                 if (enteringGroupFilter)
                 {
                     _savedPlaceIdForGroupFilter = SelectedPlaceId;

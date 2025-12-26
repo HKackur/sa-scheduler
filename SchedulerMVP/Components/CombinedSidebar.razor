@@ -62,7 +62,7 @@
             }
         </div>
         
-        <div class="sa-panel-content">
+        <div class="sa-panel-content" style="padding-bottom: 32px;">
             @if (groupsLoaded && (groups == null || groups.Count == 0))
             {
                 <div class="empty-state" style="margin:8px 0 12px 0;color:#6b7280;font-size:12px;">
@@ -77,11 +77,19 @@
                     var isSelected = UI.SelectedGroupId == group.Id;
                     var isFilteredGroup = UI.IsGroupFilterActive && UI.FilteredGroupId == group.Id;
                     var itemStyle = isFilteredGroup
-                        ? "background:#1f2937;color:#fff;border:none;box-shadow:0 0 0 2px #374151"
+                        ? "background:#eef2ff;border:none;box-shadow:0 0 0 2px #c7d2fe"
                         : (isSelected ? "background:#eef2ff;border:none;box-shadow:0 0 0 2px #c7d2fe" : string.Empty);
-                    <div class="sa-group-card@(isSelected ? " selected" : "")" @onclick="() => SelectGroup(group.Id)">
+                    <div class="sa-group-card@(isFilteredGroup ? " selected" : "")" @onclick="() => SelectGroup(group.Id)">
                         <div class="sa-group-info">
-                            <span class="sa-group-name">@group.Name</span>
+                            <div class="sa-group-header">
+                                <div class="sa-group-color-box" style="@GetGroupColorBoxStyle(group, isFilteredGroup)">
+                                    @if (isFilteredGroup)
+                                    {
+                                        <span class="sa-group-checkmark" style="@GetGroupCheckmarkStyle(group)">✓</span>
+                                    }
+                                </div>
+                                <span class="sa-group-name">@group.Name</span>
+                            </div>
                             @if (!string.IsNullOrWhiteSpace(DetermineGroupType(group)))
                             {
                                 <span class="sa-group-type">@DetermineGroupType(group)</span>
@@ -255,6 +263,31 @@
         gap: 2px;
         overflow: hidden; /* Prevent overflow */
         word-wrap: break-word; /* Ensure text wraps */
+    }
+    
+    .sa-group-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .sa-group-color-box {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        border: 1px solid rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        position: relative;
+    }
+    
+    .sa-group-checkmark {
+        font-size: 12px;
+        font-weight: bold;
+        line-height: 1;
     }
     
     .sa-group-name {
@@ -1001,6 +1034,28 @@
 
     private int GetCount(Guid groupId) => counts.TryGetValue(groupId, out var c) ? c : 0;
     private static string FormatCount(int n) => n == 1 ? "1 tid" : $"{n} tider";
+    
+    private string GetGroupColorBoxStyle(SchedulerMVP.Data.Entities.Group group, bool isActive)
+    {
+        // Get color from group's DisplayColor, default to Ljusblå if not found
+        var displayColor = group.DisplayColor ?? "Ljusblå";
+        var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
+            displayColor, 
+            SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
+        
+        return $"background-color: {colorInfo.Background}; border-color: {colorInfo.Border};";
+    }
+    
+    private string GetGroupCheckmarkStyle(SchedulerMVP.Data.Entities.Group group)
+    {
+        // Get border color for checkmark (same as border color of the color box)
+        var displayColor = group.DisplayColor ?? "Ljusblå";
+        var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
+            displayColor, 
+            SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
+        
+        return $"color: {colorInfo.Border};";
+    }
 
     private void ToggleType(string type)
     {
