@@ -10,3 +10,4 @@ public interface IGroupService
     Task<Group> UpdateGroupAsync(Group group);
     Task DeleteGroupAsync(Guid groupId);
 }
+
