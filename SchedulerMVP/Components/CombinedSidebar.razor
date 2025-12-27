@@ -53,6 +53,18 @@
             @if (groupTypes.Any())
             {
                 <div class="sa-type-filters" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+                    @* "Alla" chip - aktiv när inga filter är valda *@
+                    @{
+                        var allSelected = selectedTypes.Count == 0;
+                    }
+                    <button type="button" 
+                            class="sa-chip @(allSelected ? "active" : null)" 
+                            style="border:1px solid #d1d5db;border-radius:999px;background:@(allSelected?"#111827":"#f1f5f9");color:@(allSelected?"#fff":"#111827");padding:2px 8px;font-size:11px" 
+                            @onclick="ClearAllTypeFilters">
+                        Alla
+                    </button>
+                    
+                    @* Specifika typer *@
                     @foreach (var t in groupTypes)
                     {
                         var active = selectedTypes.Contains(t);
@@ -1057,12 +1069,19 @@
         return $"color: {colorInfo.Border};";
     }
 
+    private void ClearAllTypeFilters()
+    {
+        selectedTypes.Clear();
+        StateHasChanged();
+    }
+
     private void ToggleType(string type)
     {
         if (selectedTypes.Contains(type))
             selectedTypes.Remove(type);
         else
             selectedTypes.Add(type);
+        StateHasChanged();
     }
 
     private static string? DetermineGroupType(SchedulerMVP.Data.Entities.Group g)

@@ -66,3 +66,4 @@ namespace SchedulerMVP.Data.Migrations
         }
     }
 }
+
