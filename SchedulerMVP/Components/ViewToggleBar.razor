@@ -6,6 +6,8 @@
 @inject IScheduleTemplateService TemplateService
 @inject ICalendarBookingService CalendarBookingService
 @inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
+@inject IPlaceService PlaceService
+@inject UserContextService UserContext
 @implements IDisposable
 
 <div class="view-type-bar-container">
@@ -65,6 +67,64 @@
     <div class="view-actions-right">
         @if (!UI.IsCalendarViewMode)
         {
+            @* Share/Delning dropdown for List view - placed first, before place filter *@
+            @if (UI.IsWeekListView)
+            {
+                <div class="share-dropdown-container" style="position: relative;">
+                    <button class="btn-nav share-trigger" @onclick="ToggleShareDropdown" @onclick:stopPropagation="true" title="Dela">
+                        <span class="material-symbols-outlined">share</span>
+                    </button>
+                    @if (shareDropdownOpen)
+                    {
+                        <div class="menu-overlay" @onclick="CloseShareDropdown"></div>
+                        <div class="share-dropdown-menu" @onclick:stopPropagation="true">
+                            <button class="share-menu-item" @onclick="PrintListView">
+                                <span class="material-symbols-outlined" style="font-size: 18px;">print</span>
+                                <span>Skriv ut</span>
+                            </button>
+                            <button class="share-menu-item" @onclick="ExportToPDF">
+                                <span class="material-symbols-outlined" style="font-size: 18px;">picture_as_pdf</span>
+                                <span>Spara som PDF</span>
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+            
+            @* Place/Area filter dropdown for List view - placed after share button *@
+            @if (UI.IsWeekListView)
+            {
+                <div class="list-filter-dropdown-container" style="position: relative;">
+                    <button class="tb-select list-filter-trigger" @onclick="ToggleListFilterDropdown" @onclick:stopPropagation="true">
+                        @GetListFilterDisplayText()
+                    </button>
+                    @if (listFilterDropdownOpen)
+                    {
+                        <div class="menu-overlay" @onclick="CloseListFilterDropdown"></div>
+                        <div class="list-filter-dropdown-menu" @onclick:stopPropagation="true">
+                            <div class="list-filter-option @(GetListFilterValue() == "" ? "selected" : "")" @onclick="() => SelectListFilter(null, null)">
+                                Alla platser
+                            </div>
+                            @foreach (var place in places)
+                            {
+                                <div class="list-filter-place-header" @onclick="() => SelectListFilter(place.Id, null)">
+                                    @place.Name
+                                </div>
+                                @if (areasByPlace.ContainsKey(place.Id))
+                                {
+                                    var placeAreas = areasByPlace[place.Id];
+                                    var areaTree = BuildAreaTree(placeAreas);
+                                    @foreach (var rootArea in areaTree)
+                                    {
+                                        @RenderAreaTreeNode(rootArea, place.Id, 24)
+                                    }
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            
             <select class="tb-select" @onchange="OnTemplateChanged">
                 @foreach (var t in templates)
                 {
@@ -222,24 +282,294 @@
     .tb-item { display: flex; align-items: center; width: 100%; padding: 8px 12px; border-radius: 6px; border: none; background: transparent; font-size: 13px; cursor: pointer; text-align: left; }
     .tb-item:hover { background: #f1f5f9; }
     .menu-overlay { position: fixed; inset: 0; z-index: 999; }
+    
+    /* List filter dropdown styles */
+    .list-filter-dropdown-container { position: relative; }
+    .list-filter-trigger { 
+        height: 34px; 
+        padding: 0 12px; 
+        border-radius: 6px; 
+        border: 1px solid #e2e8f0; 
+        font-size: 13px; 
+        min-width: 180px; 
+        color: #333 !important; 
+        background: #fff;
+        cursor: pointer;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .list-filter-trigger::after {
+        content: '▼';
+        font-size: 10px;
+        margin-left: 8px;
+        opacity: 0.6;
+    }
+    .list-filter-dropdown-menu {
+        position: absolute;
+        top: 40px;
+        left: 0;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        padding: 8px;
+        min-width: 250px;
+        max-width: 350px;
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 1000;
+    }
+    .list-filter-option, .list-filter-place-header, .list-filter-area-option {
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+        text-align: left;
+        color: #374151;
+    }
+    .list-filter-option:hover, .list-filter-place-header:hover, .list-filter-area-option:hover {
+        background: #f1f5f9;
+    }
+    .list-filter-option.selected, .list-filter-area-option.selected {
+        background: #eef2ff;
+        color: #1e40af;
+        font-weight: 500;
+    }
+    .list-filter-place-header {
+        font-weight: 600;
+        color: #1f2937;
+        margin-top: 4px;
+    }
+    .list-filter-area-option {
+        color: #6b7280;
+        font-size: 12px;
+    }
+    
+    /* Share dropdown styles */
+    .share-dropdown-container { position: relative; }
+    .share-trigger {
+        width: 34px;
+        height: 34px;
+    }
+    .share-dropdown-menu {
+        position: absolute;
+        top: 40px;
+        left: 0;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        padding: 8px;
+        min-width: 180px;
+        z-index: 1000;
+    }
+    .share-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 6px;
+        border: none;
+        background: transparent;
+        font-size: 13px;
+        color: #374151;
+        cursor: pointer;
+        text-align: left;
+    }
+    .share-menu-item:hover {
+        background: #f1f5f9;
+    }
+    .share-menu-item .material-symbols-outlined {
+        font-size: 18px;
+        color: #6b7280;
+    }
 </style>
 
 @code {
     private List<ScheduleTemplate> templates = new();
     private bool moreMenuOpen, publishModalOpen, editOpen, createOpen, copyOpen;
+    private List<Place> places = new();
+    private Dictionary<Guid, List<Area>> areasByPlace = new();
+    private bool listFilterDropdownOpen = false;
+    private bool shareDropdownOpen = false;
 
     protected override async Task OnInitializedAsync()
     {
         UI.OnChanged += HandleUIStateChanged;
         await ReloadTemplatesForPlace();
+        await LoadPlacesAndAreasAsync();
     }
 
     private void HandleUIStateChanged()
     {
         InvokeAsync(async () => {
             await ReloadTemplatesForPlace();
+            // Reload places/areas when switching to list view
+            if (UI.IsWeekListView && places.Count == 0)
+            {
+                await LoadPlacesAndAreasAsync();
+            }
             StateHasChanged();
         });
+    }
+    
+    private async Task LoadPlacesAndAreasAsync()
+    {
+        try
+        {
+            places = await PlaceService.GetPlacesAsync();
+            areasByPlace = new Dictionary<Guid, List<Area>>();
+            
+            foreach (var place in places)
+            {
+                var areas = await PlaceService.GetAreasForPlaceAsync(place.Id);
+                areasByPlace[place.Id] = areas.OrderBy(a => a.Path).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ViewToggleBar] Error loading places/areas: {ex.Message}");
+        }
+    }
+    
+    private string GetListFilterValue()
+    {
+        if (UI.SelectedListFilterAreaId.HasValue)
+        {
+            return $"area:{UI.SelectedListFilterAreaId.Value}";
+        }
+        else if (UI.SelectedListFilterPlaceId.HasValue)
+        {
+            return $"place:{UI.SelectedListFilterPlaceId.Value}";
+        }
+        return "";
+    }
+    
+    private string GetListFilterDisplayText()
+    {
+        if (UI.SelectedListFilterAreaId.HasValue && areasByPlace.Values.SelectMany(a => a).FirstOrDefault(a => a.Id == UI.SelectedListFilterAreaId.Value) is Area area)
+        {
+            var place = places.FirstOrDefault(p => areasByPlace.ContainsKey(p.Id) && areasByPlace[p.Id].Any(a => a.Id == area.Id));
+            return place != null ? $"{place.Name} > {area.Name}" : area.Name;
+        }
+        else if (UI.SelectedListFilterPlaceId.HasValue)
+        {
+            var place = places.FirstOrDefault(p => p.Id == UI.SelectedListFilterPlaceId.Value);
+            return place?.Name ?? "Okänd plats";
+        }
+        return "Alla platser";
+    }
+    
+    private void ToggleListFilterDropdown()
+    {
+        listFilterDropdownOpen = !listFilterDropdownOpen;
+    }
+    
+    private void CloseListFilterDropdown()
+    {
+        listFilterDropdownOpen = false;
+    }
+    
+    private void SelectListFilter(Guid? placeId, Guid? areaId)
+    {
+        if (areaId.HasValue && placeId.HasValue)
+        {
+            UI.SelectedListFilterAreaId = areaId.Value;
+            UI.SelectedListFilterPlaceId = placeId.Value;
+        }
+        else if (placeId.HasValue)
+        {
+            UI.SelectedListFilterPlaceId = placeId.Value;
+            UI.SelectedListFilterAreaId = null;
+        }
+        else
+        {
+            UI.SelectedListFilterPlaceId = null;
+            UI.SelectedListFilterAreaId = null;
+        }
+        listFilterDropdownOpen = false;
+        UI.RaiseChanged();
+    }
+    
+    private class AreaTreeNode
+    {
+        public Area Area { get; set; } = null!;
+        public List<AreaTreeNode> Children { get; set; } = new();
+    }
+    
+    private List<AreaTreeNode> BuildAreaTree(List<Area> areas)
+    {
+        var idToNode = areas.ToDictionary(a => a.Id, a => new AreaTreeNode { Area = a });
+        var roots = new List<AreaTreeNode>();
+        
+        foreach (var area in areas)
+        {
+            if (area.ParentAreaId is Guid parentId && idToNode.TryGetValue(parentId, out var parent))
+            {
+                parent.Children.Add(idToNode[area.Id]);
+            }
+            else
+            {
+                roots.Add(idToNode[area.Id]);
+            }
+        }
+        
+        return roots.OrderBy(r => r.Area.Path).ToList();
+    }
+    
+    private RenderFragment RenderAreaTreeNode(AreaTreeNode node, Guid placeId, int indent) => builder =>
+    {
+        var seq = 0;
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", $"list-filter-area-option {(UI.SelectedListFilterAreaId == node.Area.Id ? "selected" : "")}");
+        builder.AddAttribute(seq++, "style", $"padding-left: {indent}px;");
+        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => SelectListFilter(placeId, node.Area.Id)));
+        builder.AddContent(seq++, node.Area.Name);
+        builder.CloseElement();
+        
+        foreach (var child in node.Children.OrderBy(c => c.Area.Path))
+        {
+            builder.AddContent(seq++, RenderAreaTreeNode(child, placeId, indent + 20));
+        }
+    };
+    
+    private void ToggleShareDropdown()
+    {
+        shareDropdownOpen = !shareDropdownOpen;
+    }
+    
+    private void CloseShareDropdown()
+    {
+        shareDropdownOpen = false;
+    }
+    
+    private async Task PrintListView()
+    {
+        shareDropdownOpen = false;
+        try
+        {
+            await JS.InvokeVoidAsync("SchedulerMVP.printListView");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ViewToggleBar] Error printing list view: {ex.Message}");
+        }
+    }
+    
+    private async Task ExportToPDF()
+    {
+        shareDropdownOpen = false;
+        try
+        {
+            await JS.InvokeVoidAsync("SchedulerMVP.exportListToPDF");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ViewToggleBar] Error exporting to PDF: {ex.Message}");
+        }
     }
 
     public void Dispose()

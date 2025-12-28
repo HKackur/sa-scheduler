@@ -7,6 +7,7 @@
 @inject UserContextService UserContext
 
 <div class="week-list-container">
+    <div class="print-title">Veckoschema</div>
     @for (int day = 1; day <= 7; day++)
     {
         <div class="day-section">
@@ -22,8 +23,20 @@
                         {
                             <div class="booking-row">
                                 <div class="time-col">@FormatTime(template.StartMin) - @FormatTime(template.EndMin)</div>
-                                <div class="group-col">@(template.Group?.Name ?? "Okänd grupp")</div>
-                                <div class="location-col">@($"{template.Area?.Place?.Name ?? "Okänd plats"} / {template.Area?.Name ?? "Okänd yta"}")</div>
+                                <div class="group-col">
+                                    @if (template.Group != null)
+                                    {
+                                        <div class="group-name-with-icon">
+                                            <div class="group-color-icon" style="@GetGroupColorBoxStyle(template.Group)"></div>
+                                            <span>@template.Group.Name</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span>Okänd grupp</span>
+                                    }
+                                </div>
+                                <div class="location-col"><span>@($"{template.Area?.Place?.Name ?? "Okänd plats"} / {template.Area?.Name ?? "Okänd yta"}")</span></div>
                             </div>
                         }
                     }
@@ -97,11 +110,18 @@
             
             var templates = await templatesQuery.ToListAsync();
             
-            // Apply area filter if set
-            if (UI.SelectedAreaId.HasValue)
+            // Apply list view filter (separate from SelectedAreaId to not affect other views)
+            if (UI.SelectedListFilterAreaId.HasValue)
             {
-                templates = templates.Where(bt => bt.AreaId == UI.SelectedAreaId.Value).ToList();
+                // Area filter (more specific - prioritize this)
+                templates = templates.Where(bt => bt.AreaId == UI.SelectedListFilterAreaId.Value).ToList();
             }
+            else if (UI.SelectedListFilterPlaceId.HasValue)
+            {
+                // Place filter - filter by all areas in this place
+                templates = templates.Where(bt => bt.Area != null && bt.Area.PlaceId == UI.SelectedListFilterPlaceId.Value).ToList();
+            }
+            // If neither is set, show all (default behavior)
             
             // Group by day (1-7), then by start time, then by location
             groupedTemplates = templates
@@ -151,6 +171,17 @@
         var mins = minutes % 60;
         return $"{hours:00}:{mins:00}";
     }
+    
+    private string GetGroupColorBoxStyle(SchedulerMVP.Data.Entities.Group group)
+    {
+        // Get color from group's DisplayColor, default to Ljusblå if not found
+        var displayColor = group.DisplayColor ?? "Ljusblå";
+        var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
+            displayColor, 
+            SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
+        
+        return $"background-color: {colorInfo.Background}; border-color: {colorInfo.Border};";
+    }
 }
 
 <style>
@@ -188,11 +219,12 @@
         text-align: left;
         border-bottom: 1px solid #f3f4f6;
         display: grid;
-        grid-template-columns: 140px 200px 1fr;
-        gap: 24px;
+        grid-template-columns: 160px 280px 1fr;
+        gap: 32px;
         transition: background-color 0.2s ease;
         cursor: pointer;
         margin: 0 -16px;
+        white-space: nowrap;
     }
 
     .booking-row:hover {
@@ -205,14 +237,44 @@
 
     .time-col {
         font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
     }
 
     .group-col {
-        
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        overflow: hidden;
+    }
+    
+    .group-name-with-icon {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        overflow: hidden;
+    }
+    
+    .group-name-with-icon span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .group-color-icon {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        border: 1px solid rgba(0, 0, 0, 0.15);
     }
 
     .location-col {
-        
+        text-align: right;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .no-bookings {
@@ -228,5 +290,165 @@
         padding: 32px;
         text-align: center;
         font-size: 16px;
+    }
+    
+    /* Print styles */
+    @@media print {
+        /* Optimize page margins for print - headers/footers must be disabled in browser print dialog */
+        @@page {
+            size: A4;
+            margin: 20mm 15mm;
+        }
+        
+        /* CRITICAL: Remove all height constraints and overflow restrictions for multi-page printing */
+        /* These changes ONLY affect print, not screen view */
+        html,
+        body {
+            height: auto !important;
+            overflow: visible !important;
+            max-height: none !important;
+        }
+        
+        .app-root {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+            max-height: none !important;
+        }
+        
+        .sa-app {
+            height: auto !important;
+            overflow: visible !important;
+            max-height: none !important;
+            padding: 0 !important;
+        }
+        
+        .sa-shell-new {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+            max-height: none !important;
+        }
+        
+        .sa-panel,
+        .sa-center-full,
+        .sa-center-new {
+            display: block !important;
+            height: auto !important;
+            overflow: visible !important;
+            max-height: none !important;
+            flex: none !important;
+        }
+        
+        /* Hide navigation and controls */
+        .view-type-bar-container,
+        .sa-topbar,
+        .sa-shell-new > aside,
+        .combined-sidebar,
+        .app-root > div:first-child {
+            display: none !important;
+        }
+        
+        /* Print title - only visible in print */
+        .print-title {
+            display: block !important;
+            font-size: 24px;
+            font-weight: 600;
+            color: #1f2937;
+            margin: 0 0 24px 0;
+            text-align: left;
+            padding: 0;
+        }
+        
+        /* Optimize container for print */
+        .week-list-container {
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            max-height: none !important;
+            overflow: visible !important;
+            background: white;
+            margin: 0;
+            width: 100%;
+            height: auto !important;
+        }
+        
+        /* Ensure color icons are printed */
+        .group-color-icon {
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+        
+        /* Allow page breaks between days - remove avoid to allow multi-page printing */
+        .day-section {
+            margin-bottom: 24px;
+            break-inside: auto;
+            page-break-inside: auto;
+            orphans: 2;
+            widows: 2;
+        }
+        
+        /* Allow breaking between days if needed, but try to keep at least 2 rows together */
+        .day-section:first-child {
+            page-break-before: auto;
+        }
+        
+        /* Booking rows - prevent wrapping and page breaks inside rows */
+        .booking-row {
+            margin: 0 !important;
+            padding: 8px 0 !important;
+            border-bottom: 1px solid #e5e7eb !important;
+            cursor: default !important;
+            white-space: nowrap !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            -webkit-break-inside: avoid !important;
+        }
+        
+        /* Remove hover effects in print */
+        .booking-row:hover {
+            background-color: transparent !important;
+        }
+        
+        /* Ensure columns don't wrap in print */
+        .time-col,
+        .group-col,
+        .location-col {
+            white-space: nowrap !important;
+            overflow: hidden !important;
+        }
+        
+        /* Location column - right align and truncate if needed */
+        .location-col {
+            text-align: right !important;
+            text-overflow: ellipsis !important;
+        }
+        
+        .location-col span {
+            display: inline-block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        /* Group name truncation */
+        .group-name-with-icon span {
+            text-overflow: ellipsis !important;
+            overflow: hidden !important;
+        }
+        
+        /* Ensure main content spans full width */
+        .sa-shell-new,
+        .sa-center-full,
+        .sa-panel,
+        .sa-app {
+            width: 100% !important;
+        }
+    }
+    
+    /* Hide print title in screen view */
+    .print-title {
+        display: none;
     }
 </style>
