@@ -314,6 +314,41 @@ public class UIState
     
     // Expanded areas in Resource View (persisted across view switches)
     public HashSet<Guid> ResourceViewExpandedAreas { get; set; } = new();
+    
+    // List view filter (separate from SelectedPlaceId/SelectedAreaId to not affect other views)
+    private Guid? _selectedListFilterPlaceId = null;
+    private Guid? _selectedListFilterAreaId = null;
+    
+    public Guid? SelectedListFilterPlaceId
+    {
+        get => _selectedListFilterPlaceId;
+        set
+        {
+            if (_selectedListFilterPlaceId != value)
+            {
+                _selectedListFilterPlaceId = value;
+                // Clear area filter if place filter is cleared
+                if (!value.HasValue)
+                {
+                    _selectedListFilterAreaId = null;
+                }
+                OnChanged?.Invoke();
+            }
+        }
+    }
+    
+    public Guid? SelectedListFilterAreaId
+    {
+        get => _selectedListFilterAreaId;
+        set
+        {
+            if (_selectedListFilterAreaId != value)
+            {
+                _selectedListFilterAreaId = value;
+                OnChanged?.Invoke();
+            }
+        }
+    }
 }
 
 

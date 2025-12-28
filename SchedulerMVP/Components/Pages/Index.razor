@@ -13,7 +13,7 @@
 
 <div class="sa-app">
     <div class="sa-shell-new">
-        <main class="sa-panel @(UI.IsResourceView ? "sa-center-full" : "sa-center-new")">
+        <main class="sa-panel @((UI.IsResourceView || UI.IsWeekListView) ? "sa-center-full" : "sa-center-new")">
             <ViewToggleBar />
             @if (UI.IsResourceView)
             {
@@ -24,7 +24,7 @@
                 <WeekGrid OnOpenModal="OpenBookingModal" OnOpenCalendarBookingEdit="OpenCalendarBookingEditModal" OnOpenTemplateEdit="OpenTemplateEditModal" />
             }
         </main>
-        @if (!UI.IsResourceView)
+        @if (!UI.IsResourceView && !UI.IsWeekListView)
         {
             <aside class="sa-panel sa-right-new">
                 <CombinedSidebar />

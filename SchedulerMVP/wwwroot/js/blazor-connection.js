@@ -276,7 +276,7 @@ window.blazorConnection = {
                         // If forcing and ref not available, circuit might be dead
                         // But don't log error - just resolve as unknown
                         resolve(false);
-                    } else {
+                } else {
                         // Non-forced test - assume OK if ref not available yet
                         resolve(true);
                     }
@@ -297,7 +297,7 @@ window.blazorConnection = {
                             window.blazorConnection.circuitDead = false; // Reset circuit dead flag
                         }
                         resolve(true);
-                        } else {
+                    } else {
                             window.blazorConnection.handleConnectionError('Ping returned false');
                             resolve(false);
                         }
@@ -359,7 +359,7 @@ window.blazorConnection = {
                                     window.location.reload();
                                 }, false);
                             } else {
-                                window.blazorConnection.autoReload('Failed to reconnect after coming online');
+                            window.blazorConnection.autoReload('Failed to reconnect after coming online');
                             }
                         }
                     });
