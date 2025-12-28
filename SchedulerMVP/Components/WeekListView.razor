@@ -220,7 +220,7 @@
         border-bottom: 1px solid #f3f4f6;
         display: grid;
         grid-template-columns: 160px 280px 1fr;
-        gap: 32px;
+        gap: 16px; /* Smaller gap for screen view */
         transition: background-color 0.2s ease;
         cursor: pointer;
         margin: 0 -16px;
@@ -271,7 +271,7 @@
     }
 
     .location-col {
-        text-align: right;
+        text-align: left; /* Left align for screen view */
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -403,6 +403,7 @@
             page-break-inside: avoid !important;
             break-inside: avoid !important;
             -webkit-break-inside: avoid !important;
+            gap: 32px !important; /* Larger gap for print view */
         }
         
         /* Remove hover effects in print */
@@ -418,7 +419,7 @@
             overflow: hidden !important;
         }
         
-        /* Location column - right align and truncate if needed */
+        /* Location column - right align and truncate if needed for print */
         .location-col {
             text-align: right !important;
             text-overflow: ellipsis !important;
