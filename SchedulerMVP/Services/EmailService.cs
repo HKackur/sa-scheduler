@@ -153,6 +153,8 @@ SportAdmin Team",
             using var client = new SmtpClient();
             // Accept all certificates for Brevo (they use valid certificates but validation might fail in some environments)
             client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+            client.Timeout = 30000; // 30 second timeout to prevent hanging
+            
             await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
             await client.AuthenticateAsync(smtpUser, smtpPassword);
             await client.SendAsync(message);
