@@ -117,9 +117,11 @@ var SchedulerMVP = {
 
             // Add drag listeners to booking blocks (only primary bookings, not ghosts)
             var initializedBlocks = 0;
+            var primaryBlocks = 0;
             bookingBlocks.forEach(block => {
                 // Only make primary bookings draggable (not ghost bookings)
                 if (block.classList.contains('booking--primary')) {
+                    primaryBlocks++;
                     // Make sure resize handles are not draggable
                     block.querySelectorAll('.resize-handle').forEach(handle => {
                         handle.setAttribute('draggable', 'false');

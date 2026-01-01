@@ -536,6 +536,28 @@
         {
             Console.WriteLine($"Error initializing/refreshing drag and drop: {ex.Message}");
             Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            // #region agent log
+            try
+            {
+                var errorMsg = ex.Message ?? "Unknown error";
+                await JSRuntime.InvokeVoidAsync("eval", $@"
+                    fetch('http://127.0.0.1:7242/ingest/37839937-e006-45ff-9afc-bc9cfb085f0b', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{
+                            location: 'WeekGrid.razor:OnAfterRenderAsync',
+                            message: 'Error in drag and drop initialization/refresh',
+                            data: {{ hasError: true }},
+                            timestamp: Date.now(),
+                            sessionId: 'debug-session',
+                            runId: 'run1',
+                            hypothesisId: 'E'
+                        }})
+                    }}).catch(() => {{}});
+                ");
+            }
+            catch { }
+            // #endregion
             // If reference is invalid, create a new one
             if (_dotNetRef != null)
             {
