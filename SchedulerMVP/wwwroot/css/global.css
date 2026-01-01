@@ -392,10 +392,11 @@ body .app-root .sa-topbar,
 }
 
 /* Drag and Drop visual feedback */
-/* Original block becomes transparent when dragging (like Google Calendar) */
+/* Original block becomes dimmed/desaturated when dragging - clearly shows it's the source */
 .booking-block.dragging {
-    opacity: 0.3; /* Very transparent when dragging - like Google Calendar */
-    transition: opacity 0.2s ease;
+    opacity: 0.35 !important; /* Dimmed but still visible - clearly shows original location */
+    filter: grayscale(40%) brightness(0.75) !important; /* Desaturate and darken for better visual distinction */
+    transition: opacity 0.15s ease, filter 0.15s ease;
     z-index: 999; /* Keep behind preview but visible */
     cursor: grabbing;
 }
