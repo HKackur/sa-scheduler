@@ -135,6 +135,11 @@ SportAdmin Team",
             smtpHost ?? "NULL", 
             smtpUser ?? "NULL", 
             !string.IsNullOrEmpty(smtpPassword));
+        
+        // Additional debug: Check what configuration values are actually available
+        _logger.LogInformation("Config check - Email:SmtpHost={ColonHost}, Email__SmtpHost={UnderscoreHost}", 
+            _configuration["Email:SmtpHost"] ?? "NULL",
+            _configuration["Email__SmtpHost"] ?? "NULL");
 
         if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpUser) || string.IsNullOrEmpty(smtpPassword))
         {
