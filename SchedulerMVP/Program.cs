@@ -1278,7 +1278,7 @@ app.MapPost("/auth/forgot-password", async (HttpContext httpContext, UserManager
         try
         {
             await emailService.SendPasswordResetEmailAsync(email, token, baseUrl);
-            logger.LogInformation("Password reset email sent successfully to {Email}", email);
+            // Note: EmailService logs success/failure internally
         }
         catch (Exception emailEx)
         {
