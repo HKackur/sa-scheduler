@@ -112,20 +112,22 @@ SportAdmin Team",
 
     private string GetFromEmail()
     {
-        return _configuration["Email:FromEmail"] ?? Environment.GetEnvironmentVariable("EMAIL_FROM_EMAIL") ?? "noreply@sportadmin.se";
+        return _configuration["Email:FromEmail"] ?? _configuration["Email__FromEmail"] ?? Environment.GetEnvironmentVariable("EMAIL_FROM_EMAIL") ?? "noreply@sportadmin.se";
     }
 
     private string GetFromName()
     {
-        return _configuration["Email:FromName"] ?? Environment.GetEnvironmentVariable("EMAIL_FROM_NAME") ?? "Sportadmins Schemaläggning";
+        return _configuration["Email:FromName"] ?? _configuration["Email__FromName"] ?? Environment.GetEnvironmentVariable("EMAIL_FROM_NAME") ?? "Sportadmins Schemaläggning";
     }
 
     private async Task SendEmailAsync(MimeMessage message, string email, string emailType)
     {
-        var smtpHost = _configuration["Email:SmtpHost"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_HOST");
-        var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PORT") ?? "587");
-        var smtpUser = _configuration["Email:SmtpUser"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_USER");
-        var smtpPassword = _configuration["Email:SmtpPassword"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD");
+        // Support both colon (:) and double underscore (__) for nested configuration
+        // Azure App Settings uses double underscore, local config can use colon
+        var smtpHost = _configuration["Email:SmtpHost"] ?? _configuration["Email__SmtpHost"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_HOST");
+        var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? _configuration["Email__SmtpPort"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PORT") ?? "587");
+        var smtpUser = _configuration["Email:SmtpUser"] ?? _configuration["Email__SmtpUser"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_USER");
+        var smtpPassword = _configuration["Email:SmtpPassword"] ?? _configuration["Email__SmtpPassword"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD");
 
         // Debug logging to understand configuration reading
         _logger.LogInformation("SMTP Config check for {EmailType}: Host={Host}, User={User}, PasswordSet={HasPassword}", 
