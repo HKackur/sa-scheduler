@@ -1266,4 +1266,125 @@ app.MapGet("/auth/logout", async (SignInManager<ApplicationUser> signInManager) 
     return Results.Redirect("/login");
 });
 
+app.MapPost("/auth/forgot-password", async (HttpContext httpContext, UserManager<ApplicationUser> userManager, IEmailService emailService) =>
+{
+    var logger = httpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+    
+    try
+    {
+        if (!httpContext.Request.HasFormContentType)
+        {
+            logger.LogWarning("Forgot password request without form content type: {ContentType}", httpContext.Request.ContentType);
+        }
+
+        var form = await httpContext.Request.ReadFormAsync();
+        var email = form["email"].ToString();
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            // Always return success for security (don't reveal if user exists)
+            return Results.Ok(new { success = true, message = "If a user with that email exists, a password reset link has been sent." });
+        }
+
+        logger.LogInformation("Password reset requested for email: {Email}", email);
+
+        var user = await userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            // Always return success for security (don't reveal if user exists)
+            logger.LogInformation("Password reset requested for non-existent email: {Email}", email);
+            return Results.Ok(new { success = true, message = "If a user with that email exists, a password reset link has been sent." });
+        }
+
+        // Generate password reset token (valid for 1 hour)
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        
+        // Get base URL for reset link
+        var baseUrl = $"{httpContext.Request.Scheme}://{httpContext.Request.Host}";
+        
+        // Send password reset email
+        try
+        {
+            await emailService.SendPasswordResetEmailAsync(email, token, baseUrl);
+            logger.LogInformation("Password reset email sent successfully to {Email}", email);
+        }
+        catch (Exception emailEx)
+        {
+            logger.LogError(emailEx, "Error sending password reset email to {Email}", email);
+            // Still return success for security
+        }
+
+        // Always return success for security (don't reveal if user exists)
+        return Results.Ok(new { success = true, message = "If a user with that email exists, a password reset link has been sent." });
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error in /auth/forgot-password endpoint: {Message}", ex.Message);
+        // Return success even on error for security
+        return Results.Ok(new { success = true, message = "If a user with that email exists, a password reset link has been sent." });
+    }
+});
+
+app.MapPost("/auth/reset-password", async (HttpContext httpContext, UserManager<ApplicationUser> userManager) =>
+{
+    var logger = httpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+    
+    try
+    {
+        if (!httpContext.Request.HasFormContentType)
+        {
+            logger.LogWarning("Reset password request without form content type: {ContentType}", httpContext.Request.ContentType);
+        }
+
+        var form = await httpContext.Request.ReadFormAsync();
+        var email = form["email"].ToString();
+        var token = form["token"].ToString();
+        var password = form["password"].ToString();
+        var confirmPassword = form["confirmPassword"].ToString();
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(password))
+        {
+            return Results.Redirect("/reset-password?error=missing&email=" + Uri.EscapeDataString(email ?? "") + "&token=" + Uri.EscapeDataString(token ?? ""));
+        }
+
+        if (password != confirmPassword)
+        {
+            return Results.Redirect("/reset-password?error=passwordmismatch&email=" + Uri.EscapeDataString(email) + "&token=" + Uri.EscapeDataString(token));
+        }
+
+        if (password.Length < 8)
+        {
+            return Results.Redirect("/reset-password?error=passwordtooshort&email=" + Uri.EscapeDataString(email) + "&token=" + Uri.EscapeDataString(token));
+        }
+
+        logger.LogInformation("Password reset attempt for email: {Email}", email);
+
+        var user = await userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            logger.LogWarning("Password reset attempted for non-existent user: {Email}", email);
+            return Results.Redirect("/reset-password?error=invalid&email=" + Uri.EscapeDataString(email) + "&token=" + Uri.EscapeDataString(token));
+        }
+
+        // Reset password using token
+        var result = await userManager.ResetPasswordAsync(user, token, password);
+        
+        if (result.Succeeded)
+        {
+            logger.LogInformation("Password reset successful for email: {Email}", email);
+            return Results.Redirect("/login?reset=success");
+        }
+        else
+        {
+            logger.LogWarning("Password reset failed for email: {Email}, Errors: {Errors}", email, string.Join(", ", result.Errors.Select(e => e.Description)));
+            return Results.Redirect("/reset-password?error=invalidtoken&email=" + Uri.EscapeDataString(email) + "&token=" + Uri.EscapeDataString(token));
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error in /auth/reset-password endpoint: {Message}", ex.Message);
+        return Results.Redirect("/reset-password?error=error");
+    }
+});
+
 app.Run();
