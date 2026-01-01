@@ -87,18 +87,29 @@ var SchedulerMVP = {
             var bookingBlocks = document.querySelectorAll('.booking-block');
             var dayContents = document.querySelectorAll('.day-content');
             
-            // If no elements found and we haven't exceeded retries, wait and retry
-            if ((bookingBlocks.length === 0 || dayContents.length === 0) && retryCount < maxRetries) {
-                console.log('[DragDrop] DOM not ready (found ' + bookingBlocks.length + ' blocks, ' + dayContents.length + ' day columns), retrying in 200ms... (attempt ' + (retryCount + 1) + '/' + maxRetries + ')');
+            // CRITICAL: dayContents may exist before bookingBlocks in production
+            // We need dayContents to exist, but bookingBlocks can be 0 initially (empty grid is OK)
+            // However, we should retry if dayContents is missing (grid not ready yet)
+            // If dayContents exists but bookingBlocks is 0 after retries, that's OK (empty grid)
+            
+            // If dayContents doesn't exist yet, retry (grid structure not ready)
+            if (dayContents.length === 0 && retryCount < maxRetries) {
+                console.log('[DragDrop] Day columns not ready yet, retrying in 200ms... (attempt ' + (retryCount + 1) + '/' + maxRetries + ')');
                 setTimeout(function() {
                     SchedulerMVP.initDragDrop(dotNetHelper, retryCount + 1);
                 }, 200);
                 return;
             }
             
-            // If still no elements after retries, log warning but continue (might be empty grid)
+            // If dayContents exists, proceed even if bookingBlocks is 0 (empty grid is valid)
+            // Log if no booking blocks found (might be empty grid or still loading)
+            if (bookingBlocks.length === 0 && dayContents.length > 0) {
+                console.log('[DragDrop] Day columns ready but no booking blocks found yet (attempt ' + (retryCount + 1) + '). This might be normal if grid is empty or still loading.');
+            }
+            
+            // If neither exists after retries, log warning
             if (bookingBlocks.length === 0 && dayContents.length === 0) {
-                console.warn('[DragDrop] No DOM elements found after ' + maxRetries + ' retries - grid might be empty');
+                console.warn('[DragDrop] No DOM elements found after ' + maxRetries + ' retries - grid might not be rendered');
             }
             
             // Remove existing listeners to avoid duplicates
