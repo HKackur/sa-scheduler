@@ -1,0 +1,10 @@
+{
+  "Email": {
+    "SmtpHost": "smtp-relay.brevo.com",
+    "SmtpPort": "587",
+    "SmtpUser": "din-brevo-email@example.com",
+    "SmtpPassword": "din-smtp-key-från-brevo",
+    "FromEmail": "din-brevo-email@example.com",
+    "FromName": "Sportadmins Schemaläggning"
+  }
+}

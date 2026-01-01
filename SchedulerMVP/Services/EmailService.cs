@@ -89,4 +89,81 @@ SportAdmin Team",
             throw;
         }
     }
+
+    public async Task SendPasswordResetEmailAsync(string email, string resetToken, string baseUrl)
+    {
+        var smtpHost = _configuration["Email:SmtpHost"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_HOST");
+        var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PORT") ?? "587");
+        var smtpUser = _configuration["Email:SmtpUser"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_USER");
+        var smtpPassword = _configuration["Email:SmtpPassword"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD");
+        var fromEmail = _configuration["Email:FromEmail"] ?? Environment.GetEnvironmentVariable("EMAIL_FROM_EMAIL") ?? "noreply@sportadmin.se";
+        var fromName = _configuration["Email:FromName"] ?? Environment.GetEnvironmentVariable("EMAIL_FROM_NAME") ?? "Sportadmins Schemaläggning";
+
+        if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpUser) || string.IsNullOrEmpty(smtpPassword))
+        {
+            _logger.LogWarning("SMTP not configured. Password reset email not sent to {Email}", email);
+            return;
+        }
+
+        try
+        {
+            var resetLink = $"{baseUrl.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(resetToken)}&email={Uri.EscapeDataString(email)}";
+            
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress(fromName, fromEmail));
+            message.To.Add(new MailboxAddress("", email));
+            message.Subject = "Återställ ditt lösenord - Sportadmins Schemaläggning";
+
+            var bodyBuilder = new BodyBuilder
+            {
+                TextBody = $@"Hej!
+
+Du har begärt att återställa ditt lösenord för Sportadmins Schemaläggning.
+
+Klicka på länken nedan för att återställa ditt lösenord:
+{resetLink}
+
+Länken är giltig i 1 timme.
+
+Om du inte har begärt detta, kan du ignorera detta meddelande.
+
+Vid frågor, kontakta produktägare henrik.kackur@sportadmin.se
+
+Med vänliga hälsningar,
+SportAdmin Team",
+                HtmlBody = $@"<html>
+<body style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #1761A5;"">Återställ ditt lösenord</h2>
+    <p>Hej!</p>
+    <p>Du har begärt att återställa ditt lösenord för Sportadmins Schemaläggning.</p>
+    <p>Klicka på knappen nedan för att återställa ditt lösenord:</p>
+    <p style=""margin: 24px 0;"">
+        <a href=""{resetLink}"" style=""background-color: #1761A5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 600;"">Återställ lösenord</a>
+    </p>
+    <p style=""font-size: 12px; color: #6b7280;"">Eller kopiera denna länk till din webbläsare:<br/>{resetLink}</p>
+    <p style=""font-size: 12px; color: #6b7280; margin-top: 24px;"">Länken är giltig i 1 timme.</p>
+    <p style=""margin-top: 24px; font-size: 14px; color: #6b7280;"">Om du inte har begärt detta, kan du ignorera detta meddelande.</p>
+    <p style=""margin-top: 24px;"">Vid frågor, kontakta produktägare <a href=""mailto:henrik.kackur@sportadmin.se"">henrik.kackur@sportadmin.se</a></p>
+    <p style=""margin-top: 24px;"">Med vänliga hälsningar,<br/>SportAdmin Team</p>
+</body>
+</html>"
+            };
+
+            message.Body = bodyBuilder.ToMessageBody();
+
+            using var client = new SmtpClient();
+            client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+            await client.ConnectAsync(smtpHost, smtpPort, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(smtpUser, smtpPassword);
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+
+            _logger.LogInformation("Password reset email sent successfully to {Email}", email);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending password reset email to {Email}", email);
+            throw;
+        }
+    }
 }
