@@ -31,7 +31,7 @@ main (produktion)
    git checkout staging
    git merge develop
    git push origin staging
-   # Deploy till staging-miljö på Fly.io
+   # Deploy till staging-miljö på Azure
    # Testa grundligt
    ```
 
@@ -44,47 +44,11 @@ main (produktion)
    # Deploy till produktion
    ```
 
-## Fly.io Setup för Staging & Production
+## Azure App Service Setup för Staging & Production
 
-### Skapa staging-app
-```bash
-# Skapa ny app för staging
-fly apps create sa-scheduler-staging
+Se `AZURE_DEPLOYMENT.md` för detaljerad information om Azure deployment.
 
-# Kopiera fly.toml till fly.staging.toml
-cp fly.toml fly.staging.toml
-# Ändra app name i fly.staging.toml till "sa-scheduler-staging"
-```
-
-### GitHub Actions Workflow
-
-**Option 1: Automatisk deploy per branch**
-```yaml
-# .github/workflows/deploy.yml
-on:
-  push:
-    branches:
-      - main      # Auto-deploy to production
-      - staging   # Auto-deploy to staging
-
-jobs:
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    # Deploy to production
-    
-  deploy-staging:
-    if: github.ref == 'refs/heads/staging'
-    # Deploy to staging
-```
-
-**Option 2: Manuell deploy (rekommenderat för nu)**
-```bash
-# Deploy staging manuellt när du är redo
-fly deploy --config fly.staging.toml
-
-# Deploy produktion när staging är testad
-fly deploy
-```
+För staging-miljö, skapa en separat Azure App Service med egen resource group.
 
 ## Rekommendation för Ditt Läge
 
@@ -118,8 +82,7 @@ git revert <commit-hash>
 # ELLER
 git reset --hard <commit-hash>  # ENDAST om ingen pushat ännu
 
-# Deploy igen
-fly deploy
+# Deploy igen via Azure (se AZURE_DEPLOYMENT.md)
 ```
 
 ## Tagging för Versioner
@@ -160,7 +123,7 @@ git push origin feature/feature-name
 ```
 
 ### När användare kommer:
-1. Skapa staging-miljö på Fly.io
+1. Skapa staging-miljö på Azure App Service
 2. Deploy staging först, testa
 3. När OK: deploy main (produktion)
 

@@ -135,17 +135,6 @@ Om du har en egen SMTP-server (t.ex. via din domän):
    - `Email:FromName` = `Sportadmins Schemaläggning`
 4. Klicka **Save**
 
-## Fly.io
-
-```bash
-fly secrets set EMAIL_SMTP_HOST="smtp-relay.brevo.com"
-fly secrets set EMAIL_SMTP_PORT="587"
-fly secrets set EMAIL_SMTP_USER="din-brevo-email@example.com"
-fly secrets set EMAIL_SMTP_PASSWORD="din-smtp-key-från-brevo"
-fly secrets set EMAIL_FROM_EMAIL="henrik.kackur@sportadmin.se"
-fly secrets set EMAIL_FROM_NAME="Sportadmins Schemaläggning"
-```
-
 ## Testa
 
 Efter konfiguration, testa genom att:
