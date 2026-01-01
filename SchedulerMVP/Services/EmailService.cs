@@ -127,9 +127,17 @@ SportAdmin Team",
         var smtpUser = _configuration["Email:SmtpUser"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_USER");
         var smtpPassword = _configuration["Email:SmtpPassword"] ?? Environment.GetEnvironmentVariable("EMAIL_SMTP_PASSWORD");
 
+        // Debug logging to understand configuration reading
+        _logger.LogInformation("SMTP Config check for {EmailType}: Host={Host}, User={User}, PasswordSet={HasPassword}", 
+            emailType, 
+            smtpHost ?? "NULL", 
+            smtpUser ?? "NULL", 
+            !string.IsNullOrEmpty(smtpPassword));
+
         if (string.IsNullOrEmpty(smtpHost) || string.IsNullOrEmpty(smtpUser) || string.IsNullOrEmpty(smtpPassword))
         {
-            _logger.LogWarning("SMTP not configured. {EmailType} email not sent to {Email}", emailType, email);
+            _logger.LogWarning("SMTP not configured. {EmailType} email not sent to {Email}. Host={Host}, User={User}, PasswordSet={HasPassword}", 
+                emailType, email, smtpHost ?? "NULL", smtpUser ?? "NULL", !string.IsNullOrEmpty(smtpPassword));
             return;
         }
 
