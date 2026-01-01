@@ -33,10 +33,10 @@ ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 
-# Expose Fly.io port
+# Expose port
 EXPOSE 8080
 
-# Healthcheck for Fly.io
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD curl -f http://localhost:8080/ || exit 1
 
 ENTRYPOINT ["dotnet", "SchedulerMVP.dll"]

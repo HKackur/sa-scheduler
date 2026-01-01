@@ -110,12 +110,9 @@ var builder = WebApplication.CreateBuilder(args);
 var supabaseHost = "db.anebyqfrzsuqwrbncwxt.supabase.co";
 
 // DataProtection: Persist keys across app restarts for authentication cookies
-// Supports both Fly.io (/app/keys) and Azure App Service (local temp path)
+// Azure App Service: Uses persistent home directory
 if (!builder.Environment.IsDevelopment())
 {
-    // Try Fly.io path first (if mounted volume exists)
-    var flyKeysPath = "/app/keys";
-    
     // Azure App Service: Use persistent home directory (survives restarts and deployments)
     // Linux App Service exposes HOME=/home; Windows uses D:\\home
     string? azureHome = Environment.GetEnvironmentVariable("HOME");
@@ -131,29 +128,16 @@ if (!builder.Environment.IsDevelopment())
         azureKeysPath = Path.Combine(homeDrive, homePath.TrimStart('\\', '/'), "data", "ProtectionKeys");
     }
     
-    if (Directory.Exists(flyKeysPath))
+    if (!Directory.Exists(azureKeysPath))
     {
-        // Fly.io: Use mounted volume
-        builder.Services.AddDataProtection()
-            .PersistKeysToFileSystem(new DirectoryInfo(flyKeysPath))
-            .SetApplicationName("SchedulerMVP");
+        Directory.CreateDirectory(azureKeysPath);
     }
-    else
-    {
-        // Azure App Service or other platforms: Use persistent home directory
-        if (!Directory.Exists(azureKeysPath))
-        {
-            Directory.CreateDirectory(azureKeysPath);
-        }
-        builder.Services.AddDataProtection()
-            .PersistKeysToFileSystem(new DirectoryInfo(azureKeysPath))
-            .SetApplicationName("SchedulerMVP");
-    }
-    // If both fail, DataProtection uses in-memory keys (cookies invalid on restart)
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(azureKeysPath))
+        .SetApplicationName("SchedulerMVP");
 }
 
-// Port configuration: Supports both Fly.io (8080) and Azure App Service
-// Azure App Service sets PORT environment variable - app MUST listen on that port
+// Port configuration: Azure App Service sets PORT environment variable - app MUST listen on that port
 // CRITICAL: Azure App Service has issues with HTTP/2 - use HTTP/1.1 only for Azure
 // For Azure, we MUST disable HTTP/2 completely to avoid ERR_HTTP2_PROTOCOL_ERROR
 var port = Environment.GetEnvironmentVariable("PORT");
@@ -172,7 +156,7 @@ if (!string.IsNullOrEmpty(port) && int.TryParse(port, out var portNumber))
 }
 else
 {
-    // Fly.io or local dev: Use default 8080 with HTTP/1.1 and HTTP/2
+    // Local dev: Use default 8080 with HTTP/1.1 and HTTP/2
     builder.WebHost.ConfigureKestrel(options =>
     {
         options.ListenAnyIP(8080);
@@ -185,7 +169,7 @@ builder.Services.AddRazorPages();
 
 // Add memory cache for performance optimization (caching Groups, Places, Areas)
 builder.Services.AddMemoryCache();
-// CRITICAL: Configure SignalR BEFORE AddServerSideBlazor for Blazor Server on Fly.io
+// CRITICAL: Configure SignalR BEFORE AddServerSideBlazor for Blazor Server
 // This ensures proper connection handling behind proxy
 builder.Services.AddSignalR(options =>
 {
@@ -274,9 +258,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromDays(7);
     options.SlidingExpiration = true;
     options.LoginPath = "/login";
-    // Required for HTTPS/proxy environments (Fly.io)
+    // Required for HTTPS/proxy environments (Azure App Service)
     options.Cookie.SameSite = SameSiteMode.Lax; // Use Lax for better compatibility
-    // CRITICAL: Use Always in production (HTTPS) - Fly.io uses HTTPS proxy
+    // CRITICAL: Use Always in production (HTTPS)
     options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() 
         ? CookieSecurePolicy.SameAsRequest 
         : CookieSecurePolicy.Always;
@@ -368,14 +352,14 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 
 var app = builder.Build();
 
-// Respect proxy headers: Supports both Fly.io and Azure App Service
+// Respect proxy headers: Azure App Service
 // CRITICAL: Include XForwardedHost for SignalR base path detection
-// Azure App Service uses X-Forwarded-* headers, Fly.io uses Fly-Forwarded-* headers
+// Azure App Service uses X-Forwarded-* headers
 // MUST be called before UseStaticFiles and other middleware
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
-    // Clear known networks/proxies to allow both Fly.io and Azure App Service proxies
+    // Clear known networks/proxies to allow Azure App Service proxy
     KnownNetworks = { },
     KnownProxies = { },
     // Azure App Service requirement: require at least one header
@@ -389,18 +373,6 @@ app.UseExceptionHandler("/Error");
 // HSTS: Only enable if we're sure we're on HTTPS
 // UseForwardedHeaders should have already set the scheme correctly
 app.UseHsts();
-
-// Additional HTTPS scheme detection for Fly.io (UseForwardedHeaders handles Azure)
-// Fly.io uses Fly-Forwarded-Proto instead of X-Forwarded-Proto
-app.Use((ctx, next) =>
-{
-    // Fly.io specific header
-    if (ctx.Request.Headers.TryGetValue("Fly-Forwarded-Proto", out var flyProto) && flyProto == "https")
-    {
-        ctx.Request.Scheme = "https";
-    }
-    return next();
-});
 
 app.UseStaticFiles();
 app.UseRouting();
