@@ -34,14 +34,23 @@
         <div class="sa-topbar-row">
             @* Left column: Title and Breadcrumbs *@
             <div class="tb-topbar-left">
-                @if (isAdminPage || isGroupsManagePage || isMyAccountPage || isHelpPage)
+                @if (isAdminPage || isGroupsManagePage || isMyAccountPage)
                 {
                     <div class="sa-header-content">
                         <button class="btn-back" @onclick="NavigateBack" title="Tillbaka">
                             <span class="material-symbols-outlined">chevron_left</span>
                             Tillbaka
                         </button>
-                        <h2 class="sa-page-title">@(isAdminPage ? "Admin" : (isGroupsManagePage ? "Hantera grupper" : (isMyAccountPage ? "Mitt konto" : "Hjälp")))</h2>
+                        <h2 class="sa-page-title">@(isAdminPage ? "Admin" : (isGroupsManagePage ? "Hantera grupper" : "Mitt konto"))</h2>
+                    </div>
+                }
+                else if (isHelpPage)
+                {
+                    <div class="sa-header-content">
+                        <button class="btn-back" @onclick="NavigateBack" title="Tillbaka">
+                            <span class="material-symbols-outlined">chevron_left</span>
+                            Tillbaka
+                        </button>
                     </div>
                 }
                 else if (isWhatsNewPage)

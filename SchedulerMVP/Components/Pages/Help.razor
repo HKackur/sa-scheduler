@@ -1,17 +1,382 @@
 @page "/hjalp"
+@using Microsoft.JSInterop
 @inject SchedulerMVP.Services.UIState UI
+@inject IJSRuntime JSRuntime
 
-<div class="sa-panel" style="padding:16px; overflow-y: auto; overflow-x: hidden; padding-bottom: 64px;">
+<PageTitle>Hjälp</PageTitle>
+
+<div class="help-container">
+    <h1 class="help-title">Hjälp</h1>
     <div class="help-content">
-        <p style="font-size:14px; color:#374151; line-height:1.6;">
-            I denna testversion finns ingen hjälpsektion än. Vid frågor kontakta produktägare <a href="mailto:henrik.kackur@sportadmin.se" style="color:#1761A5; text-decoration:none;">henrik.kackur@sportadmin.se</a>.
-        </p>
+        <!-- Table of Contents -->
+        <div class="help-toc">
+            <h2 class="help-toc-title">Innehållsförteckning</h2>
+            <ul class="help-toc-list">
+                <li><a href="#kom-igang" @onclick='(e) => ScrollToSection(e, "kom-igang")' @onclick:preventDefault="true">Kom igång</a></li>
+                <li><a href="#veckoschema" @onclick='(e) => ScrollToSection(e, "veckoschema")' @onclick:preventDefault="true">Veckoschema</a></li>
+                <li><a href="#kalendervy" @onclick='(e) => ScrollToSection(e, "kalendervy")' @onclick:preventDefault="true">Kalendervy</a></li>
+                <li><a href="#vyer" @onclick='(e) => ScrollToSection(e, "vyer")' @onclick:preventDefault="true">Vyer</a></li>
+                <li><a href="#grupper" @onclick='(e) => ScrollToSection(e, "grupper")' @onclick:preventDefault="true">Hantera grupper</a></li>
+                <li><a href="#mallar" @onclick='(e) => ScrollToSection(e, "mallar")' @onclick:preventDefault="true">Skapa och hantera mallar</a></li>
+                <li><a href="#kontakt" @onclick='(e) => ScrollToSection(e, "kontakt")' @onclick:preventDefault="true">Kontakt</a></li>
+            </ul>
+        </div>
+
+        <!-- Kom igång -->
+        <div id="kom-igang" class="help-section">
+            <h2 class="help-section-title">Kom igång</h2>
+            <div class="help-item">
+                <p class="help-item-description">
+                    Välkommen till schemaläggningssystemet! Detta är en testversion där du kan skapa veckoscheman, 
+                    hantera bokningar och organisera dina grupper. Systemet består av två huvudlägen: 
+                    <strong>Veckoschema</strong> för att skapa återkommande veckomallar och <strong>Kalendervy</strong> 
+                    för att se och hantera faktiska bokningar.
+                </p>
+                <p class="help-item-description">
+                    Börja med att välja en plats och en veckomall i toppmenyn. Du kan sedan dra grupper från 
+                    högerkolumnen in i veckogriden för att skapa bokningar.
+                </p>
+            </div>
+        </div>
+
+        <!-- Veckoschema -->
+        <div id="veckoschema" class="help-section">
+            <h2 class="help-section-title">Veckoschema</h2>
+            
+            <div class="help-item">
+                <h3 class="help-item-title">Skapa bokningar med drag & drop</h3>
+                <p class="help-item-description">
+                    Det enklaste sättet att skapa en bokning är att dra en grupp från högerkolumnen och släppa 
+                    den i veckogriden på önskad dag och tid. En dialog öppnas där du kan justera detaljer som 
+                    yta, starttid, sluttid och vilka veckodagar bokningen ska gälla.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Redigera bokningar</h3>
+                <p class="help-item-description">
+                    Klicka på en bokning i veckogriden för att öppna redigeringsdialogen. Här kan du ändra yta, 
+                    tid, grupp eller ta bort bokningen. Du kan också flytta bokningar genom att dra dem till 
+                    en ny position eller ändra längden genom att dra i kanterna.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Konflikter</h3>
+                <p class="help-item-description">
+                    Systemet kontrollerar automatiskt om bokningar kolliderar. Om en bokning blockerar en yta 
+                    som redan är bokad, visas en "ghost" (halvtransparent block) som visar konflikten. Du kan 
+                    inte spara en bokning som skapar en konflikt.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Återkommande bokningar</h3>
+                <p class="help-item-description">
+                    När du skapar en bokning kan du välja flera veckodagar. Detta skapar en återkommande 
+                    bokning som gäller för alla valda dagar i veckomallen. Detta är perfekt för träningspass 
+                    som sker samma tid varje vecka.
+                </p>
+            </div>
+        </div>
+
+        <!-- Kalendervy -->
+        <div id="kalendervy" class="help-section">
+            <h2 class="help-section-title">Kalendervy</h2>
+            
+            <div class="help-item">
+                <h3 class="help-item-title">Växla till kalendervy</h3>
+                <p class="help-item-description">
+                    Kalendervyn visar faktiska bokningar för specifika datum. Du växlar till kalendervy genom 
+                    att välja "Kalender" i vyn-väljaren. Här kan du navigera mellan veckor med pilarna eller 
+                    klicka på "Idag" för att gå till aktuell vecka.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Kopiera från mall</h3>
+                <p class="help-item-description">
+                    I kalendervyn kan du kopiera en veckomall till en specifik vecka. Klicka på "Fler alternativ" 
+                    och välj "Lägg till från mall". Välj sedan vilken mall du vill kopiera och till vilken vecka. 
+                    Alla bokningar från mallen kopieras till den valda veckan.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Hantera bokningar i kalendern</h3>
+                <p class="help-item-description">
+                    I kalendervyn kan du se alla faktiska bokningar. Du kan klicka på en bokning för att redigera 
+                    eller ta bort den. Bokningar i kalendervyn är specifika för ett datum, till skillnad från 
+                    veckomallar som är återkommande.
+                </p>
+            </div>
+        </div>
+
+        <!-- Vyer -->
+        <div id="vyer" class="help-section">
+            <h2 class="help-section-title">Vyer</h2>
+            
+            <div class="help-item">
+                <h3 class="help-item-title">Veckovy</h3>
+                <p class="help-item-description">
+                    Standardvyn som visar hela veckan (måndag till söndag) med tider från 00:00 till 24:00. 
+                    Perfekt för att få en översikt över hela veckan och se hur bokningar fördelas över dagarna.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Dagsvy</h3>
+                <p class="help-item-description">
+                    Visar en enda dag i taget med alla tider. Användbart när du behöver fokusera på en specifik 
+                    dag och se alla bokningar i detalj. Navigera mellan dagar med pilarna.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Listvy</h3>
+                <p class="help-item-description">
+                    Visar alla bokningar i en lista, sorterade efter datum och tid. Här kan du filtrera efter 
+                    plats eller yta och exportera listan som PDF eller skriva ut den. Perfekt för att skapa 
+                    fysiska scheman att sätta upp vid hallar eller planer.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Resursvy</h3>
+                <p class="help-item-description">
+                    Visar resurser (platser och ytor) på vänster sida och tiden på översta raden. Detta gör det 
+                    enkelt att se när specifika resurser är bokade och skapa nya bokningar direkt för en resurs.
+                </p>
+            </div>
+        </div>
+
+        <!-- Grupper -->
+        <div id="grupper" class="help-section">
+            <h2 class="help-section-title">Hantera grupper</h2>
+            
+            <div class="help-item">
+                <h3 class="help-item-title">Öppna grupphantering</h3>
+                <p class="help-item-description">
+                    Gå till sidan "Hantera grupper" via menyn för att skapa och hantera dina grupper. Här kan 
+                    du se alla dina grupper i en tabell med information om grupptyp, källa och visningsfärg.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Skapa en ny grupp</h3>
+                <p class="help-item-description">
+                    Klicka på "Ny grupp" för att skapa en ny grupp. Du behöver ange namn, välja en grupptyp 
+                    och kan också ange en visningsfärg. Färgen används för att identifiera gruppen i schemat.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Filtrera grupper</h3>
+                <p class="help-item-description">
+                    Använd filtren ovanför tabellen för att filtrera grupper efter typ, källa eller färg. 
+                    Detta gör det enklare att hitta specifika grupper när du har många.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Grupptyper</h3>
+                <p class="help-item-description">
+                    Grupptyper hjälper dig att organisera dina grupper. Du kan skapa grupptyper som "Lag", 
+                    "Träningsgrupp" eller liknande. Varje grupptyp kan ha sin egen färg som visas i schemat.
+                </p>
+            </div>
+        </div>
+
+        <!-- Mallar -->
+        <div id="mallar" class="help-section">
+            <h2 class="help-section-title">Skapa och hantera mallar</h2>
+            
+            <div class="help-item">
+                <h3 class="help-item-title">Vad är en veckomall?</h3>
+                <p class="help-item-description">
+                    En veckomall är en mall för återkommande bokningar. När du skapar bokningar i veckoschemaläget 
+                    sparas de i den valda mallen. Du kan sedan kopiera mallen till specifika veckor i kalendervyn.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Skapa en ny mall</h3>
+                <p class="help-item-description">
+                    Klicka på "Fler alternativ" i toppmenyn och välj "Ny tom mall". Ge mallen ett namn och välj 
+                    vilken plats den ska gälla. Du kan sedan börja lägga till bokningar i mallen.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Redigera en mall</h3>
+                <p class="help-item-description">
+                    Välj "Hantera mallen" från "Fler alternativ" för att ändra mallets namn eller andra inställningar. 
+                    Du kan redigera bokningar i mallen direkt i veckogriden genom att klicka på dem.
+                </p>
+            </div>
+
+            <div class="help-item">
+                <h3 class="help-item-title">Duplicera en mall</h3>
+                <p class="help-item-description">
+                    Om du vill skapa en ny mall baserad på en befintlig, välj "Duplicera mallen" från "Fler alternativ". 
+                    Detta skapar en kopia som du kan redigera utan att påverka originalet.
+                </p>
+            </div>
+        </div>
+
+        <!-- Kontakt -->
+        <div id="kontakt" class="help-section">
+            <h2 class="help-section-title">Kontakt</h2>
+            <div class="help-item">
+                <p class="help-item-description">
+                    Detta är en testversion av systemet. Om du har frågor eller stöter på problem, kontakta 
+                    produktägare <a href="mailto:henrik.kackur@sportadmin.se" class="help-link">henrik.kackur@sportadmin.se</a>.
+                </p>
+            </div>
+        </div>
     </div>
 </div>
+
+<style>
+    .help-container {
+        padding: 24px;
+        max-width: 800px;
+        margin: 0 auto;
+        padding-bottom: 48px;
+        min-height: 100%;
+    }
+
+    .help-title {
+        font-size: 28px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 0 0 24px 0;
+        text-align: left;
+        border: none;
+        outline: none;
+    }
+
+    .help-content {
+        background: #fff;
+        border-radius: 8px;
+        padding: 32px;
+        padding-bottom: 64px;
+    }
+
+    .help-toc {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 48px;
+    }
+
+    .help-toc-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 0 0 12px 0;
+    }
+
+    .help-toc-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .help-toc-list li {
+        margin-bottom: 8px;
+    }
+
+    .help-toc-list li:last-child {
+        margin-bottom: 0;
+    }
+
+    .help-toc-list a {
+        color: #0F4A7A;
+        text-decoration: none;
+        font-size: 14px;
+        transition: color 0.2s;
+    }
+
+    .help-toc-list a:hover {
+        color: #0a3a62;
+        text-decoration: underline;
+    }
+
+    .help-section {
+        margin-bottom: 48px;
+        scroll-margin-top: 20px;
+    }
+
+    .help-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .help-section-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 0 0 24px 0;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .help-item {
+        margin-bottom: 32px;
+        padding-left: 24px;
+        border-left: 3px solid #0F4A7A;
+    }
+
+    .help-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .help-item-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1f2937;
+        margin: 0 0 8px 0;
+    }
+
+    .help-item-description {
+        font-size: 14px;
+        line-height: 1.6;
+        color: #4b5563;
+        margin: 0 0 12px 0;
+    }
+
+    .help-item-description:last-child {
+        margin-bottom: 0;
+    }
+
+    .help-link {
+        color: #0F4A7A;
+        text-decoration: none;
+    }
+
+    .help-link:hover {
+        text-decoration: underline;
+    }
+
+    .help-item-description strong {
+        color: #1f2937;
+        font-weight: 600;
+    }
+</style>
 
 @code {
     protected override void OnInitialized()
     {
         UI.PageTitle = "Hjälp";
+    }
+
+    private async Task ScrollToSection(Microsoft.AspNetCore.Components.Web.MouseEventArgs e, string sectionId)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval", $"document.getElementById('{sectionId}')?.scrollIntoView({{ behavior: 'smooth', block: 'start' }});");
+        }
+        catch { }
     }
 }
