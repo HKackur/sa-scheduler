@@ -1,0 +1,97 @@
+@using SchedulerMVP.Data.Entities
+@using System.Security.Claims
+@inject SchedulerMVP.Services.IModalService ModalService
+@inject NavigationManager Nav
+@inject SchedulerMVP.Services.UserContextService UserContext
+
+@if (Modal != null)
+{
+    <div class="modal-container" @onclick="OnBackdrop">
+        <div class="bm-modal" @onclick:stopPropagation="true">
+            <div class="bm-header">
+                <h2 class="bm-title">@Modal.Title</h2>
+            </div>
+            <div class="bm-body">
+                <div class="user-modal-content" @onclick:stopPropagation="true">
+                    @((MarkupString)Modal.Content)
+                </div>
+            </div>
+            <div class="bm-actions">
+                @if (!string.IsNullOrEmpty(Modal.LinkRoute))
+                {
+                    <button type="button" @onclick="OnNavigate" class="btn-primary">
+                        @(string.IsNullOrWhiteSpace(Modal.ButtonText) ? "Visa mig" : Modal.ButtonText)
+                    </button>
+                }
+                <button type="button" @onclick="OnOk" class="btn-outline">Ok</button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px;border:1px solid #e6e7ea;border-radius:12px;width:600px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{margin-bottom:20px}
+        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
+        .bm-body{margin-bottom:16px}
+        .user-modal-content{font-size:14px;line-height:1.6;color:#0f1720}
+        .user-modal-content p{margin:0 0 12px 0}
+        .user-modal-content p:last-child{margin-bottom:0}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
+    </style>
+}
+
+@code {
+    [Parameter] public Modal? Modal { get; set; }
+    [Parameter] public EventCallback OnClosed { get; set; }
+
+    private async Task OnOk()
+    {
+        if (Modal != null)
+        {
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            if (!string.IsNullOrEmpty(userId))
+            {
+                try
+                {
+                    await ModalService.MarkModalAsReadAsync(Modal.Id, userId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[UserModal] Error marking as read: {ex.Message}");
+                }
+            }
+        }
+        await OnClosed.InvokeAsync();
+    }
+
+    private async Task OnNavigate()
+    {
+        if (Modal != null)
+        {
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            if (!string.IsNullOrEmpty(userId))
+            {
+                try
+                {
+                    await ModalService.MarkModalAsReadAsync(Modal.Id, userId);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[UserModal] Error marking as read: {ex.Message}");
+                }
+            }
+
+            if (!string.IsNullOrEmpty(Modal.LinkRoute))
+            {
+                Nav.NavigateTo(Modal.LinkRoute);
+            }
+        }
+        await OnClosed.InvokeAsync();
+    }
+
+    private async Task OnBackdrop(MouseEventArgs _)
+    {
+        // Don't close on backdrop click - user must click Ok or navigate
+    }
+}
+

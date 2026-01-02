@@ -341,6 +341,7 @@ builder.Services.AddScoped<IScheduleTemplateService, ScheduleTemplateService>();
 builder.Services.AddScoped<IPlaceService, PlaceService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ICalendarBookingService, CalendarBookingService>();
+builder.Services.AddScoped<IModalService, ModalService>();
 builder.Services.AddScoped<BookingDialogService>();
 builder.Services.AddScoped<UIState>();
 builder.Services.AddScoped<DbSeeder>();
@@ -953,6 +954,52 @@ _ = Task.Run(async () =>
                         ");
                         Console.WriteLine("[MIGRATION] ✅ Checked/added StandardDisplayColor column to GroupTypes table (PostgreSQL)");
                         logger.LogInformation("✅ Checked/added StandardDisplayColor column to GroupTypes table (PostgreSQL)");
+                        
+                        // Create Modals table if it doesn't exist (PostgreSQL)
+                        await context.Database.ExecuteSqlRawAsync(@"
+                            DO $$ 
+                            BEGIN 
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.tables 
+                                    WHERE table_name = 'Modals'
+                                ) THEN
+                                    CREATE TABLE ""Modals"" (
+                                        ""Id"" TEXT NOT NULL PRIMARY KEY,
+                                        ""Title"" VARCHAR(200) NOT NULL,
+                                        ""Content"" TEXT NOT NULL,
+                                        ""StartDate"" TEXT NOT NULL,
+                                        ""EndDate"" TEXT NOT NULL,
+                                        ""LinkRoute"" VARCHAR(200),
+                                        ""ButtonText"" VARCHAR(50),
+                                        ""CreatedAt"" TEXT NOT NULL,
+                                        ""UpdatedAt"" TEXT NOT NULL
+                                    );
+                                    CREATE INDEX ""IX_Modals_StartDate_EndDate"" ON ""Modals"" (""StartDate"", ""EndDate"");
+                                END IF;
+                            END $$;
+                        ");
+                        
+                        // Create ModalReadBy table if it doesn't exist (PostgreSQL)
+                        await context.Database.ExecuteSqlRawAsync(@"
+                            DO $$ 
+                            BEGIN 
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.tables 
+                                    WHERE table_name = 'ModalReadBy'
+                                ) THEN
+                                    CREATE TABLE ""ModalReadBy"" (
+                                        ""Id"" TEXT NOT NULL PRIMARY KEY,
+                                        ""ModalId"" TEXT NOT NULL,
+                                        ""UserId"" VARCHAR(450) NOT NULL,
+                                        ""ReadAt"" TEXT NOT NULL,
+                                        CONSTRAINT ""FK_ModalReadBy_Modals_ModalId"" FOREIGN KEY (""ModalId"") REFERENCES ""Modals"" (""Id"") ON DELETE CASCADE
+                                    );
+                                    CREATE INDEX ""IX_ModalReadBy_ModalId_UserId"" ON ""ModalReadBy"" (""ModalId"", ""UserId"");
+                                END IF;
+                            END $$;
+                        ");
+                        Console.WriteLine("[MIGRATION] ✅ Checked/created Modals and ModalReadBy tables (PostgreSQL)");
+                        logger.LogInformation("✅ Checked/created Modals and ModalReadBy tables (PostgreSQL)");
                     }
                     else
                     {
@@ -1016,6 +1063,64 @@ _ = Task.Run(async () =>
                         else
                         {
                             Console.WriteLine("[MIGRATION] StandardDisplayColor column already exists");
+                        }
+                        
+                        // Check and create Modals table if it doesn't exist (SQLite)
+                        var modalsTableExists = false;
+                        using (var modalsCheckCommand = connection.CreateCommand())
+                        {
+                            modalsCheckCommand.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='Modals'";
+                            using (var modalsCheckReader = await modalsCheckCommand.ExecuteReaderAsync())
+                            {
+                                modalsTableExists = await modalsCheckReader.ReadAsync();
+                            }
+                        }
+                        
+                        if (!modalsTableExists)
+                        {
+                            await context.Database.ExecuteSqlRawAsync(@"
+                                CREATE TABLE IF NOT EXISTS Modals (
+                                    Id TEXT NOT NULL PRIMARY KEY,
+                                    Title TEXT NOT NULL,
+                                    Content TEXT NOT NULL,
+                                    StartDate TEXT NOT NULL,
+                                    EndDate TEXT NOT NULL,
+                                    LinkRoute TEXT,
+                                    ButtonText TEXT,
+                                    CreatedAt TEXT NOT NULL,
+                                    UpdatedAt TEXT NOT NULL
+                                );
+                                CREATE INDEX IF NOT EXISTS IX_Modals_StartDate_EndDate ON Modals(StartDate, EndDate);
+                            ");
+                            Console.WriteLine("[MIGRATION] ✅ Created Modals table (SQLite)");
+                            logger.LogInformation("✅ Created Modals table (SQLite)");
+                        }
+                        
+                        // Check and create ModalReadBy table if it doesn't exist (SQLite)
+                        var modalReadByTableExists = false;
+                        using (var modalReadByCheckCommand = connection.CreateCommand())
+                        {
+                            modalReadByCheckCommand.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='ModalReadBy'";
+                            using (var modalReadByCheckReader = await modalReadByCheckCommand.ExecuteReaderAsync())
+                            {
+                                modalReadByTableExists = await modalReadByCheckReader.ReadAsync();
+                            }
+                        }
+                        
+                        if (!modalReadByTableExists)
+                        {
+                            await context.Database.ExecuteSqlRawAsync(@"
+                                CREATE TABLE IF NOT EXISTS ModalReadBy (
+                                    Id TEXT NOT NULL PRIMARY KEY,
+                                    ModalId TEXT NOT NULL,
+                                    UserId TEXT NOT NULL,
+                                    ReadAt TEXT NOT NULL,
+                                    FOREIGN KEY (ModalId) REFERENCES Modals(Id) ON DELETE CASCADE
+                                );
+                                CREATE INDEX IF NOT EXISTS IX_ModalReadBy_ModalId_UserId ON ModalReadBy(ModalId, UserId);
+                            ");
+                            Console.WriteLine("[MIGRATION] ✅ Created ModalReadBy table (SQLite)");
+                            logger.LogInformation("✅ Created ModalReadBy table (SQLite)");
                         }
                     }
                     

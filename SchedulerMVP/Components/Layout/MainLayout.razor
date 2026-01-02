@@ -2,7 +2,10 @@
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Authorization
+@using SchedulerMVP.Data.Entities
 @inject NavigationManager Navigation
+@inject SchedulerMVP.Services.IModalService ModalService
+@inject SchedulerMVP.Services.UserContextService UserContext
 @implements IDisposable
 
 @{
@@ -28,6 +31,10 @@ else
                 </div>
                 <Toast />
                 <ConnectionHealthCheck />
+                @if (_currentModal != null)
+                {
+                    <UserModal Modal="@_currentModal" OnClosed="OnModalClosed" />
+                }
             </div>
         </Authorized>
         <NotAuthorized>
@@ -41,11 +48,23 @@ else
     private bool _isWhatsNewPage = false;
     private bool _isGroupsManagePage = false;
     private bool _isHelpPage = false;
+    private Modal? _currentModal = null;
+    private List<Modal> _pendingModals = new();
+    private bool _modalsLoaded = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         UpdateLoginStatus();
         Navigation.LocationChanged += OnLocationChanged;
+        await LoadModalsAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_isLoginPage)
+        {
+            await LoadModalsAsync();
+        }
     }
 
     private void UpdateLoginStatus()
@@ -72,6 +91,54 @@ else
     {
         UpdateLoginStatus();
         StateHasChanged();
+    }
+
+    private async Task LoadModalsAsync()
+    {
+        if (_isLoginPage || _modalsLoaded)
+            return;
+
+        try
+        {
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            if (string.IsNullOrEmpty(userId))
+                return;
+
+            // Get active modals for user (optimized query with indexes)
+            var activeModals = await ModalService.GetActiveModalsForUserAsync(userId);
+            
+            _pendingModals = activeModals;
+            _modalsLoaded = true;
+
+            // Show first modal if any
+            if (_pendingModals.Count > 0 && _currentModal == null)
+            {
+                _currentModal = _pendingModals[0];
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MainLayout] Error loading modals: {ex.Message}");
+        }
+    }
+
+    private async Task OnModalClosed()
+    {
+        if (_currentModal != null)
+        {
+            // Remove current modal from pending list
+            _pendingModals.Remove(_currentModal);
+            _currentModal = null;
+
+            // Show next modal if any
+            if (_pendingModals.Count > 0)
+            {
+                _currentModal = _pendingModals[0];
+            }
+
+            StateHasChanged();
+        }
     }
 
     public void Dispose()

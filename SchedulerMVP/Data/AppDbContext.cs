@@ -15,6 +15,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<BookingTemplate> BookingTemplates => Set<BookingTemplate>();
     public DbSet<Booking> Bookings => Set<Booking>();
     public DbSet<CalendarBooking> CalendarBookings => Set<CalendarBooking>();
+    public DbSet<Modal> Modals => Set<Modal>();
+    public DbSet<ModalReadBy> ModalReadBy => Set<ModalReadBy>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -94,6 +96,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany(st => st.CalendarBookings)
             .HasForeignKey(cb => cb.SourceTemplateId)
             .OnDelete(DeleteBehavior.SetNull); // Allow null when template is deleted
+
+        // Configure ModalReadBy relationship
+        modelBuilder.Entity<ModalReadBy>()
+            .HasOne(mrb => mrb.Modal)
+            .WithMany(m => m.ReadBy)
+            .HasForeignKey(mrb => mrb.ModalId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Performance indexes for Modals
+        modelBuilder.Entity<Modal>()
+            .HasIndex(m => new { m.StartDate, m.EndDate });
+
+        // Performance index for ModalReadBy - critical for fast "has read" checks
+        modelBuilder.Entity<ModalReadBy>()
+            .HasIndex(mrb => new { mrb.ModalId, mrb.UserId });
     }
 }
 

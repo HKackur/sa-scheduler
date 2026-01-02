@@ -1,0 +1,221 @@
+@using SchedulerMVP.Data.Entities
+@inject SchedulerMVP.Services.IModalService ModalService
+
+@if (IsOpen)
+{
+    <div class="modal-container" @onclick="OnBackdrop">
+        <div class="bm-modal" @onclick:stopPropagation="true">
+            <div class="bm-header">
+                <h2 class="bm-title">@(IsEditMode ? "Redigera modal" : "Ny modal")</h2>
+            </div>
+            
+            <div class="bm-field">
+                <label class="bm-label">Titel</label>
+                <input class="bm-input" type="text" @bind="modal.Title" placeholder="Ange titel" maxlength="200" />
+            </div>
+
+            <div class="bm-field">
+                <label class="bm-label">Innehåll</label>
+                <textarea class="bm-input" @bind="modal.Content" placeholder="Ange innehåll (HTML stöds)" rows="6" style="resize:vertical;"></textarea>
+            </div>
+
+            <div style="display:flex; gap:12px;">
+                <div class="bm-field" style="flex:1;">
+                    <label class="bm-label">Startdatum</label>
+                    <input class="bm-input" type="date" value="@startDateString" @onchange="@((ChangeEventArgs e) => startDateString = e.Value?.ToString() ?? string.Empty)" />
+                </div>
+                <div class="bm-field" style="flex:1;">
+                    <label class="bm-label">Slutdatum</label>
+                    <input class="bm-input" type="date" value="@endDateString" @onchange="@((ChangeEventArgs e) => endDateString = e.Value?.ToString() ?? string.Empty)" />
+                </div>
+            </div>
+
+            <div class="bm-field">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" @bind="hasLink" style="width:18px; height:18px; cursor:pointer;" />
+                    <span class="bm-label" style="margin:0;">Lägg till länk-knapp</span>
+                </label>
+            </div>
+
+            @if (hasLink)
+            {
+                <div class="bm-field">
+                    <label class="bm-label">Route</label>
+                    <select class="bm-input" @bind="modal.LinkRoute" style="min-height:40px;">
+                        <option value="">Välj route</option>
+                        @foreach (var route in availableRoutes)
+                        {
+                            <option value="@route.Value">@route.Label</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="bm-field">
+                    <label class="bm-label">Knapptext</label>
+                    <input class="bm-input" type="text" @bind="modal.ButtonText" placeholder="Visa mig" maxlength="50" />
+                </div>
+            }
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="message message-error">@errorMessage</div>
+            }
+
+            <div class="bm-actions">
+                <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
+                <button type="button" @onclick="OnSave" class="btn-primary" disabled="@(string.IsNullOrWhiteSpace(modal.Title) || string.IsNullOrWhiteSpace(modal.Content) || isSaving)">
+                    @if (isSaving)
+                    {
+                        <span>Sparar...</span>
+                    }
+                    else
+                    {
+                        <span>Spara</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px 28px 0 28px;border:1px solid #e6e7ea;border-radius:12px;width:600px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{margin-bottom:20px}
+        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
+        .bm-field{margin-bottom:16px}
+        .bm-label{display:block;font-size:12px;font-weight:500;color:#374151;margin-bottom:6px}
+        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
+        .message{padding:12px;border-radius:6px;font-size:13px;margin-top:8px}
+        .message-error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public Guid? ModalId { get; set; }
+
+    private Modal modal = new();
+    private bool isSaving = false;
+    private string errorMessage = string.Empty;
+    private bool hasLink = false;
+    private string startDateString = string.Empty;
+    private string endDateString = string.Empty;
+    private bool IsEditMode => ModalId.HasValue;
+
+    private readonly List<(string Value, string Label)> availableRoutes = new()
+    {
+        ("/", "Startsida"),
+        ("/admin", "Admin"),
+        ("/grupper", "Hantera grupper"),
+        ("/mitt-konto", "Mitt konto"),
+        ("/vad-ar-nytt", "Vad är nytt?"),
+        ("/hjalp", "Hjälp")
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            if (IsEditMode && ModalId.HasValue)
+            {
+                var existingModal = await ModalService.GetModalByIdAsync(ModalId.Value);
+                if (existingModal != null)
+                {
+                    modal = existingModal;
+                    startDateString = modal.StartDate.ToString("yyyy-MM-dd");
+                    endDateString = modal.EndDate.ToString("yyyy-MM-dd");
+                    hasLink = !string.IsNullOrEmpty(modal.LinkRoute);
+                }
+                else
+                {
+                    errorMessage = "Modal hittades inte.";
+                }
+            }
+            else
+            {
+                modal = new Modal();
+                startDateString = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+                endDateString = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(7)).ToString("yyyy-MM-dd");
+                hasLink = false;
+            }
+            errorMessage = string.Empty;
+        }
+    }
+
+    private void OnBackdrop()
+    {
+        OnCancel();
+    }
+
+    private void OnCancel()
+    {
+        modal = new Modal();
+        errorMessage = string.Empty;
+        hasLink = false;
+        OnClose.InvokeAsync();
+    }
+
+    private async Task OnSave()
+    {
+        if (string.IsNullOrWhiteSpace(modal.Title) || string.IsNullOrWhiteSpace(modal.Content))
+        {
+            errorMessage = "Titel och innehåll är obligatoriska.";
+            return;
+        }
+
+        if (!DateOnly.TryParse(startDateString, out var startDate) || !DateOnly.TryParse(endDateString, out var endDate))
+        {
+            errorMessage = "Ogiltiga datum.";
+            return;
+        }
+
+        if (startDate > endDate)
+        {
+            errorMessage = "Startdatum kan inte vara efter slutdatum.";
+            return;
+        }
+
+        isSaving = true;
+        errorMessage = string.Empty;
+        StateHasChanged();
+
+        try
+        {
+            modal.StartDate = startDate;
+            modal.EndDate = endDate;
+
+            if (!hasLink)
+            {
+                modal.LinkRoute = null;
+                modal.ButtonText = null;
+            }
+            else if (string.IsNullOrWhiteSpace(modal.ButtonText))
+            {
+                modal.ButtonText = "Visa mig";
+            }
+
+            if (IsEditMode)
+            {
+                await ModalService.UpdateModalAsync(modal);
+            }
+            else
+            {
+                await ModalService.CreateModalAsync(modal);
+            }
+
+            await OnSaved.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid sparande: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+}
+

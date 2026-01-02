@@ -7,26 +7,35 @@
 @inject SchedulerMVP.Services.IScheduleTemplateService TemplateService
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IEmailService EmailService
+@inject SchedulerMVP.Services.IModalService ModalService
 
 <div class="sa-panel" style="padding:16px; overflow-y: auto; overflow-x: hidden; padding-bottom: 64px;">
-    @if (isLoading)
-    {
-        <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 12px;">
-            <div style="width: 40px; height: 40px; border: 4px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: admin-spin 0.8s linear infinite;"></div>
-            <div style="font-size: 14px; color: #6b7280;">Läser in användare...</div>
-        </div>
-    }
-
-    <!-- Create User Button -->
-    <div style="display:flex; justify-content:flex-end; margin-bottom:20px;">
-        <button class="tb-btn" @onclick="OpenCreateUserModal">
-            <span class="material-symbols-outlined" style="font-size:18px;">add</span>
-            Skapa användare
-        </button>
+    <!-- Tab Navigation -->
+    <div class="nav-tabs" style="margin-bottom:20px;">
+        <button class="nav-tab @(activeTab == "users" ? "active" : "")" @onclick='() => SetActiveTab("users")'>Användare</button>
+        <button class="nav-tab @(activeTab == "modals" ? "active" : "")" @onclick='() => SetActiveTab("modals")'>Modaler</button>
     </div>
 
-    <!-- Users table -->
-    <h3 class="groups-table-title" style="margin-bottom:12px;">Användare</h3>
+    @if (activeTab == "users")
+    {
+        @if (isLoading)
+        {
+            <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border: 4px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: admin-spin 0.8s linear infinite;"></div>
+                <div style="font-size: 14px; color: #6b7280;">Läser in användare...</div>
+            </div>
+        }
+
+        <!-- Create User Button -->
+        <div style="display:flex; justify-content:flex-end; margin-bottom:20px;">
+            <button class="tb-btn" @onclick="OpenCreateUserModal">
+                <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+                Skapa användare
+            </button>
+        </div>
+
+        <!-- Users table -->
+        <h3 class="groups-table-title" style="margin-bottom:12px;">Användare</h3>
     <div class="groups-table-container">
         <table class="groups-table">
             <thead>
@@ -94,9 +103,73 @@
             </tbody>
         </table>
     </div>
+    }
+    else if (activeTab == "modals")
+    {
+        <!-- Modals tab content will be added here -->
+        <div style="display:flex; justify-content:flex-end; margin-bottom:20px;">
+            <button class="tb-btn" @onclick="OpenCreateModalModal">
+                <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+                Ny modal
+            </button>
+        </div>
+
+        <h3 class="groups-table-title" style="margin-bottom:12px;">Modaler</h3>
+        <div class="groups-table-container">
+            <table class="groups-table">
+                <thead>
+                    <tr>
+                        <th>Modalnamn</th>
+                        <th>Status</th>
+                        <th>Visningsdatum</th>
+                        <th>Läst av</th>
+                        <th style="width: 40px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var modal in modals)
+                    {
+                        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                        var isActive = modal.StartDate <= today && modal.EndDate >= today;
+                        var readCount = readCounts.ContainsKey(modal.Id) ? readCounts[modal.Id] : 0;
+                        <tr>
+                            <td>@modal.Title</td>
+                            <td>
+                                @if (isActive)
+                                {
+                                    <span style="display:inline-block; padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500; background:#d1fae5; color:#065f46; border:1px solid #6ee7b7;">Aktiv</span>
+                                }
+                                else
+                                {
+                                    <span style="display:inline-block; padding:4px 12px; border-radius:999px; font-size:12px; font-weight:500; background:#f3f4f6; color:#6b7280;">Inaktiv</span>
+                                }
+                            </td>
+                            <td>@modal.StartDate.ToString("yyyy-MM-dd") - @modal.EndDate.ToString("yyyy-MM-dd")</td>
+                            <td>@readCount</td>
+                            <td style="position:relative;">
+                                <button class="action-menu-trigger" @onclick="() => ToggleModalActionMenu(modal.Id)" @onclick:stopPropagation="true">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                                @if (modalActionMenuOpenForId == modal.Id)
+                                {
+                                    <div class="action-menu" @onclick:stopPropagation="true">
+                                        <button class="action-menu-item" @onclick="() => OpenEditModalModal(modal.Id)">Redigera</button>
+                                        <button class="action-menu-item" style="color:#dc2626;" @onclick="() => OpenDeleteModalModal(modal.Id)">Ta bort</button>
+                                    </div>
+                                    <div class="menu-overlay" @onclick="CloseModalActionMenu"></div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 </div>
 
 <CreateUserModal IsOpen="@createUserModalOpen" OnClose="CloseCreateUserModal" OnCreated="AfterUserCreated" />
+<ModalManageModal IsOpen="@(createModalModalOpen || editModalModalOpen)" OnClose="@(createModalModalOpen ? CloseCreateModalModal : CloseEditModalModal)" OnSaved="AfterModalSaved" ModalId="@editingModalId" />
+<ModalDeleteModal IsOpen="@deleteModalModalOpen" Modal="@(deletingModalId.HasValue ? modals.FirstOrDefault(m => m.Id == deletingModalId.Value) : null)" OnClose="CloseDeleteModalModal" OnDeleted="AfterModalDeleted" />
 
 <style>
     @@keyframes admin-spin {
@@ -227,12 +300,26 @@
     private HashSet<string> isProcessing = new();
     private Dictionary<string, string> processingAction = new();
     private string? actionMenuOpenForUserId;
+    
+    // Tab state
+    private string activeTab = "users";
+    
+    // Modals state
+    private List<Modal> modals = new();
+    private Dictionary<Guid, int> readCounts = new();
+    private bool createModalModalOpen = false;
+    private bool editModalModalOpen = false;
+    private bool deleteModalModalOpen = false;
+    private Guid? editingModalId = null;
+    private Guid? deletingModalId = null;
+    private Guid? modalActionMenuOpenForId = null;
 
     protected override async Task OnInitializedAsync()
     {
         UI.IsAdminPage = true;
         UI.PageTitle = "Admin";
         await LoadAsync();
+        await LoadModalsAsync();
     }
 
     public void Dispose()
@@ -485,5 +572,105 @@
             processingAction.Remove(userId);
             StateHasChanged();
         }
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        StateHasChanged();
+    }
+
+    private async Task LoadModalsAsync()
+    {
+        try
+        {
+            modals = await ModalService.GetAllModalsAsync();
+            readCounts.Clear();
+            foreach (var modal in modals)
+            {
+                readCounts[modal.Id] = await ModalService.GetReadCountAsync(modal.Id);
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid laddning av modaler: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private void OpenCreateModalModal()
+    {
+        editingModalId = null;
+        createModalModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void OpenEditModalModal(Guid modalId)
+    {
+        modalActionMenuOpenForId = null;
+        editingModalId = modalId;
+        editModalModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void OpenDeleteModalModal(Guid modalId)
+    {
+        modalActionMenuOpenForId = null;
+        deletingModalId = modalId;
+        deleteModalModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseCreateModalModal()
+    {
+        createModalModalOpen = false;
+        StateHasChanged();
+    }
+
+    private void CloseEditModalModal()
+    {
+        editModalModalOpen = false;
+        editingModalId = null;
+        StateHasChanged();
+    }
+
+    private void CloseDeleteModalModal()
+    {
+        deleteModalModalOpen = false;
+        deletingModalId = null;
+        StateHasChanged();
+    }
+
+    private async Task AfterModalSaved()
+    {
+        await LoadModalsAsync();
+        CloseCreateModalModal();
+        CloseEditModalModal();
+    }
+
+    private async Task AfterModalDeleted()
+    {
+        await LoadModalsAsync();
+        CloseDeleteModalModal();
+    }
+
+    private void ToggleModalActionMenu(Guid modalId)
+    {
+        if (modalActionMenuOpenForId == modalId)
+        {
+            modalActionMenuOpenForId = null;
+        }
+        else
+        {
+            modalActionMenuOpenForId = modalId;
+        }
+        StateHasChanged();
+    }
+
+    private void CloseModalActionMenu()
+    {
+        modalActionMenuOpenForId = null;
+        StateHasChanged();
     }
 }
