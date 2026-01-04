@@ -105,11 +105,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .OnDelete(DeleteBehavior.Cascade);
 
         // Explicitly configure table names for PostgreSQL (case-sensitive with quotes)
-        modelBuilder.Entity<Modal>()
-            .ToTable("Modals");
-
-        modelBuilder.Entity<ModalReadBy>()
-            .ToTable("ModalReadBy");
+        // Must match exactly how tables were created in SQL script
+        if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            modelBuilder.Entity<Modal>()
+                .ToTable("Modals", "public");
+            
+            modelBuilder.Entity<ModalReadBy>()
+                .ToTable("ModalReadBy", "public");
+        }
 
         // Performance indexes for Modals
         modelBuilder.Entity<Modal>()
