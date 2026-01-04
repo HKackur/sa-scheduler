@@ -16,10 +16,19 @@ public class ModalService : IModalService
     public async Task<List<Modal>> GetAllModalsAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        return await db.Modals
+        
+        // Debug: Log which database provider is being used
+        var provider = db.Database.ProviderName ?? "unknown";
+        Console.WriteLine($"[ModalService] GetAllModalsAsync - Using provider: {provider}");
+        
+        var modals = await db.Modals
             .AsNoTracking()
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync();
+        
+        Console.WriteLine($"[ModalService] GetAllModalsAsync - Found {modals.Count} modals");
+        
+        return modals;
     }
 
     public async Task<Modal?> GetModalByIdAsync(Guid id)
@@ -68,6 +77,11 @@ public class ModalService : IModalService
     public async Task<List<Modal>> GetActiveModalsForUserAsync(string userId)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
+        
+        // Debug: Log which database provider is being used
+        var provider = db.Database.ProviderName ?? "unknown";
+        Console.WriteLine($"[ModalService] GetActiveModalsForUserAsync - Using provider: {provider}, UserId: {userId}");
+        
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         
         // Optimized query: Get active modals that user hasn't read
@@ -78,6 +92,8 @@ public class ModalService : IModalService
             .Where(m => !db.ModalReadBy.Any(mrb => mrb.ModalId == m.Id && mrb.UserId == userId))
             .OrderBy(m => m.CreatedAt)
             .ToListAsync();
+        
+        Console.WriteLine($"[ModalService] GetActiveModalsForUserAsync - Found {activeModals.Count} active modals for user");
         
         return activeModals;
     }

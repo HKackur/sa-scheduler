@@ -196,6 +196,13 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? builder.Configuration["ConnectionStrings:DefaultConnection"]
     ?? builder.Configuration["ConnectionStrings__DefaultConnection"];
 
+// Also try Azure App Service specific format
+if (string.IsNullOrEmpty(connectionString))
+{
+    // Try Azure App Service connection string format
+    connectionString = builder.Configuration["DefaultConnection"];
+}
+
 // Connection string should be set correctly in Azure App Service
 // For Session pooler: use aws-1-eu-west-1.pooler.supabase.com:5432
 // For Transaction pooler: use aws-1-eu-west-1.pooler.supabase.com:6543
@@ -204,13 +211,23 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 // Log connection string status (without exposing password)
 if (string.IsNullOrEmpty(connectionString))
 {
-    Console.WriteLine("[ERROR] Connection string is null or empty!");
+    Console.WriteLine("[ERROR] Connection string is null or empty! Will use SQLite fallback.");
+    Console.WriteLine("[DEBUG] Available config keys:");
+    foreach (var key in builder.Configuration.AsEnumerable())
+    {
+        if (key.Key.Contains("Connection", StringComparison.OrdinalIgnoreCase) || 
+            key.Key.Contains("Database", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine($"[DEBUG]   {key.Key} = {(key.Value?.Length > 50 ? key.Value.Substring(0, 50) + "..." : key.Value)}");
+        }
+    }
 }
 else
 {
     var host = connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Host="))?.Replace("Host=", "") ?? "unknown";
     var connectionPort = connectionString.Split(';').FirstOrDefault(s => s.StartsWith("Port="))?.Replace("Port=", "") ?? "unknown";
     Console.WriteLine($"[INFO] Connection string found, Host: {host}, Port: {connectionPort}");
+    Console.WriteLine($"[INFO] Will use PostgreSQL (Supabase) database");
 }
 
 // Add ApplicationDbContext for Identity
