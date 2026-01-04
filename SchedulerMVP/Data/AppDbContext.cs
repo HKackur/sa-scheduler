@@ -104,6 +104,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(mrb => mrb.ModalId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Explicitly configure table names for PostgreSQL (case-sensitive with quotes)
+        modelBuilder.Entity<Modal>()
+            .ToTable("Modals");
+
+        modelBuilder.Entity<ModalReadBy>()
+            .ToTable("ModalReadBy");
+
         // Performance indexes for Modals
         modelBuilder.Entity<Modal>()
             .HasIndex(m => new { m.StartDate, m.EndDate });
