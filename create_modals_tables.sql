@@ -9,12 +9,12 @@ BEGIN
             "Id" TEXT NOT NULL PRIMARY KEY,
             "Title" VARCHAR(200) NOT NULL,
             "Content" TEXT NOT NULL,
-            "StartDate" TEXT NOT NULL,
-            "EndDate" TEXT NOT NULL,
+            "StartDate" DATE NOT NULL,
+            "EndDate" DATE NOT NULL,
             "LinkRoute" VARCHAR(200),
             "ButtonText" VARCHAR(50),
-            "CreatedAt" TEXT NOT NULL,
-            "UpdatedAt" TEXT NOT NULL
+            "CreatedAt" TIMESTAMP NOT NULL,
+            "UpdatedAt" TIMESTAMP NOT NULL
         );
         CREATE INDEX "IX_Modals_StartDate_EndDate" ON "Modals" ("StartDate", "EndDate");
         RAISE NOTICE 'Created Modals table';
@@ -34,7 +34,7 @@ BEGIN
             "Id" TEXT NOT NULL PRIMARY KEY,
             "ModalId" TEXT NOT NULL,
             "UserId" VARCHAR(450) NOT NULL,
-            "ReadAt" TEXT NOT NULL,
+            "ReadAt" TIMESTAMP NOT NULL,
             CONSTRAINT "FK_ModalReadBy_Modals_ModalId" FOREIGN KEY ("ModalId") REFERENCES "Modals" ("Id") ON DELETE CASCADE
         );
         CREATE INDEX "IX_ModalReadBy_ModalId_UserId" ON "ModalReadBy" ("ModalId", "UserId");

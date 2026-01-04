@@ -22,8 +22,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         base.OnModelCreating(modelBuilder);
 
-        // CRITICAL FIX: Configure Guid and DateOnly properties to work with TEXT columns in PostgreSQL
-        // This allows reading TEXT columns as Guid/DateOnly (for compatibility with SQLite migrations)
+        // CRITICAL FIX: Configure Guid properties to work with TEXT columns in PostgreSQL
+        // This allows reading TEXT columns as Guid (for compatibility with SQLite migrations)
+        // DateOnly and DateTime use native PostgreSQL types (DATE, TIMESTAMP) - no conversion needed
         if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
         {
             // Configure all Guid properties to use TEXT storage and string conversion
@@ -46,23 +47,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                             property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<Guid?, string>(
                                 v => v.HasValue ? v.Value.ToString() : null!,
                                 v => string.IsNullOrEmpty(v) ? null : Guid.Parse(v)));
-                        }
-                    }
-                    else if (property.ClrType == typeof(DateOnly) || property.ClrType == typeof(DateOnly?))
-                    {
-                        property.SetColumnType("text");
-                        // Use value converter to handle TEXT -> DateOnly conversion
-                        if (property.ClrType == typeof(DateOnly))
-                        {
-                            property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateOnly, string>(
-                                v => v.ToString("yyyy-MM-dd"),
-                                v => DateOnly.Parse(v)));
-                        }
-                        else // DateOnly?
-                        {
-                            property.SetValueConverter(new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateOnly?, string>(
-                                v => v.HasValue ? v.Value.ToString("yyyy-MM-dd") : null!,
-                                v => string.IsNullOrEmpty(v) ? null : DateOnly.Parse(v)));
                         }
                     }
                 }
