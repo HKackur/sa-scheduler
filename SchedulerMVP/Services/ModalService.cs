@@ -15,18 +15,44 @@ public class ModalService : IModalService
 
     public async Task<List<Modal>> GetAllModalsAsync()
     {
+        // #region agent log
+        try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A,B,C", location = "ModalService.cs:18", message = "GetAllModalsAsync entry", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
+        
         await using var db = await _dbFactory.CreateDbContextAsync();
         
-        // Debug: Log which database provider is being used
+        // #region agent log
         var provider = db.Database.ProviderName ?? "unknown";
-        Console.WriteLine($"[ModalService] GetAllModalsAsync - Using provider: {provider}");
+        try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A", location = "ModalService.cs:22", message = "Database provider", data = new { provider = provider }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
         
-        var modals = await db.Modals
-            .AsNoTracking()
-            .OrderByDescending(m => m.CreatedAt)
-            .ToListAsync();
+        List<Modal> modals;
+        try
+        {
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B,C", location = "ModalService.cs:28", message = "Before query Modals", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+            
+            modals = await db.Modals
+                .AsNoTracking()
+                .OrderByDescending(m => m.CreatedAt)
+                .ToListAsync();
+            
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "C", location = "ModalService.cs:33", message = "After query Modals", data = new { count = modals.Count, firstId = modals.FirstOrDefault()?.Id.ToString() ?? "null", firstTitle = modals.FirstOrDefault()?.Title ?? "null" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+        }
+        catch (Exception ex)
+        {
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "ModalService.cs:38", message = "Exception in GetAllModalsAsync", data = new { exceptionType = ex.GetType().Name, message = ex.Message, stackTrace = ex.StackTrace?.Substring(0, Math.Min(500, ex.StackTrace.Length ?? 0)) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+            throw;
+        }
         
-        Console.WriteLine($"[ModalService] GetAllModalsAsync - Found {modals.Count} modals");
+        // #region agent log
+        try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A,B,C", location = "ModalService.cs:45", message = "GetAllModalsAsync exit", data = new { count = modals.Count }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
         
         return modals;
     }
@@ -76,24 +102,42 @@ public class ModalService : IModalService
 
     public async Task<List<Modal>> GetActiveModalsForUserAsync(string userId)
     {
+        // #region agent log
+        try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "E", location = "ModalService.cs:79", message = "GetActiveModalsForUserAsync entry", data = new { userId = userId ?? "null", userIdLength = userId?.Length ?? 0 }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
+        
         await using var db = await _dbFactory.CreateDbContextAsync();
         
-        // Debug: Log which database provider is being used
         var provider = db.Database.ProviderName ?? "unknown";
-        Console.WriteLine($"[ModalService] GetActiveModalsForUserAsync - Using provider: {provider}, UserId: {userId}");
-        
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         
-        // Optimized query: Get active modals that user hasn't read
-        // Uses indexes on (StartDate, EndDate) and (ModalId, UserId)
-        var activeModals = await db.Modals
-            .AsNoTracking()
-            .Where(m => m.StartDate <= today && m.EndDate >= today)
-            .Where(m => !db.ModalReadBy.Any(mrb => mrb.ModalId == m.Id && mrb.UserId == userId))
-            .OrderBy(m => m.CreatedAt)
-            .ToListAsync();
+        // #region agent log
+        try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "A,E", location = "ModalService.cs:87", message = "Before query active modals", data = new { provider = provider, today = today.ToString(), userId = userId ?? "null" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
         
-        Console.WriteLine($"[ModalService] GetActiveModalsForUserAsync - Found {activeModals.Count} active modals for user");
+        List<Modal> activeModals;
+        try
+        {
+            // Optimized query: Get active modals that user hasn't read
+            // Uses indexes on (StartDate, EndDate) and (ModalId, UserId)
+            activeModals = await db.Modals
+                .AsNoTracking()
+                .Where(m => m.StartDate <= today && m.EndDate >= today)
+                .Where(m => !db.ModalReadBy.Any(mrb => mrb.ModalId == m.Id && mrb.UserId == userId))
+                .OrderBy(m => m.CreatedAt)
+                .ToListAsync();
+            
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "C,E", location = "ModalService.cs:96", message = "After query active modals", data = new { count = activeModals.Count, firstId = activeModals.FirstOrDefault()?.Id.ToString() ?? "null" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+        }
+        catch (Exception ex)
+        {
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "ModalService.cs:101", message = "Exception in GetActiveModalsForUserAsync", data = new { exceptionType = ex.GetType().Name, message = ex.Message, stackTrace = ex.StackTrace?.Substring(0, Math.Min(500, ex.StackTrace.Length ?? 0)) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+            throw;
+        }
         
         return activeModals;
     }

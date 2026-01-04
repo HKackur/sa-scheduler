@@ -95,17 +95,48 @@ else
 
     private async Task LoadModalsAsync()
     {
+        // #region agent log
+        try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D,E", location = "MainLayout.razor:96", message = "LoadModalsAsync entry", data = new { isLoginPage = _isLoginPage, modalsLoaded = _modalsLoaded }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+        // #endregion
+        
         if (_isLoginPage || _modalsLoaded)
+        {
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "MainLayout.razor:99", message = "LoadModalsAsync early return", data = new { reason = _isLoginPage ? "isLoginPage" : "modalsLoaded" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
             return;
+        }
 
         try
         {
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "E", location = "MainLayout.razor:105", message = "Before GetCurrentUserIdAsync", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+            
             var userId = await UserContext.GetCurrentUserIdAsync();
+            
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "E", location = "MainLayout.razor:108", message = "After GetCurrentUserIdAsync", data = new { userId = userId ?? "null", userIdLength = userId?.Length ?? 0, isEmpty = string.IsNullOrEmpty(userId) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
+            
             if (string.IsNullOrEmpty(userId))
+            {
+                // #region agent log
+                try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "E", location = "MainLayout.razor:111", message = "LoadModalsAsync return - no userId", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+                // #endregion
                 return;
+            }
+
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "MainLayout.razor:116", message = "Before GetActiveModalsForUserAsync", data = new { userId = userId }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
 
             // Get active modals for user (optimized query with indexes)
             var activeModals = await ModalService.GetActiveModalsForUserAsync(userId);
+            
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "C,D", location = "MainLayout.razor:121", message = "After GetActiveModalsForUserAsync", data = new { count = activeModals.Count, firstId = activeModals.FirstOrDefault()?.Id.ToString() ?? "null" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
             
             _pendingModals = activeModals;
             _modalsLoaded = true;
@@ -115,10 +146,17 @@ else
             {
                 _currentModal = _pendingModals[0];
                 StateHasChanged();
+                
+                // #region agent log
+                try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "D", location = "MainLayout.razor:128", message = "Modal set to show", data = new { modalId = _currentModal?.Id.ToString() ?? "null", modalTitle = _currentModal?.Title ?? "null" }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+                // #endregion
             }
         }
         catch (Exception ex)
         {
+            // #region agent log
+            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "MainLayout.razor:135", message = "LoadModalsAsync exception", data = new { exceptionType = ex.GetType().Name, message = ex.Message, stackTrace = ex.StackTrace?.Substring(0, Math.Min(500, ex.StackTrace.Length ?? 0)) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            // #endregion
             Console.WriteLine($"[MainLayout] Error loading modals: {ex.Message}");
         }
     }
