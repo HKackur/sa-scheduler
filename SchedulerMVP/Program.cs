@@ -1265,9 +1265,22 @@ app.MapGet("/health", async (HttpContext context) =>
         
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         string dbError = null;
+        string dbProvider = null;
+        int modalCount = 0;
         try
         {
             var canConnect = await db.Database.CanConnectAsync();
+            dbProvider = db.Database.ProviderName ?? "unknown";
+            
+            // Try to count modals
+            try
+            {
+                modalCount = await db.Modals.CountAsync();
+            }
+            catch (Exception ex)
+            {
+                dbError = $"Can connect but error reading Modals: {ex.Message}";
+            }
         }
         catch (Exception ex)
         {
@@ -1291,8 +1304,13 @@ app.MapGet("/health", async (HttpContext context) =>
         { 
             status = "healthy",
             database = dbError == null ? "connected" : $"disconnected: {dbError}",
+            databaseProvider = dbProvider,
+            modalCount = modalCount,
             identityDb = identityError == null ? "connected" : $"disconnected: {identityError}",
             connStringFound = !string.IsNullOrEmpty(connString1) || !string.IsNullOrEmpty(connString2) || !string.IsNullOrEmpty(connString3),
+            connString1 = !string.IsNullOrEmpty(connString1),
+            connString2 = !string.IsNullOrEmpty(connString2),
+            connString3 = !string.IsNullOrEmpty(connString3),
             timestamp = DateTime.UtcNow
         });
     }
