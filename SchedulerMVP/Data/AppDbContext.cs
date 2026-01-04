@@ -107,6 +107,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         // Explicitly configure table names for PostgreSQL (case-sensitive with quotes)
         // Must match exactly how tables were created in SQL script
+        // DateOnly and DateTime properties use native PostgreSQL types (DATE, TIMESTAMP)
         if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
         {
             modelBuilder.Entity<Modal>()
