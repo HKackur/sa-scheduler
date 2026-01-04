@@ -192,18 +192,19 @@ builder.Services.AddServerSideBlazor(options =>
 });
 
 // Get connection string - Azure App Service exposes connection strings in multiple ways
-// 1. As Connection String (accessible via GetConnectionString or ConnectionStrings:Name)
-// 2. As App Setting with double underscore (ConnectionStrings__Name)
-// 3. Directly as app setting (Name)
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+// Priority order (Azure App Service specific):
+// 1. App Setting with double underscore (ConnectionStrings__DefaultConnection) - Most reliable in Azure
+// 2. Connection String type (GetConnectionString) - May not work correctly in all Azure scenarios
+// 3. App Setting with colon (ConnectionStrings:DefaultConnection)
+// 4. Direct app setting (DefaultConnection)
+var connectionString = builder.Configuration["ConnectionStrings__DefaultConnection"];
 if (string.IsNullOrEmpty(connectionString))
 {
-    connectionString = builder.Configuration["ConnectionStrings:DefaultConnection"];
+    connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 }
 if (string.IsNullOrEmpty(connectionString))
 {
-    // Azure App Service uses double underscore for nested config
-    connectionString = builder.Configuration["ConnectionStrings__DefaultConnection"];
+    connectionString = builder.Configuration["ConnectionStrings:DefaultConnection"];
 }
 if (string.IsNullOrEmpty(connectionString))
 {
