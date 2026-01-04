@@ -982,7 +982,7 @@ _ = Task.Run(async () =>
                         logger.LogInformation("✅ Checked/added StandardDisplayColor column to GroupTypes table (PostgreSQL)");
                         
                         // Create Modals table if it doesn't exist (PostgreSQL)
-                        // Note: PostgreSQL stores unquoted table names in lowercase, but quoted names are case-sensitive
+                        // Use native DATE and TIMESTAMP types for better performance and type safety
                         await context.Database.ExecuteSqlRawAsync(@"
                             DO $$ 
                             BEGIN 
@@ -994,17 +994,27 @@ _ = Task.Run(async () =>
                                         ""Id"" TEXT NOT NULL PRIMARY KEY,
                                         ""Title"" VARCHAR(200) NOT NULL,
                                         ""Content"" TEXT NOT NULL,
-                                        ""StartDate"" TEXT NOT NULL,
-                                        ""EndDate"" TEXT NOT NULL,
+                                        ""StartDate"" DATE NOT NULL,
+                                        ""EndDate"" DATE NOT NULL,
                                         ""LinkRoute"" VARCHAR(200),
                                         ""ButtonText"" VARCHAR(50),
-                                        ""CreatedAt"" TEXT NOT NULL,
-                                        ""UpdatedAt"" TEXT NOT NULL
+                                        ""CreatedAt"" TIMESTAMP NOT NULL,
+                                        ""UpdatedAt"" TIMESTAMP NOT NULL
                                     );
                                     CREATE INDEX ""IX_Modals_StartDate_EndDate"" ON ""Modals"" (""StartDate"", ""EndDate"");
                                     RAISE NOTICE 'Created Modals table';
                                 ELSE
-                                    RAISE NOTICE 'Modals table already exists';
+                                    -- Table exists, check if we need to alter columns from TEXT to DATE/TIMESTAMP
+                                    IF EXISTS (
+                                        SELECT 1 FROM information_schema.columns 
+                                        WHERE table_schema = 'public' AND table_name = 'Modals' AND column_name = 'StartDate' AND data_type = 'text'
+                                    ) THEN
+                                        ALTER TABLE ""Modals"" ALTER COLUMN ""StartDate"" TYPE DATE USING ""StartDate""::DATE;
+                                        ALTER TABLE ""Modals"" ALTER COLUMN ""EndDate"" TYPE DATE USING ""EndDate""::DATE;
+                                        ALTER TABLE ""Modals"" ALTER COLUMN ""CreatedAt"" TYPE TIMESTAMP USING ""CreatedAt""::TIMESTAMP;
+                                        ALTER TABLE ""Modals"" ALTER COLUMN ""UpdatedAt"" TYPE TIMESTAMP USING ""UpdatedAt""::TIMESTAMP;
+                                        RAISE NOTICE 'Altered Modals table columns to DATE/TIMESTAMP';
+                                    END IF;
                                 END IF;
                             END $$;
                         ");
@@ -1021,13 +1031,20 @@ _ = Task.Run(async () =>
                                         ""Id"" TEXT NOT NULL PRIMARY KEY,
                                         ""ModalId"" TEXT NOT NULL,
                                         ""UserId"" VARCHAR(450) NOT NULL,
-                                        ""ReadAt"" TEXT NOT NULL,
+                                        ""ReadAt"" TIMESTAMP NOT NULL,
                                         CONSTRAINT ""FK_ModalReadBy_Modals_ModalId"" FOREIGN KEY (""ModalId"") REFERENCES ""Modals"" (""Id"") ON DELETE CASCADE
                                     );
                                     CREATE INDEX ""IX_ModalReadBy_ModalId_UserId"" ON ""ModalReadBy"" (""ModalId"", ""UserId"");
                                     RAISE NOTICE 'Created ModalReadBy table';
                                 ELSE
-                                    RAISE NOTICE 'ModalReadBy table already exists';
+                                    -- Table exists, check if we need to alter ReadAt column
+                                    IF EXISTS (
+                                        SELECT 1 FROM information_schema.columns 
+                                        WHERE table_schema = 'public' AND table_name = 'ModalReadBy' AND column_name = 'ReadAt' AND data_type = 'text'
+                                    ) THEN
+                                        ALTER TABLE ""ModalReadBy"" ALTER COLUMN ""ReadAt"" TYPE TIMESTAMP USING ""ReadAt""::TIMESTAMP;
+                                        RAISE NOTICE 'Altered ModalReadBy ReadAt column to TIMESTAMP';
+                                    END IF;
                                 END IF;
                             END $$;
                         ");
