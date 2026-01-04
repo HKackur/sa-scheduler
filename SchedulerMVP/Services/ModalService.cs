@@ -45,7 +45,7 @@ public class ModalService : IModalService
         catch (Exception ex)
         {
             // #region agent log
-            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "ModalService.cs:38", message = "Exception in GetAllModalsAsync", data = new { exceptionType = ex.GetType().Name, message = ex.Message, stackTrace = ex.StackTrace?.Substring(0, Math.Min(500, ex.StackTrace.Length ?? 0)) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            try { var st = ex.StackTrace ?? ""; System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "ModalService.cs:38", message = "Exception in GetAllModalsAsync", data = new { exceptionType = ex.GetType().Name, message = ex.Message, stackTrace = st.Length > 500 ? st.Substring(0, 500) : st }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
             // #endregion
             throw;
         }
@@ -134,7 +134,7 @@ public class ModalService : IModalService
         catch (Exception ex)
         {
             // #region agent log
-            try { System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "ModalService.cs:101", message = "Exception in GetActiveModalsForUserAsync", data = new { exceptionType = ex.GetType().Name, message = ex.Message, stackTrace = ex.StackTrace?.Substring(0, Math.Min(500, ex.StackTrace.Length ?? 0)) }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
+            try { var st = ex.StackTrace ?? ""; System.IO.File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", System.Text.Json.JsonSerializer.Serialize(new { sessionId = "debug-session", runId = "run1", hypothesisId = "B", location = "ModalService.cs:101", message = "Exception in GetActiveModalsForUserAsync", data = new { exceptionType = ex.GetType().Name, message = ex.Message, stackTrace = st.Length > 500 ? st.Substring(0, 500) : st }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) + "\n"); } catch { }
             // #endregion
             throw;
         }
