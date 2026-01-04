@@ -191,15 +191,23 @@ builder.Services.AddServerSideBlazor(options =>
     options.MaxBufferedUnacknowledgedRenderBatches = 30; // Increased from 20 for better performance
 });
 
-// Get connection string - try both Azure Connection String format and App Settings format
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? builder.Configuration["ConnectionStrings:DefaultConnection"]
-    ?? builder.Configuration["ConnectionStrings__DefaultConnection"];
-
-// Also try Azure App Service specific format
+// Get connection string - Azure App Service exposes connection strings in multiple ways
+// 1. As Connection String (accessible via GetConnectionString or ConnectionStrings:Name)
+// 2. As App Setting with double underscore (ConnectionStrings__Name)
+// 3. Directly as app setting (Name)
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrEmpty(connectionString))
 {
-    // Try Azure App Service connection string format
+    connectionString = builder.Configuration["ConnectionStrings:DefaultConnection"];
+}
+if (string.IsNullOrEmpty(connectionString))
+{
+    // Azure App Service uses double underscore for nested config
+    connectionString = builder.Configuration["ConnectionStrings__DefaultConnection"];
+}
+if (string.IsNullOrEmpty(connectionString))
+{
+    // Try direct app setting
     connectionString = builder.Configuration["DefaultConnection"];
 }
 
