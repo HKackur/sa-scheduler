@@ -1251,6 +1251,50 @@ _ = Task.Run(async () =>
     }
 });
 
+// --- Debug endpoint for modals ---
+app.MapGet("/debug/modals", async (HttpContext context) =>
+{
+    try
+    {
+        var scope = context.RequestServices.CreateScope();
+        var modalService = scope.ServiceProvider.GetRequiredService<IModalService>();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        
+        var provider = db.Database.ProviderName ?? "unknown";
+        var allModals = await modalService.GetAllModalsAsync();
+        var canConnect = await db.Database.CanConnectAsync();
+        
+        // Try to query directly
+        int directCount = 0;
+        string? directError = null;
+        try
+        {
+            directCount = await db.Modals.CountAsync();
+        }
+        catch (Exception ex)
+        {
+            directError = $"{ex.GetType().Name}: {ex.Message}";
+        }
+        
+        scope.Dispose();
+        
+        return Results.Ok(new 
+        { 
+            databaseProvider = provider,
+            canConnect = canConnect,
+            modalsFromService = allModals.Count,
+            modalsFromDirectQuery = directCount,
+            directQueryError = directError,
+            modals = allModals.Select(m => new { m.Id, m.Title, m.StartDate, m.EndDate }).ToList(),
+            timestamp = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Debug endpoint failed: {ex.Message}\n{ex.StackTrace}");
+    }
+});
+
 // --- Health check endpoint ---
 app.MapGet("/health", async (HttpContext context) =>
 {
