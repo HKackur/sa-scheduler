@@ -51,6 +51,13 @@ public class PlaceService : IPlaceService
             .OrderBy(p => p.Name)
             .ToListAsync();
 
+        // Debug: Log query results
+        Console.WriteLine($"[PlaceService] GetPlacesAsync - UserId: {userId ?? "null"}, Found {places.Count} places");
+        if (places.Count > 0)
+        {
+            Console.WriteLine($"[PlaceService] First place: {places[0].Name}, UserId: {places[0].UserId}");
+        }
+
         // Cache for 60 seconds
         _cache.Set(cacheKey, places, TimeSpan.FromSeconds(CacheTTLSeconds));
 
