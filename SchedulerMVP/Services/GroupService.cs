@@ -77,8 +77,10 @@ public class GroupService : IGroupService
         db.Groups.Add(group);
         await db.SaveChangesAsync();
         
-        // Invalidate cache
-        InvalidateGroupsCache();
+        // Invalidate cache for this user
+        var userId = await _userContext.GetCurrentUserIdAsync();
+        var cacheKey = $"groups:{userId ?? "anonymous"}";
+        _cache.Remove(cacheKey);
         
         return group;
     }
@@ -89,8 +91,10 @@ public class GroupService : IGroupService
         db.Groups.Update(group);
         await db.SaveChangesAsync();
         
-        // Invalidate cache
-        InvalidateGroupsCache();
+        // Invalidate cache for this user
+        var userId = await _userContext.GetCurrentUserIdAsync();
+        var cacheKey = $"groups:{userId ?? "anonymous"}";
+        _cache.Remove(cacheKey);
         
         return group;
     }
@@ -104,17 +108,11 @@ public class GroupService : IGroupService
             db.Groups.Remove(group);
             await db.SaveChangesAsync();
             
-            // Invalidate cache
-            InvalidateGroupsCache();
+            // Invalidate cache for this user
+            var userId = await _userContext.GetCurrentUserIdAsync();
+            var cacheKey = $"groups:{userId ?? "anonymous"}";
+            _cache.Remove(cacheKey);
         }
-    }
-
-    private void InvalidateGroupsCache()
-    {
-        // Cache will expire naturally (60s TTL) or be refreshed on next request
-        // Since we cache by userId, we'd need to track all keys to invalidate precisely
-        // For simplicity, we let cache expire naturally - this is acceptable for write-heavy workloads
-        // In a write-heavy scenario, consider using cache versioning or distributed cache tags
     }
 }
 
