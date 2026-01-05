@@ -38,7 +38,12 @@ public class PlaceService : IPlaceService
         // All users (including admin) only see their own places
         if (!string.IsNullOrEmpty(userId))
         {
-            query = query.Where(p => p.UserId == userId);
+            query = query.Where(p => p.UserId != null && p.UserId == userId);
+        }
+        else
+        {
+            // If no userId, only show places with null UserId (backward compatibility)
+            query = query.Where(p => p.UserId == null);
         }
 
         var places = await query
@@ -84,8 +89,9 @@ public class PlaceService : IPlaceService
         db.Places.Add(place);
         await db.SaveChangesAsync();
         
-        // Invalidate places cache
-        InvalidatePlacesCache();
+        // Invalidate places cache for this user
+        var cacheKey = $"places:{userId ?? "anonymous"}";
+        _cache.Remove(cacheKey);
         
         return place;
     }
@@ -121,21 +127,13 @@ public class PlaceService : IPlaceService
 
         await db.SaveChangesAsync();
         
-        // Invalidate places cache
-        InvalidatePlacesCache();
+        // Invalidate places cache for this user
+        var cacheKey = $"places:{userId ?? "anonymous"}";
+        _cache.Remove(cacheKey);
         // Also invalidate areas cache for this place
         _cache.Remove($"areas:place:{place.Id}");
         
         return existingPlace;
-    }
-
-    private void InvalidatePlacesCache()
-    {
-        // Remove all places cache entries - clear all cache keys that start with "places:"
-        // This ensures old cache entries with isAdmin are cleared
-        var cacheKeys = new List<string>();
-        // Note: IMemoryCache doesn't support enumeration, so we rely on TTL expiration
-        // Cache will expire naturally (60s TTL) or be refreshed on next request
     }
 
     public async Task DeletePlaceAsync(Guid placeId)
@@ -185,7 +183,8 @@ public class PlaceService : IPlaceService
             await db.SaveChangesAsync();
             
             // Invalidate caches
-            InvalidatePlacesCache();
+            var cacheKey = $"places:{userId ?? "anonymous"}";
+            _cache.Remove(cacheKey);
             _cache.Remove($"areas:place:{placeId}");
         }
     }
