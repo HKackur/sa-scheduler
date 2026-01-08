@@ -2145,21 +2145,12 @@
     
     private async Task OnCalendarBookingClick(CalendarBooking booking, MouseEventArgs e)
     {
-        // #region agent log
-        await JSRuntime.InvokeVoidAsync("SchedulerMVP.logDebug", new { location = "WeekGrid.razor:2158", message = "OnCalendarBookingClick called", data = new { bookingId = booking.Id.ToString() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId = "E" });
-        // #endregion
         // Check if a resize operation just finished - if so, don't open popover
         try
         {
             var justFinishedResize = await JSRuntime.InvokeAsync<bool>("SchedulerMVP.checkJustFinishedResize");
-            // #region agent log
-            await JSRuntime.InvokeVoidAsync("SchedulerMVP.logDebug", new { location = "WeekGrid.razor:2166", message = "Resize check result", data = new { justFinishedResize = justFinishedResize }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId = "F" });
-            // #endregion
             if (justFinishedResize)
             {
-                // #region agent log
-                await JSRuntime.InvokeVoidAsync("SchedulerMVP.logDebug", new { location = "WeekGrid.razor:2170", message = "Resize just finished - not opening popover", data = new { }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId = "F" });
-                // #endregion
                 return; // Don't open popover if resize just finished
             }
         }
@@ -2168,9 +2159,6 @@
             // If JavaScript call fails, continue normally (allow popover to open)
         }
         
-        // #region agent log
-        await JSRuntime.InvokeVoidAsync("SchedulerMVP.logDebug", new { location = "WeekGrid.razor:2180", message = "Setting popover state", data = new { popoverX = e.ClientX, popoverY = e.ClientY }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId = "E" });
-        // #endregion
         popoverBooking = booking;
         popoverX = e.ClientX;
         popoverY = e.ClientY;
@@ -2181,15 +2169,9 @@
     [JSInvokable]
     public async Task OnCalendarBookingClickFromJS(string bookingId, double clientX, double clientY)
     {
-        // #region agent log
-        await JSRuntime.InvokeVoidAsync("SchedulerMVP.logDebug", new { location = "WeekGrid.razor:2170", message = "OnCalendarBookingClickFromJS called", data = new { bookingId = bookingId, weekBookingsCount = weekBookings.Count }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId = "E" });
-        // #endregion
         if (Guid.TryParse(bookingId, out var id))
         {
             var booking = weekBookings.FirstOrDefault(b => b.Id == id);
-            // #region agent log
-            await JSRuntime.InvokeVoidAsync("SchedulerMVP.logDebug", new { location = "WeekGrid.razor:2174", message = "Booking lookup result", data = new { found = booking != null, bookingId = id.ToString() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId = "E" });
-            // #endregion
             if (booking != null)
             {
                 await OnCalendarBookingClick(booking, new MouseEventArgs { ClientX = clientX, ClientY = clientY });
@@ -2200,15 +2182,9 @@
     [JSInvokable]
     public async Task OnTemplateClickFromJS(string templateId, double clientX, double clientY)
     {
-        // #region agent log
-        await JSRuntime.InvokeVoidAsync("SchedulerMVP.logDebug", new { location = "WeekGrid.razor:2183", message = "OnTemplateClickFromJS called", data = new { templateId = templateId, allTemplatesCount = allTemplates.Count }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId = "E" });
-        // #endregion
         if (Guid.TryParse(templateId, out var id))
         {
             var template = allTemplates.FirstOrDefault(t => t.Id == id);
-            // #region agent log
-            await JSRuntime.InvokeVoidAsync("SchedulerMVP.logDebug", new { location = "WeekGrid.razor:2187", message = "Template lookup result", data = new { found = template != null, templateId = id.ToString() }, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId = "E" });
-            // #endregion
             if (template != null)
             {
                 await OnTemplateClick(template, new MouseEventArgs { ClientX = clientX, ClientY = clientY });
