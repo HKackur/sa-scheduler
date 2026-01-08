@@ -1620,7 +1620,10 @@ var SchedulerMVP = {
     resizeState: null,
     
     // Flag to track if resize just finished (prevents popover from opening)
-    justFinishedResize: false
+    justFinishedResize: false,
+    
+    // Flag to track if drag is in progress (prevents popover from opening after drag)
+    isDragging: false
 };
 
 
