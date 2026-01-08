@@ -82,6 +82,35 @@ var SchedulerMVP = {
         retryCount = retryCount || 0;
         const maxRetries = 10; // Max 10 retries = ~2 seconds total
         
+        // CRITICAL: Ensure isDragging is initialized on every init (safety for production)
+        if (typeof SchedulerMVP.isDragging === 'undefined') {
+            SchedulerMVP.isDragging = false;
+        }
+        
+        // CRITICAL: Add global mouseup listener to reset isDragging if drag is aborted
+        // This handles cases where handleDragEnd might not fire (e.g., mouse released outside window)
+        if (!SchedulerMVP._dragCleanupListener) {
+            const globalMouseUpHandler = function(e) {
+                // Only reset if we're actually dragging and not over a drop zone
+                // handleDragEnd will reset it normally, this is just a safety net
+                if (SchedulerMVP.isDragging === true && !e.target.closest('.day-content')) {
+                    // Delay to allow handleDragEnd to fire first if it's going to
+                    setTimeout(function() {
+                        // Only reset if still dragging (handleDragEnd should have reset it by now)
+                        if (SchedulerMVP.isDragging === true) {
+                            SchedulerMVP.isDragging = false;
+                            // Also remove dragging class from any blocks
+                            document.querySelectorAll('.booking-block.dragging').forEach(function(block) {
+                                block.classList.remove('dragging');
+                            });
+                        }
+                    }, 200);
+                }
+            };
+            document.addEventListener('mouseup', globalMouseUpHandler, true);
+            SchedulerMVP._dragCleanupListener = globalMouseUpHandler;
+        }
+        
         try {
             // Check if DOM elements exist - critical for production where rendering can be delayed
             var bookingBlocks = document.querySelectorAll('.booking-block');
@@ -203,6 +232,11 @@ var SchedulerMVP = {
             return; // Not a booking block
         }
         
+        // CRITICAL: Ensure isDragging is always initialized (safety check for production)
+        if (typeof SchedulerMVP.isDragging === 'undefined') {
+            SchedulerMVP.isDragging = false;
+        }
+        
         // CRITICAL: If drag just happened, prevent click from firing
         // This prevents popover from opening after drag
         if (SchedulerMVP.isDragging || bookingBlock.classList.contains('dragging')) {
@@ -265,6 +299,11 @@ var SchedulerMVP = {
         if (!bookingBlock) {
             e.preventDefault();
             return false;
+        }
+        
+        // CRITICAL: Ensure isDragging is always initialized (safety check for production)
+        if (typeof SchedulerMVP.isDragging === 'undefined') {
+            SchedulerMVP.isDragging = false;
         }
         
         // CRITICAL: Mark that drag is in progress to prevent refreshDragDrop from removing listeners
@@ -428,6 +467,7 @@ var SchedulerMVP = {
         }
 
         // CRITICAL: Mark that drag is finished - allow refreshDragDrop again
+        // Always reset, even if isDragging was undefined (safety for production)
         SchedulerMVP.isDragging = false;
 
         // Clean up floating drag element

@@ -20,7 +20,10 @@
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="alternate icon" type="image/png" href="favicon.png" />
     <!-- Build version for deploy detection - update this timestamp on each deploy -->
-    <meta name="app-version" content="@DateTime.UtcNow.ToString("yyyyMMddHHmmss")" />
+    @{
+        var appVersion = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+    }
+    <meta name="app-version" content="@appVersion" />
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
 </head>
 <body>
@@ -42,7 +45,7 @@
         </div>
     </div>
 
-    <script src="js/dragdrop.js"></script>
+    <script src="js/dragdrop.js?v=@DateTime.UtcNow.ToString("yyyyMMddHHmmss")"></script>
     <script src="js/blazor-connection.js"></script>
     <script src="js/deploy-notification.js"></script>
     <script src="js/list-print-export.js"></script>
