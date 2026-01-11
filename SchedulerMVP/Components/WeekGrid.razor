@@ -643,6 +643,7 @@
 
             // CRITICAL: Use async version to avoid blocking and improve performance
             var currentUserId = await UserContext.GetCurrentUserIdAsync();
+            var currentClubId = await UserContext.GetCurrentUserClubIdAsync();
             var currentIsAdmin = await UserContext.IsAdminAsync();
 
         if (!UI.IsCalendarViewMode)
@@ -662,10 +663,15 @@
                     var templateQuery = db.ScheduleTemplates
                         .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId));
                     
-                    // Filter by user ownership
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    // Filter by club (non-admin users see only their club's templates)
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
+                        templateQuery = templateQuery.Where(t => t.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                        templateQuery = templateQuery.Where(t => t.ClubId == null);
                     }
                     
                     templateId = await templateQuery
@@ -681,9 +687,14 @@
                 {
                     // Verify template ownership before checking if it contains the group
                     var templateOwnershipQuery = db.ScheduleTemplates.Where(t => t.Id == templateId);
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        templateOwnershipQuery = templateOwnershipQuery.Where(t => t.UserId == currentUserId);
+                        templateOwnershipQuery = templateOwnershipQuery.Where(t => t.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                        templateOwnershipQuery = templateOwnershipQuery.Where(t => t.ClubId == null);
                     }
                     var templateExists = await templateOwnershipQuery.AnyAsync();
                     
@@ -703,10 +714,15 @@
                             var templateQuery = db.ScheduleTemplates
                                 .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId));
                             
-                            // Filter by user ownership
-                            if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                            // Filter by club (non-admin users see only their club's templates)
+                            if (!currentIsAdmin && currentClubId.HasValue)
                             {
-                                templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
+                                templateQuery = templateQuery.Where(t => t.ClubId == currentClubId.Value);
+                            }
+                            else if (!currentIsAdmin && !currentClubId.HasValue)
+                            {
+                                // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                                templateQuery = templateQuery.Where(t => t.ClubId == null);
                             }
                             
                             templateId = await templateQuery
@@ -737,10 +753,15 @@
                             .ThenInclude(bt => bt.Group)
                         .Where(t => t.Id == templateId);
                     
-                    // Filter by user ownership
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    // Filter by club (non-admin users see only their club's templates)
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
+                        templateQuery = templateQuery.Where(t => t.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                        templateQuery = templateQuery.Where(t => t.ClubId == null);
                     }
                     
                     var templateEntity = await templateQuery.FirstOrDefaultAsync();
@@ -756,10 +777,17 @@
                             .Where(bt => bt.GroupId == filteredGroupId)
                             .ToList();
                         
-                        if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                        if (!currentIsAdmin && currentClubId.HasValue)
                         {
                             groupTemplates = groupTemplates
-                                .Where(bt => bt.Group != null && bt.Group.UserId == currentUserId)
+                                .Where(bt => bt.Group != null && bt.Group.ClubId == currentClubId.Value)
+                                .ToList();
+                        }
+                        else if (!currentIsAdmin && !currentClubId.HasValue)
+                        {
+                            // User without club sees nothing (backward compatibility: show groups with null ClubId during migration)
+                            groupTemplates = groupTemplates
+                                .Where(bt => bt.Group != null && bt.Group.ClubId == null)
                                 .ToList();
                         }
 
@@ -806,10 +834,15 @@
                     var templateQuery = db.ScheduleTemplates
                         .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId));
                     
-                    // Filter by user ownership
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    // Filter by club (non-admin users see only their club's templates)
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
+                        templateQuery = templateQuery.Where(t => t.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                        templateQuery = templateQuery.Where(t => t.ClubId == null);
                     }
                     
                     templateId = await templateQuery
@@ -825,9 +858,14 @@
                 {
                     // Verify template ownership before checking if it contains the group
                     var templateOwnershipQuery = db.ScheduleTemplates.Where(t => t.Id == templateId);
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        templateOwnershipQuery = templateOwnershipQuery.Where(t => t.UserId == currentUserId);
+                        templateOwnershipQuery = templateOwnershipQuery.Where(t => t.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                        templateOwnershipQuery = templateOwnershipQuery.Where(t => t.ClubId == null);
                     }
                     var templateExists = await templateOwnershipQuery.AnyAsync();
                     
@@ -847,10 +885,15 @@
                             var templateQuery = db.ScheduleTemplates
                                 .Where(t => t.Bookings.Any(bt => bt.GroupId == filteredGroupId));
                             
-                            // Filter by user ownership
-                            if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                            // Filter by club (non-admin users see only their club's templates)
+                            if (!currentIsAdmin && currentClubId.HasValue)
                             {
-                                templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
+                                templateQuery = templateQuery.Where(t => t.ClubId == currentClubId.Value);
+                            }
+                            else if (!currentIsAdmin && !currentClubId.HasValue)
+                            {
+                                // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                                templateQuery = templateQuery.Where(t => t.ClubId == null);
                             }
                             
                             templateId = await templateQuery
@@ -881,10 +924,15 @@
                             .ThenInclude(bt => bt.Group)
                         .Where(t => t.Id == templateId);
                     
-                    // Filter by user ownership
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    // Filter by club (non-admin users see only their club's templates)
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        templateQuery = templateQuery.Where(t => t.UserId == currentUserId);
+                        templateQuery = templateQuery.Where(t => t.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                        templateQuery = templateQuery.Where(t => t.ClubId == null);
                     }
                     
                     var templateEntity = await templateQuery.FirstOrDefaultAsync();
@@ -900,11 +948,18 @@
                             .Where(bt => bt.GroupId == filteredGroupId)
                             .ToList();
                         
-                        // Additional filter: ensure group belongs to current user
-                        if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                        // Additional filter: ensure group belongs to current user's club
+                        if (!currentIsAdmin && currentClubId.HasValue)
                         {
                             groupTemplates = groupTemplates
-                                .Where(bt => bt.Group != null && bt.Group.UserId == currentUserId)
+                                .Where(bt => bt.Group != null && bt.Group.ClubId == currentClubId.Value)
+                                .ToList();
+                        }
+                        else if (!currentIsAdmin && !currentClubId.HasValue)
+                        {
+                            // User without club sees nothing (backward compatibility: show groups with null ClubId during migration)
+                            groupTemplates = groupTemplates
+                                .Where(bt => bt.Group != null && bt.Group.ClubId == null)
                                 .ToList();
                         }
 
@@ -960,9 +1015,14 @@
                             .ThenInclude(a => a.Place)
                             .AsNoTracking();
 
-                        if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                        if (!currentIsAdmin && currentClubId.HasValue)
                         {
-                            overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => bt.Group!.UserId == currentUserId);
+                            overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => bt.Group!.ClubId == currentClubId.Value);
+                        }
+                        else if (!currentIsAdmin && !currentClubId.HasValue)
+                        {
+                            // User without club sees nothing (backward compatibility: show templates with groups that have null ClubId during migration)
+                            overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => bt.Group!.ClubId == null);
                         }
 
                         // PERF: Run leaf count and template query in parallel
@@ -1013,9 +1073,14 @@
                             query = query.Where(bt => placeAreaIds.Contains(bt.AreaId));
                         }
 
-                        if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                        if (!currentIsAdmin && currentClubId.HasValue)
                         {
-                            query = query.Where(bt => bt.Group!.UserId == currentUserId);
+                            query = query.Where(bt => bt.Group!.ClubId == currentClubId.Value);
+                        }
+                        else if (!currentIsAdmin && !currentClubId.HasValue)
+                        {
+                            // User without club sees nothing (backward compatibility: show templates with groups that have null ClubId during migration)
+                            query = query.Where(bt => bt.Group!.ClubId == null);
                         }
 
                         var templates = await query
@@ -1060,9 +1125,14 @@
                     .ThenInclude(a => a.Place)
                     .AsNoTracking();
 
-                if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                if (!currentIsAdmin && currentClubId.HasValue)
                 {
-                    groupBookingsQuery = groupBookingsQuery.Where(c => c.Group.UserId == currentUserId);
+                    groupBookingsQuery = groupBookingsQuery.Where(c => c.Group.ClubId == currentClubId.Value);
+                }
+                else if (!currentIsAdmin && !currentClubId.HasValue)
+                {
+                    // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
+                    groupBookingsQuery = groupBookingsQuery.Where(c => c.Group.ClubId == null);
                 }
 
                 var groupBookings = await groupBookingsQuery
@@ -1121,9 +1191,14 @@
                         .ThenInclude(a => a.Place)
                         .AsNoTracking();
 
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        overlappingBookingsQuery = overlappingBookingsQuery.Where(c => c.Group.UserId == currentUserId);
+                        overlappingBookingsQuery = overlappingBookingsQuery.Where(c => c.Group.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
+                        overlappingBookingsQuery = overlappingBookingsQuery.Where(c => c.Group.ClubId == null);
                     }
 
                     // PERF: Run leaf count and booking query in parallel
@@ -1182,9 +1257,14 @@
                         .ThenInclude(a => a.Place)
                         .AsNoTracking();
 
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        placeBookingsQuery = placeBookingsQuery.Where(c => c.Group.UserId == currentUserId);
+                        placeBookingsQuery = placeBookingsQuery.Where(c => c.Group.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
+                        placeBookingsQuery = placeBookingsQuery.Where(c => c.Group.ClubId == null);
                     }
 
                     var placeBookings = await placeBookingsQuery
@@ -1230,9 +1310,14 @@
                         .ThenInclude(a => a.Place)
                         .AsNoTracking();
 
-                    if (!currentIsAdmin && !string.IsNullOrEmpty(currentUserId))
+                    if (!currentIsAdmin && currentClubId.HasValue)
                     {
-                        allBookingsQuery = allBookingsQuery.Where(c => c.Group.UserId == currentUserId);
+                        allBookingsQuery = allBookingsQuery.Where(c => c.Group.ClubId == currentClubId.Value);
+                    }
+                    else if (!currentIsAdmin && !currentClubId.HasValue)
+                    {
+                        // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
+                        allBookingsQuery = allBookingsQuery.Where(c => c.Group.ClubId == null);
                     }
 
                     var allBookings = await allBookingsQuery

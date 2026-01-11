@@ -1,0 +1,247 @@
+@using Microsoft.AspNetCore.Identity
+@using SchedulerMVP.Data.Entities
+@using Microsoft.AspNetCore.Components
+
+@if (IsOpen)
+{
+    <div class="modal-container" @onclick="HandleOverlayClick">
+        <div class="bm-modal" @onclick:stopPropagation="true" style="width:700px;">
+            <div class="bm-header">
+                <h2 class="bm-title">Hantera användare i @(club?.Name ?? "förening")</h2>
+            </div>
+            <div class="bm-body">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="message message-error">
+                        @errorMessage
+                    </div>
+                }
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div class="message message-success">
+                        @successMessage
+                    </div>
+                }
+                
+                @if (club != null)
+                {
+                    <div style="margin-bottom:24px;">
+                        <h3 style="font-size:16px; font-weight:600; margin-bottom:12px; color:#111827;">Användare i föreningen</h3>
+                        @if (usersInClub.Any())
+                        {
+                            <div class="groups-table-container">
+                                <table class="groups-table">
+                                    <thead>
+                                        <tr>
+                                            <th>E-post</th>
+                                            <th style="width:120px;">Åtgärd</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var user in usersInClub)
+                                        {
+                                            <tr>
+                                                <td>@user.Email</td>
+                                                <td>
+                                                <button class="btn-outline" style="font-size:12px; padding:6px 12px;" @onclick="() => RemoveUserFromClub(user.Id)" disabled="@(isProcessing.Contains(user.Id))">
+                                                    @(isProcessing.Contains(user.Id) ? "Tar bort..." : "Ta bort")
+                                                </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p style="color:#6b7280; font-size:14px;">Inga användare i denna förening.</p>
+                        }
+                    </div>
+                    
+                    <div>
+                        <h3 style="font-size:16px; font-weight:600; margin-bottom:12px; color:#111827;">Lägg till användare</h3>
+                        <div class="groups-table-container">
+                            <table class="groups-table">
+                                <thead>
+                                    <tr>
+                                        <th>E-post</th>
+                                        <th style="width:120px;">Åtgärd</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var user in usersNotInClub)
+                                    {
+                                        <tr>
+                                            <td>@user.Email</td>
+                                            <td>
+                                                <button class="btn-primary" style="font-size:12px; padding:6px 12px;" @onclick="() => AddUserToClub(user.Id)" disabled="@(isProcessing.Contains(user.Id))">
+                                                    @(isProcessing.Contains(user.Id) ? "Lägger till..." : "Lägg till")
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="bm-actions">
+                <button type="button" @onclick="Close" class="btn-outline">Avbryt</button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px 28px 0 28px;border:1px solid #e6e7ea;border-radius:12px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{margin-bottom:20px}
+        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
+        .message{padding:12px;border-radius:6px;font-size:13px;margin-bottom:16px}
+        .message-error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+        .message-success{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+        .groups-table-container{background:#fff;border:1px solid #e5e7eb;border-radius:8px;overflow:visible !important;min-height:fit-content}
+        .groups-table{width:100%;border-collapse:collapse;display:table}
+        .groups-table thead{background:#F9FAFB}
+        .groups-table th{padding:12px 20px;text-align:left;font-size:12px;font-weight:600;color:#6B7280;border-bottom:1px solid #e5e7eb}
+        .groups-table tbody tr{border-bottom:1px solid #f3f4f6}
+        .groups-table tbody tr:last-child{border-bottom:none}
+        .groups-table td{padding:12px 20px;font-size:14px;color:#111827}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public Guid? ClubId { get; set; }
+    
+    [Inject] private SchedulerMVP.Services.IClubService ClubService { get; set; } = null!;
+    [Inject] private UserManager<ApplicationUser> UserManager { get; set; } = null!;
+    
+    private Club? club;
+    private List<ApplicationUser> usersInClub = new();
+    private List<ApplicationUser> usersNotInClub = new();
+    private HashSet<string> isProcessing = new();
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && ClubId.HasValue)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            errorMessage = null;
+            successMessage = null;
+            
+            club = await ClubService.GetClubAsync(ClubId!.Value);
+            if (club == null)
+            {
+                errorMessage = "Föreningen hittades inte.";
+                StateHasChanged();
+                return;
+            }
+            
+            usersInClub = await ClubService.GetUsersInClubAsync(ClubId.Value);
+            
+            var allUsers = UserManager.Users.ToList();
+            var usersInClubIds = new HashSet<string>(usersInClub.Select(u => u.Id));
+            usersNotInClub = allUsers.Where(u => !usersInClubIds.Contains(u.Id)).OrderBy(u => u.Email).ToList();
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid laddning: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task AddUserToClub(string userId)
+    {
+        if (!ClubId.HasValue) return;
+        if (isProcessing.Contains(userId)) return;
+        
+        isProcessing.Add(userId);
+        errorMessage = null;
+        successMessage = null;
+        StateHasChanged();
+        
+        try
+        {
+            // AssignUserToClubAsync already calls MigrateUserDataToClubAsync internally
+            await ClubService.AssignUserToClubAsync(userId, ClubId.Value);
+            successMessage = "Användaren har lagts till i föreningen och deras data har migrerats.";
+            await LoadDataAsync();
+            await OnSaved.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel: {ex.Message}";
+            StateHasChanged();
+        }
+        finally
+        {
+            isProcessing.Remove(userId);
+            StateHasChanged();
+        }
+    }
+
+    private async Task RemoveUserFromClub(string userId)
+    {
+        if (!ClubId.HasValue) return;
+        if (isProcessing.Contains(userId)) return;
+        
+        isProcessing.Add(userId);
+        errorMessage = null;
+        successMessage = null;
+        StateHasChanged();
+        
+        try
+        {
+            var user = await UserManager.FindByIdAsync(userId);
+            if (user != null)
+            {
+                user.ClubId = null;
+                await UserManager.UpdateAsync(user);
+                successMessage = "Användaren har tagits bort från föreningen.";
+                await LoadDataAsync();
+                await OnSaved.InvokeAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel: {ex.Message}";
+            StateHasChanged();
+        }
+        finally
+        {
+            isProcessing.Remove(userId);
+            StateHasChanged();
+        }
+    }
+
+    private void Close()
+    {
+        errorMessage = null;
+        successMessage = null;
+        usersInClub.Clear();
+        usersNotInClub.Clear();
+        club = null;
+        OnClose.InvokeAsync();
+    }
+
+    private void HandleOverlayClick()
+    {
+        Close();
+    }
+}
+

@@ -21,8 +21,9 @@ public class GroupService : IGroupService
 
     public async Task<List<Group>> GetGroupsAsync()
     {
-        var userId = await _userContext.GetCurrentUserIdAsync();
-        var cacheKey = $"groups:{userId ?? "anonymous"}";
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
+        var isAdmin = await _userContext.IsAdminAsync();
+        var cacheKey = $"groups:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}";
 
         // Try to get from cache
         if (_cache.TryGetValue(cacheKey, out List<Group>? cachedGroups) && cachedGroups != null)
@@ -34,10 +35,21 @@ public class GroupService : IGroupService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var query = db.Groups.AsQueryable();
 
-        // All users (including admin) only see their own groups
-        if (!string.IsNullOrEmpty(userId))
+        // Admin can see all groups, regular users see only their club's groups
+        if (isAdmin)
         {
-            query = query.Where(g => g.UserId == userId);
+            // Admin sees all groups
+            query = query.Where(g => g.ClubId != null);
+        }
+        else if (clubId.HasValue)
+        {
+            // Regular users see only their club's groups
+            query = query.Where(g => g.ClubId == clubId.Value);
+        }
+        else
+        {
+            // User without club sees nothing (backward compatibility: show groups with null ClubId during migration)
+            query = query.Where(g => g.ClubId == null);
         }
 
         var groups = await query
@@ -60,10 +72,11 @@ public class GroupService : IGroupService
         
         if (group == null) return null;
 
-        var userId = await _userContext.GetCurrentUserIdAsync();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
+        var isAdmin = await _userContext.IsAdminAsync();
 
-        // All users (including admin) can only access their own groups
-        if (!string.IsNullOrEmpty(userId) && group.UserId != userId && group.UserId != null)
+        // Admin can access all groups, regular users can only access their club's groups
+        if (!isAdmin && (!clubId.HasValue || group.ClubId != clubId.Value))
         {
             return null; // User doesn't have access
         }
@@ -74,13 +87,29 @@ public class GroupService : IGroupService
     public async Task<Group> CreateGroupAsync(Group group)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
+        
+        // Set ClubId for the current user's club
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
+        var userId = await _userContext.GetCurrentUserIdAsync();
+        
+        if (clubId.HasValue)
+        {
+            group.ClubId = clubId.Value;
+        }
+        
+        // Set UserId for audit/spårning (behålls för att visa vem som skapade)
+        if (!string.IsNullOrEmpty(userId))
+        {
+            group.UserId = userId;
+        }
+        
         db.Groups.Add(group);
         await db.SaveChangesAsync();
         
-        // Invalidate cache for this user
-        var userId = await _userContext.GetCurrentUserIdAsync();
-        var cacheKey = $"groups:{userId ?? "anonymous"}";
-        _cache.Remove(cacheKey);
+        // Invalidate cache
+        var isAdmin = await _userContext.IsAdminAsync();
+        _cache.Remove($"groups:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}");
+        _cache.Remove("groups:club:*"); // Invalidate all club caches
         
         return group;
     }
@@ -88,15 +117,37 @@ public class GroupService : IGroupService
     public async Task<Group> UpdateGroupAsync(Group group)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        db.Groups.Update(group);
+        
+        // Reload the entity to check access
+        var existingGroup = await db.Groups.FindAsync(group.Id);
+        if (existingGroup == null) throw new InvalidOperationException("Group not found");
+        
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
+        var isAdmin = await _userContext.IsAdminAsync();
+
+        // Admin can update all groups, regular users can only update their club's groups
+        if (!isAdmin && (!clubId.HasValue || existingGroup.ClubId != clubId.Value))
+        {
+            throw new UnauthorizedAccessException("You don't have permission to update this group");
+        }
+
+        // Update properties
+        existingGroup.Name = group.Name;
+        existingGroup.ColorHex = group.ColorHex;
+        existingGroup.GroupType = group.GroupType;
+        existingGroup.Source = group.Source;
+        existingGroup.DisplayColor = group.DisplayColor;
+        
+        // UserId behålls för audit/spårning (behålls som det är)
+        // ClubId should not be changed via update (it's set when creating)
+        
         await db.SaveChangesAsync();
         
-        // Invalidate cache for this user
-        var userId = await _userContext.GetCurrentUserIdAsync();
-        var cacheKey = $"groups:{userId ?? "anonymous"}";
-        _cache.Remove(cacheKey);
+        // Invalidate cache
+        _cache.Remove($"groups:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}");
+        _cache.Remove("groups:club:*"); // Invalidate all club caches
         
-        return group;
+        return existingGroup;
     }
 
     public async Task DeleteGroupAsync(Guid groupId)
@@ -105,13 +156,21 @@ public class GroupService : IGroupService
         var group = await db.Groups.FindAsync(groupId);
         if (group != null)
         {
+            var clubId = await _userContext.GetCurrentUserClubIdAsync();
+            var isAdmin = await _userContext.IsAdminAsync();
+
+            // Admin can delete all groups, regular users can only delete their club's groups
+            if (!isAdmin && (!clubId.HasValue || group.ClubId != clubId.Value))
+            {
+                throw new UnauthorizedAccessException("You don't have permission to delete this group");
+            }
+
             db.Groups.Remove(group);
             await db.SaveChangesAsync();
             
-            // Invalidate cache for this user
-            var userId = await _userContext.GetCurrentUserIdAsync();
-            var cacheKey = $"groups:{userId ?? "anonymous"}";
-            _cache.Remove(cacheKey);
+            // Invalidate cache
+            _cache.Remove($"groups:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}");
+            _cache.Remove("groups:club:*"); // Invalidate all club caches
         }
     }
 }

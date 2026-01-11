@@ -5,9 +5,10 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject UIState UI
 @inject UserContextService UserContext
+@inject IClubService ClubService
 
 <div class="week-list-container">
-    <div class="print-title">Veckoschema</div>
+    <div class="print-title">@printTitle</div>
     @for (int day = 1; day <= 7; day++)
     {
         <div class="day-section">
@@ -52,11 +53,13 @@
 
 @code {
     private Dictionary<int, Dictionary<int, Dictionary<string, List<BookingTemplate>>>>? groupedTemplates;
+    private string printTitle = "Veckoschema";
     
     protected override async Task OnInitializedAsync()
     {
         UI.OnChanged += OnUIChanged;
         await LoadDataAsync();
+        await UpdatePrintTitleAsync();
     }
     
     public void Dispose()
@@ -67,7 +70,41 @@
     private async void OnUIChanged()
     {
         await LoadDataAsync();
+        await UpdatePrintTitleAsync();
         await InvokeAsync(StateHasChanged);
+    }
+    
+    private async Task UpdatePrintTitleAsync()
+    {
+        try
+        {
+            var clubId = await UserContext.GetCurrentUserClubIdAsync();
+            if (clubId.HasValue)
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var club = await db.Clubs
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.Id == clubId.Value);
+                
+                if (club != null && !string.IsNullOrWhiteSpace(club.Name))
+                {
+                    printTitle = $"Veckoschema - {club.Name}";
+                }
+                else
+                {
+                    printTitle = "Veckoschema";
+                }
+            }
+            else
+            {
+                printTitle = "Veckoschema";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating print title: {ex.Message}");
+            printTitle = "Veckoschema";
+        }
     }
     
     private async Task LoadDataAsync()
@@ -78,15 +115,21 @@
             
             await using var db = await DbFactory.CreateDbContextAsync();
             
-            // Get current user and admin status
+            // Get current user, club, and admin status
             var userId = await UserContext.GetCurrentUserIdAsync();
+            var clubId = await UserContext.GetCurrentUserClubIdAsync();
             var isAdmin = await UserContext.IsAdminAsync();
             
             // First verify template ownership
             var templateQuery = db.ScheduleTemplates.Where(t => t.Id == UI.SelectedTemplateId.Value);
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            if (!isAdmin && clubId.HasValue)
             {
-                templateQuery = templateQuery.Where(t => t.UserId == userId);
+                templateQuery = templateQuery.Where(t => t.ClubId == clubId.Value);
+            }
+            else if (!isAdmin && !clubId.HasValue)
+            {
+                // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+                templateQuery = templateQuery.Where(t => t.ClubId == null);
             }
             var templateExists = await templateQuery.AnyAsync();
             
@@ -102,10 +145,15 @@
                     .ThenInclude(a => a.Place)
                 .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value);
             
-            // Filter by user ownership through Group
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            // Filter by club through Group
+            if (!isAdmin && clubId.HasValue)
             {
-                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.UserId == userId);
+                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.ClubId == clubId.Value);
+            }
+            else if (!isAdmin && !clubId.HasValue)
+            {
+                // User without club sees nothing (backward compatibility: show groups with null ClubId during migration)
+                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.ClubId == null);
             }
             
             var templates = await templatesQuery.ToListAsync();

@@ -15,8 +15,12 @@ public class Place
     public int VisibleStartMin { get; set; } = 420;
     public int VisibleEndMin { get; set; } = 1260;
 
-    // Multi-tenant: UserId for data isolation (nullable for backward compatibility)
+    // Multi-tenant: UserId for audit/spårning (behålls för att visa vem som skapade)
     public string? UserId { get; set; }
+    
+    // Club/Förening association (nullable for migration) - används för access control/isolation
+    public Guid? ClubId { get; set; }
+    public Club? Club { get; set; }
 
     public ICollection<Area> Areas { get; set; } = new List<Area>();
     public ICollection<Leaf> Leafs { get; set; } = new List<Leaf>();

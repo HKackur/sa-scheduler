@@ -76,6 +76,27 @@ var SchedulerMVP = {
             console.error('[ResourceView] Error initializing scroll:', error);
         }
     },
+    
+    scrollResourceViewToFirstBooking: function (startMin) {
+        try {
+            const gridColumn = document.querySelector('.resource-grid-column');
+            const scrollContainer = document.querySelector('.resource-scroll-container');
+            
+            if (!gridColumn || !scrollContainer) {
+                console.log('[ResourceView] Elements not found for scrolling to first booking');
+                return;
+            }
+            
+            // Scroll horizontally: each hour is 60px, so startMin minutes = startMin pixels
+            // Scroll to show the booking with some padding (scroll to 30 minutes before)
+            const scrollLeft = Math.max(0, startMin - 30);
+            gridColumn.scrollLeft = scrollLeft;
+            
+            console.log(`[ResourceView] Scrolled to first booking at ${startMin} minutes (scrollLeft: ${scrollLeft}px)`);
+        } catch (error) {
+            console.error('[ResourceView] Error scrolling to first booking:', error);
+        }
+    },
 
     // Drag and Drop functionality
     initDragDrop: function (dotNetHelper, retryCount) {

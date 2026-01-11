@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using System.Data.Common;
 using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 // Fix Azure culture issue - set default culture to avoid "__10" invalid culture error
 CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("en-US");
@@ -257,6 +258,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseSqlite("Data Source=app.db", sqlite =>
             sqlite.MigrationsAssembly("SchedulerMVP"));
     }
+    
+    // Ignore pending model changes warning for ClubId (we handle it via SQL in AppDbContext migration)
+    options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 }, ServiceLifetime.Scoped);
 
 // Add Identity
@@ -316,6 +320,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseSqlite("Data Source=app.db", sqlite =>
             sqlite.MigrationsAssembly("SchedulerMVP"));
     }
+    
 }, ServiceLifetime.Scoped);
 
 builder.Services.AddHttpContextAccessor();
@@ -372,6 +377,7 @@ builder.Services.AddScoped<BookingDialogService>();
 builder.Services.AddScoped<UIState>();
 builder.Services.AddScoped<DbSeeder>();
 builder.Services.AddScoped<UserContextService>();
+builder.Services.AddScoped<IClubService, ClubService>();
 builder.Services.AddScoped<IGroupTypeService, GroupTypeService>();
 builder.Services.AddSingleton<ToastService>();
 builder.Services.AddScoped<RoleManager<IdentityRole>>();
@@ -744,23 +750,54 @@ _ = Task.Run(async () =>
         
         try
         {
-            var pendingMigrations = await identityContext.Database.GetPendingMigrationsAsync();
-            Console.WriteLine($"[MIGRATION] Pending Identity migrations: {pendingMigrations.Count()}");
-            logger.LogInformation("Pending Identity migrations: {Count}", pendingMigrations.Count());
-            foreach (var migration in pendingMigrations)
+            var identityDbProvider = identityContext.Database.ProviderName ?? string.Empty;
+            if (identityDbProvider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"[MIGRATION]   - {migration}");
-                logger.LogInformation("  - {Migration}", migration);
+                // Use Migrate() for PostgreSQL (production)
+                var pendingMigrations = await identityContext.Database.GetPendingMigrationsAsync();
+                Console.WriteLine($"[MIGRATION] Pending Identity migrations: {pendingMigrations.Count()}");
+                logger.LogInformation("Pending Identity migrations: {Count}", pendingMigrations.Count());
+                foreach (var migration in pendingMigrations)
+                {
+                    Console.WriteLine($"[MIGRATION]   - {migration}");
+                    logger.LogInformation("  - {Migration}", migration);
+                }
+                await identityContext.Database.MigrateAsync();
+                Console.WriteLine("[MIGRATION] Identity database migration completed");
+                logger.LogInformation("=== Identity database migration completed ===");
             }
-            
-            await identityContext.Database.MigrateAsync();
-            Console.WriteLine("[MIGRATION] Identity database migration completed");
-            logger.LogInformation("=== Identity database migration completed ===");
+            else
+            {
+                // Use EnsureCreated() for SQLite (local dev)
+                Console.WriteLine("[MIGRATION] Using EnsureCreated() for Identity (SQLite - local dev)");
+                logger.LogInformation("Using EnsureCreated() for Identity (SQLite - local dev)");
+                await identityContext.Database.EnsureCreatedAsync();
+                
+                // Manually add ClubId column if it doesn't exist (EnsureCreated doesn't add custom properties)
+                try
+                {
+                    // SQLite's ALTER TABLE ADD COLUMN will fail if column exists, so we catch and ignore
+                    await identityContext.Database.ExecuteSqlRawAsync("ALTER TABLE AspNetUsers ADD COLUMN ClubId TEXT;");
+                    Console.WriteLine("[MIGRATION] ClubId column added to AspNetUsers");
+                    logger.LogInformation("ClubId column added to AspNetUsers");
+                }
+                catch (Exception colEx)
+                {
+                    // Column might already exist, which is fine - ignore the error
+                    if (!colEx.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"[MIGRATION] ClubId column check (non-critical): {colEx.Message}");
+                        logger.LogInformation("ClubId column check (non-critical): {Message}", colEx.Message);
+                    }
+                }
+                
+                Console.WriteLine("[MIGRATION] Identity database EnsureCreated completed");
+                logger.LogInformation("=== Identity database EnsureCreated completed ===");
+            }
             
             // ONBOARDING REMOVED - Drop OnboardingCompletedStep column if it exists
             try
             {
-                var identityDbProvider = identityContext.Database.ProviderName ?? string.Empty;
                 if (identityDbProvider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
                 {
                     await identityContext.Database.ExecuteSqlRawAsync(@"
@@ -816,9 +853,88 @@ _ = Task.Run(async () =>
             }
             else
             {
-                Console.WriteLine("[MIGRATION] Using EnsureCreated (not Npgsql provider)");
-                logger.LogInformation("Using EnsureCreated (not Npgsql provider)");
+                // Use EnsureCreated() for SQLite (local dev) - creates tables from model directly
+                // For PostgreSQL (production), we use Migrate() above
+                Console.WriteLine("[MIGRATION] Using EnsureCreated() for SQLite provider (local dev)");
+                logger.LogInformation("Using EnsureCreated() for SQLite provider (local dev)");
                 await context.Database.EnsureCreatedAsync();
+                
+                // Manually add ClubId columns and Clubs table after EnsureCreated()
+                // EnsureCreated() should create tables, but we add ClubId manually to be safe
+                try
+                {
+                    // Create Clubs table if it doesn't exist
+                    await context.Database.ExecuteSqlRawAsync(@"
+                        CREATE TABLE IF NOT EXISTS Clubs (
+                            Id TEXT NOT NULL PRIMARY KEY,
+                            Name TEXT NOT NULL,
+                            CreatedAt TEXT,
+                            UpdatedAt TEXT
+                        );
+                    ");
+                    
+                    // Add ClubId columns to existing tables (if tables exist)
+                    // We check if each table exists before trying to add column
+                    var tablesToUpdate = new[] { "Places", "Groups", "ScheduleTemplates", "GroupTypes" };
+                    foreach (var tableName in tablesToUpdate)
+                    {
+                        try
+                        {
+                            // Check if table exists by trying to query it
+                            await context.Database.ExecuteSqlRawAsync($"SELECT COUNT(*) FROM {tableName} LIMIT 1;");
+                            // Table exists, try to add ClubId column
+                            try
+                            {
+                                await context.Database.ExecuteSqlRawAsync($"ALTER TABLE {tableName} ADD COLUMN ClubId TEXT;");
+                                logger.LogInformation("Added ClubId column to {Table}", tableName);
+                            }
+                            catch (Exception colEx)
+                            {
+                                // Ignore "duplicate column" - column already exists, which is fine
+                                if (!colEx.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    logger.LogWarning("Failed to add ClubId to {Table}: {Message}", tableName, colEx.Message);
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // Table doesn't exist yet - that's ok, EnsureCreated() will create it
+                            logger.LogInformation("Table {Table} doesn't exist yet, will be created by EnsureCreated()", tableName);
+                        }
+                    }
+                    
+                    // Create indexes for ClubId (IF NOT EXISTS is supported for indexes)
+                    var indexStatements = new[]
+                    {
+                        "CREATE INDEX IF NOT EXISTS IX_Places_ClubId ON Places(ClubId);",
+                        "CREATE INDEX IF NOT EXISTS IX_Groups_ClubId ON Groups(ClubId);",
+                        "CREATE INDEX IF NOT EXISTS IX_ScheduleTemplates_ClubId ON ScheduleTemplates(ClubId);",
+                        "CREATE INDEX IF NOT EXISTS IX_GroupTypes_ClubId ON GroupTypes(ClubId);"
+                    };
+                    
+                    foreach (var sql in indexStatements)
+                    {
+                        try
+                        {
+                            await context.Database.ExecuteSqlRawAsync(sql);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Log but don't fail - index might already exist or table might not exist yet
+                            logger.LogWarning("Failed to create ClubId index: {Message}", ex.Message);
+                        }
+                    }
+                    
+                    Console.WriteLine("[MIGRATION] ClubId columns and Clubs table setup completed");
+                    logger.LogInformation("ClubId columns and Clubs table setup completed");
+                }
+                catch (Exception colEx)
+                {
+                    Console.WriteLine($"[MIGRATION] ClubId setup error (non-critical): {colEx.Message}");
+                    logger.LogWarning(colEx, "ClubId setup error (non-critical): {Message}", colEx.Message);
+                }
+                
                 Console.WriteLine("[MIGRATION] AppDbContext EnsureCreated completed");
                 logger.LogInformation("=== AppDbContext EnsureCreated completed ===");
                 

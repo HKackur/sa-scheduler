@@ -8,11 +8,13 @@
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IEmailService EmailService
 @inject SchedulerMVP.Services.IModalService ModalService
+@inject SchedulerMVP.Services.IClubService ClubService
 
 <div class="sa-panel" style="padding:16px; overflow-y: auto; overflow-x: hidden; padding-bottom: 64px;">
     <!-- Tab Navigation -->
     <div class="nav-tabs" style="margin-bottom:20px;">
         <button class="nav-tab @(activeTab == "users" ? "active" : "")" @onclick='() => SetActiveTab("users")'>Användare</button>
+        <button class="nav-tab @(activeTab == "clubs" ? "active" : "")" @onclick='() => SetActiveTab("clubs")'>Föreningar</button>
         <button class="nav-tab @(activeTab == "modals" ? "active" : "")" @onclick='() => SetActiveTab("modals")'>Modaler</button>
     </div>
 
@@ -41,6 +43,7 @@
             <thead>
                 <tr>
                     <th>E-post</th>
+                    <th>Förening</th>
                     <th>Senast inloggad</th>
                     <th>Admin</th>
                     <th>Status</th>
@@ -54,6 +57,7 @@
                     var hasInvitationSent = !u.EmailConfirmed && string.IsNullOrEmpty(u.PasswordHash);
                     <tr>
                         <td>@u.Email</td>
+                        <td>@(GetClubNameForUser(u.ClubId) ?? "—")</td>
                         <td>@FormatLastLogin(u.LastLoginAt)</td>
                         <td>
                             @if (isAdmin)
@@ -103,6 +107,64 @@
             </tbody>
         </table>
     </div>
+    }
+    else if (activeTab == "clubs")
+    {
+        @if (isLoadingClubs)
+        {
+            <div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border: 4px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: admin-spin 0.8s linear infinite;"></div>
+                <div style="font-size: 14px; color: #6b7280;">Läser in föreningar...</div>
+            </div>
+        }
+
+        <!-- Create Club Button -->
+        <div style="display:flex; justify-content:flex-end; margin-bottom:20px;">
+            <button class="tb-btn" @onclick="OpenCreateClubModal">
+                <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+                Skapa förening
+            </button>
+        </div>
+
+        <!-- Clubs table -->
+        <h3 class="groups-table-title" style="margin-bottom:12px;">Föreningar</h3>
+        <div class="groups-table-container">
+            <table class="groups-table">
+                <thead>
+                    <tr>
+                        <th>Namn</th>
+                        <th>Användare</th>
+                        <th>Skapad</th>
+                        <th style="width: 40px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var club in clubs)
+                    {
+                        var userCount = clubUserCounts.ContainsKey(club.Id) ? clubUserCounts[club.Id] : 0;
+                        <tr>
+                            <td>@club.Name</td>
+                            <td>@userCount</td>
+                            <td>@(club.CreatedAt?.ToString("yyyy-MM-dd") ?? "—")</td>
+                            <td style="position:relative;">
+                                <button class="action-menu-trigger" @onclick="() => ToggleClubActionMenu(club.Id)" @onclick:stopPropagation="true">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                                @if (clubActionMenuOpenForId == club.Id)
+                                {
+                                    <div class="action-menu" @onclick:stopPropagation="true">
+                                        <button class="action-menu-item" @onclick="() => OpenEditClubModal(club.Id)">Redigera</button>
+                                        <button class="action-menu-item" @onclick="() => OpenManageUsersModal(club.Id)">Hantera användare</button>
+                                        <button class="action-menu-item" style="color:#dc2626;" @onclick="() => OpenDeleteClubModal(club.Id)">Radera</button>
+                                    </div>
+                                    <div class="menu-overlay" @onclick="CloseClubActionMenu"></div>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
     else if (activeTab == "modals")
     {
@@ -168,6 +230,9 @@
 </div>
 
 <CreateUserModal IsOpen="@createUserModalOpen" OnClose="CloseCreateUserModal" OnCreated="AfterUserCreated" />
+<ClubManageModal IsOpen="@(createClubModalOpen || editClubModalOpen)" OnClose="@(createClubModalOpen ? CloseCreateClubModal : CloseEditClubModal)" OnSaved="AfterClubSaved" ClubId="@editingClubId" />
+<ClubDeleteModal IsOpen="@deleteClubModalOpen" Club="@(deletingClubId.HasValue ? clubs.FirstOrDefault(c => c.Id == deletingClubId.Value) : null)" OnClose="CloseDeleteClubModal" OnDeleted="AfterClubDeleted" />
+<ClubManageUsersModal IsOpen="@manageUsersModalOpen" OnClose="CloseManageUsersModal" OnSaved="AfterUsersManaged" ClubId="@managingUsersClubId" />
 <ModalManageModal IsOpen="@(createModalModalOpen || editModalModalOpen)" OnClose="@(createModalModalOpen ? CloseCreateModalModal : CloseEditModalModal)" OnSaved="AfterModalSaved" ModalId="@editingModalId" />
 <ModalDeleteModal IsOpen="@deleteModalModalOpen" Modal="@(deletingModalId.HasValue ? modals.FirstOrDefault(m => m.Id == deletingModalId.Value) : null)" OnClose="CloseDeleteModalModal" OnDeleted="AfterModalDeleted" />
 
@@ -304,6 +369,19 @@
     // Tab state
     private string activeTab = "users";
     
+    // Clubs state
+    private List<Club> clubs = new();
+    private Dictionary<Guid, int> clubUserCounts = new();
+    private bool isLoadingClubs = true;
+    private bool createClubModalOpen = false;
+    private bool editClubModalOpen = false;
+    private bool deleteClubModalOpen = false;
+    private bool manageUsersModalOpen = false;
+    private Guid? editingClubId = null;
+    private Guid? deletingClubId = null;
+    private Guid? managingUsersClubId = null;
+    private Guid? clubActionMenuOpenForId = null;
+    
     // Modals state
     private List<Modal> modals = new();
     private Dictionary<Guid, int> readCounts = new();
@@ -319,6 +397,7 @@
         UI.IsAdminPage = true;
         UI.PageTitle = "Admin";
         await LoadAsync();
+        await LoadClubsAsync();
         await LoadModalsAsync();
     }
 
@@ -349,6 +428,9 @@
             {
                 adminIds = new HashSet<string>();
             }
+            
+            // Load clubs for displaying club names
+            await LoadClubsAsync();
         }
         catch (Exception ex)
         {
@@ -359,6 +441,12 @@
             isLoading = false;
             StateHasChanged();
         }
+    }
+    
+    private string? GetClubNameForUser(Guid? clubId)
+    {
+        if (!clubId.HasValue) return null;
+        return clubs.FirstOrDefault(c => c.Id == clubId.Value)?.Name;
     }
 
     private static string FormatLastLogin(DateTimeOffset? ts) => ts.HasValue ? ts.Value.LocalDateTime.ToString("yyyy-MM-dd HH:mm") : "—";
@@ -577,6 +665,132 @@
     private void SetActiveTab(string tab)
     {
         activeTab = tab;
+        StateHasChanged();
+    }
+
+    private async Task LoadClubsAsync()
+    {
+        try
+        {
+            isLoadingClubs = true;
+            StateHasChanged();
+            
+            clubs = await ClubService.GetClubsAsync();
+            
+            clubUserCounts.Clear();
+            foreach (var club in clubs)
+            {
+                var users = await ClubService.GetUsersInClubAsync(club.Id);
+                clubUserCounts[club.Id] = users.Count;
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel vid laddning av föreningar: {ex.Message}";
+            StateHasChanged();
+        }
+        finally
+        {
+            isLoadingClubs = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OpenCreateClubModal()
+    {
+        editingClubId = null;
+        createClubModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void OpenEditClubModal(Guid clubId)
+    {
+        clubActionMenuOpenForId = null;
+        editingClubId = clubId;
+        editClubModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void OpenDeleteClubModal(Guid clubId)
+    {
+        clubActionMenuOpenForId = null;
+        deletingClubId = clubId;
+        deleteClubModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void OpenManageUsersModal(Guid clubId)
+    {
+        clubActionMenuOpenForId = null;
+        managingUsersClubId = clubId;
+        manageUsersModalOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseCreateClubModal()
+    {
+        createClubModalOpen = false;
+        StateHasChanged();
+    }
+
+    private void CloseEditClubModal()
+    {
+        editClubModalOpen = false;
+        editingClubId = null;
+        StateHasChanged();
+    }
+
+    private void CloseDeleteClubModal()
+    {
+        deleteClubModalOpen = false;
+        deletingClubId = null;
+        StateHasChanged();
+    }
+
+    private void CloseManageUsersModal()
+    {
+        manageUsersModalOpen = false;
+        managingUsersClubId = null;
+        StateHasChanged();
+    }
+
+    private async Task AfterClubSaved()
+    {
+        await LoadClubsAsync();
+        CloseCreateClubModal();
+        CloseEditClubModal();
+    }
+
+    private async Task AfterClubDeleted()
+    {
+        await LoadClubsAsync();
+        CloseDeleteClubModal();
+    }
+
+    private async Task AfterUsersManaged()
+    {
+        await LoadClubsAsync();
+        await LoadAsync(); // Reload users too
+        CloseManageUsersModal();
+    }
+
+    private void ToggleClubActionMenu(Guid clubId)
+    {
+        if (clubActionMenuOpenForId == clubId)
+        {
+            clubActionMenuOpenForId = null;
+        }
+        else
+        {
+            clubActionMenuOpenForId = clubId;
+        }
+        StateHasChanged();
+    }
+
+    private void CloseClubActionMenu()
+    {
+        clubActionMenuOpenForId = null;
         StateHasChanged();
     }
 

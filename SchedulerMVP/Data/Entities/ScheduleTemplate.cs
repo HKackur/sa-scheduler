@@ -14,8 +14,12 @@ public class ScheduleTemplate
     public Guid PlaceId { get; set; }
     public Place? Place { get; set; }
 
-    // Multi-tenant: UserId for data isolation (nullable for backward compatibility)
+    // Multi-tenant: UserId for audit/spårning (behålls för att visa vem som skapade)
     public string? UserId { get; set; }
+    
+    // Club/Förening association (nullable for migration) - används för access control/isolation
+    public Guid? ClubId { get; set; }
+    public Club? Club { get; set; }
 
     public ICollection<BookingTemplate> Bookings { get; set; } = new List<BookingTemplate>();
     

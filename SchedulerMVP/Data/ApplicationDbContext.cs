@@ -17,6 +17,11 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         base.OnModelCreating(builder);
         // Identity tables will be configured automatically
         // ONBOARDING COMPLETELY REMOVED - No configuration needed
+        
+        // Configure ClubId property (EF Core will handle it automatically, but we ensure it's recognized)
+        builder.Entity<ApplicationUser>()
+            .Property(u => u.ClubId)
+            .HasColumnType("TEXT"); // SQLite stores Guid as TEXT
     }
 }
 
