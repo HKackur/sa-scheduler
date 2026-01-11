@@ -4,7 +4,6 @@
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.EntityFrameworkCore.Infrastructure
 @using Microsoft.JSInterop
-@using System.Text.Json
 @using System.Threading
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject UIState UI
@@ -352,26 +351,6 @@
     private List<CalendarBooking> weekBookings = new();
     private Area? selectedArea;
     private Place? selectedPlace;
-    
-    private void LogDebug(string location, string message, object? data = null, string? hypothesisId = null)
-    {
-        try
-        {
-            var logEntry = new { location, message, data, timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), sessionId = "debug-session", runId = "run1", hypothesisId };
-            var logJson = System.Text.Json.JsonSerializer.Serialize(logEntry);
-            // Write to console (visible in Azure App Service logs)
-            Console.WriteLine($"[DEBUG] {logJson}");
-            // Also try to write to file if possible (for local debugging)
-            try
-            {
-                var logPath = System.IO.Path.Combine(System.Environment.GetEnvironmentVariable("HOME") ?? ".", ".cursor", "debug.log");
-                System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(logPath)!);
-                System.IO.File.AppendAllText(logPath, logJson + "\n");
-            }
-            catch { }
-        }
-        catch { }
-    }
     private bool _didInitialScroll;
     private int? _tooltipDay;
     private double _tooltipMouseY;
@@ -429,9 +408,6 @@
         { 
             try
             {
-                // #region agent log
-                LogDebug("WeekGrid.razor:401", "OnChanged triggered", new { selectedAreaId = UI.SelectedAreaId?.ToString(), selectedTemplateId = UI.SelectedTemplateId?.ToString(), isCalendarViewMode = UI.IsCalendarViewMode, isWeekListView = UI.IsWeekListView, isDayView = UI.IsDayView, isResourceView = UI.IsResourceView, currentWeekStart = UI.CurrentWeekStart.ToString(), filteredGroupId = UI.FilteredGroupId?.ToString() }, "A");
-                // #endregion
                 // PERF: Only reload if relevant state actually changed
                 var areaChanged = _lastLoadedAreaId != UI.SelectedAreaId;
                 var templateChanged = _lastLoadedTemplateId != UI.SelectedTemplateId;
@@ -439,9 +415,6 @@
                 var weekChanged = _lastLoadedWeekStart != UI.CurrentWeekStart;
                 var groupFilterChanged = _lastLoadedFilteredGroupId != UI.FilteredGroupId;
                 
-                // #region agent log
-                LogDebug("WeekGrid.razor:414", "Change detection result", new { areaChanged, templateChanged, viewModeChanged, weekChanged, groupFilterChanged, forceRefresh = UI.ForceRefresh, shouldReload = areaChanged || templateChanged || viewModeChanged || weekChanged || groupFilterChanged || UI.ForceRefresh }, "A");
-                // #endregion
                 // Always reload if state changed OR if force refresh is requested
                 // This ensures new bookings appear immediately
                 if (areaChanged || templateChanged || viewModeChanged || weekChanged || groupFilterChanged || UI.ForceRefresh)
@@ -451,13 +424,7 @@
                     await _loadDataLock.WaitAsync();
                     try
                     {
-                        // #region agent log
-                        LogDebug("WeekGrid.razor:416", "Calling LoadDataAsync (locked)", null, "B");
-                        // #endregion
                         await LoadDataAsync();
-                        // #region agent log
-                        LogDebug("WeekGrid.razor:417", "LoadDataAsync completed, calling StateHasChanged", new { allTemplatesCount = allTemplates?.Count ?? 0, weekBookingsCount = weekBookings?.Count ?? 0 }, "B");
-                        // #endregion
                         _lastLoadedAreaId = UI.SelectedAreaId;
                         _lastLoadedTemplateId = UI.SelectedTemplateId;
                         _lastLoadedCalendarMode = UI.IsCalendarViewMode;
@@ -465,9 +432,6 @@
                         _lastLoadedFilteredGroupId = UI.FilteredGroupId;
                         UI.ForceRefresh = false; // Reset flag after reload
                         await InvokeAsync(StateHasChanged);
-                        // #region agent log
-                        LogDebug("WeekGrid.razor:423", "StateHasChanged completed", null, "B");
-                        // #endregion
                     }
                     finally
                     {
@@ -477,9 +441,6 @@
             }
             catch (Exception ex)
             {
-                // #region agent log
-                LogDebug("WeekGrid.razor:428", "OnChanged error", new { error = ex.Message, stack = ex.StackTrace }, "A");
-                // #endregion
                 // Silently handle errors to prevent circuit crashes
             }
         };
@@ -613,9 +574,6 @@
     {
         try
         {
-        // #region agent log
-        LogDebug("WeekGrid.razor:579", "LoadDataAsync entry", new { selectedAreaId = UI.SelectedAreaId?.ToString(), selectedPlaceId = UI.SelectedPlaceId?.ToString(), selectedTemplateId = UI.SelectedTemplateId?.ToString(), isCalendarViewMode = UI.IsCalendarViewMode, isGroupFilterActive = UI.IsGroupFilterActive, filteredGroupId = UI.FilteredGroupId?.ToString() }, "D");
-        // #endregion
         // PERF: Only load areas for selected place, not ALL areas (unless group filter overrides)
         await using var db = await DbFactory.CreateDbContextAsync();
         
@@ -1353,16 +1311,10 @@
                 groupQuery = groupQuery.Where(g => g.UserId == userId);
             }
             groups = await groupQuery.OrderBy(g => g.Name).ToListAsync();
-            // #region agent log
-            LogDebug("WeekGrid.razor:1319", "LoadDataAsync exit (success)", new { allTemplatesCount = allTemplates?.Count ?? 0, weekBookingsCount = weekBookings?.Count ?? 0, isCalendarViewMode = UI.IsCalendarViewMode, selectedAreaId = UI.SelectedAreaId?.ToString(), selectedTemplateId = UI.SelectedTemplateId?.ToString() }, "D");
-            // #endregion
             StateHasChanged();
         }
         catch (Exception ex)
         {
-            // #region agent log
-            LogDebug("WeekGrid.razor:1323", "LoadDataAsync error", new { error = ex.Message }, "D");
-            // #endregion
             Console.WriteLine($"Error loading data: {ex.Message}");
             allTemplates = new List<TemplateView>();
             weekBookings = new List<CalendarBooking>();
