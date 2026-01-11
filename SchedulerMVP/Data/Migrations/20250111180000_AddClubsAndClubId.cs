@@ -25,14 +25,8 @@ public partial class AddClubsAndClubId : Migration
                 table.PrimaryKey("PK_Clubs", x => x.Id);
             });
 
-        // Add ClubId to AspNetUsers (ApplicationUser)
-        // Note: AspNetUsers is in ApplicationDbContext, but we add the column here via SQL
-        // We handle the relationship in application code (no FK constraint)
-        // ApplicationUser.ClubId is Guid?, so we store as TEXT (SQLite stores Guid as TEXT)
-        migrationBuilder.Sql(@"
-            ALTER TABLE AspNetUsers 
-            ADD COLUMN ClubId TEXT;
-        ");
+        // Note: ClubId on AspNetUsers is handled by ApplicationDbContext migration
+        // (20250111190000_AddClubIdToUsers in SchedulerMVP.Migrations namespace)
 
         // Add ClubId to Places
         migrationBuilder.AddColumn<Guid>(
@@ -175,9 +169,8 @@ public partial class AddClubsAndClubId : Migration
             name: "ClubId",
             table: "Places");
 
-        migrationBuilder.DropColumn(
-            name: "ClubId",
-            table: "AspNetUsers");
+        // Note: AspNetUsers.ClubId is dropped by ApplicationDbContext migration
+        // (20250111190000_AddClubIdToUsers in SchedulerMVP.Migrations namespace)
 
         // Drop Clubs table
         migrationBuilder.DropTable(
