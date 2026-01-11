@@ -18,7 +18,7 @@ namespace SchedulerMVP.Services
         public async Task<List<CalendarBooking>> GetBookingsForWeekAsync(DateOnly weekStart)
         {
             var weekEnd = weekStart.AddDays(6);
-            var userId = _userContext.GetCurrentUserId();
+            var clubId = await _userContext.GetCurrentUserClubIdAsync();
             var isAdmin = await _userContext.IsAdminAsync();
 
             var query = _context.CalendarBookings
@@ -27,9 +27,14 @@ namespace SchedulerMVP.Services
                 .Include(cb => cb.Group)
                 .Where(cb => cb.Date >= weekStart && cb.Date <= weekEnd);
 
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            if (!isAdmin && clubId.HasValue)
             {
-                query = query.Where(cb => cb.Group.UserId == userId);
+                query = query.Where(cb => cb.Group.ClubId == clubId.Value);
+            }
+            else if (!isAdmin && !clubId.HasValue)
+            {
+                // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
+                query = query.Where(cb => cb.Group.ClubId == null);
             }
 
             return await query
@@ -42,7 +47,7 @@ namespace SchedulerMVP.Services
         public async Task<List<CalendarBooking>> GetBookingsForAreaAsync(Guid areaId, DateOnly weekStart)
         {
             var weekEnd = weekStart.AddDays(6);
-            var userId = _userContext.GetCurrentUserId();
+            var clubId = await _userContext.GetCurrentUserClubIdAsync();
             var isAdmin = await _userContext.IsAdminAsync();
 
             var query = _context.CalendarBookings
@@ -51,9 +56,14 @@ namespace SchedulerMVP.Services
                 .Include(cb => cb.Group)
                 .Where(cb => cb.AreaId == areaId && cb.Date >= weekStart && cb.Date <= weekEnd);
 
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            if (!isAdmin && clubId.HasValue)
             {
-                query = query.Where(cb => cb.Group.UserId == userId);
+                query = query.Where(cb => cb.Group.ClubId == clubId.Value);
+            }
+            else if (!isAdmin && !clubId.HasValue)
+            {
+                // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
+                query = query.Where(cb => cb.Group.ClubId == null);
             }
 
             return await query

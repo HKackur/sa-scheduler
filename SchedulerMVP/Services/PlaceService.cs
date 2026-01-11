@@ -22,8 +22,9 @@ public class PlaceService : IPlaceService
 
     public async Task<List<Place>> GetPlacesAsync()
     {
-        var userId = await _userContext.GetCurrentUserIdAsync();
-        var cacheKey = $"places:{userId ?? "anonymous"}";
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
+        var isAdmin = await _userContext.IsAdminAsync();
+        var cacheKey = $"places:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}";
 
         // Try to get from cache
         if (_cache.TryGetValue(cacheKey, out List<Place>? cachedPlaces) && cachedPlaces != null)
@@ -35,28 +36,27 @@ public class PlaceService : IPlaceService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var query = db.Places.AsQueryable();
 
-        // All users (including admin) only see their own places
-        if (!string.IsNullOrEmpty(userId))
+        // Admin can see all places, regular users see only their club's places
+        if (isAdmin)
         {
-            query = query.Where(p => p.UserId != null && p.UserId == userId);
+            // Admin sees all places
+            query = query.Where(p => p.ClubId != null);
+        }
+        else if (clubId.HasValue)
+        {
+            // Regular users see only their club's places
+            query = query.Where(p => p.ClubId == clubId.Value);
         }
         else
         {
-            // If no userId, only show places with null UserId (backward compatibility)
-            query = query.Where(p => p.UserId == null);
+            // User without club sees nothing (backward compatibility: show places with null ClubId during migration)
+            query = query.Where(p => p.ClubId == null);
         }
 
         var places = await query
             .AsNoTracking()
             .OrderBy(p => p.Name)
             .ToListAsync();
-
-        // Debug: Log query results
-        Console.WriteLine($"[PlaceService] GetPlacesAsync - UserId: {userId ?? "null"}, Found {places.Count} places");
-        if (places.Count > 0)
-        {
-            Console.WriteLine($"[PlaceService] First place: {places[0].Name}, UserId: {places[0].UserId}");
-        }
 
         // Cache for 60 seconds
         _cache.Set(cacheKey, places, TimeSpan.FromSeconds(CacheTTLSeconds));
@@ -70,10 +70,11 @@ public class PlaceService : IPlaceService
         var place = await db.Places.FirstOrDefaultAsync(p => p.Id == id);
         if (place == null) return null;
 
-        var userId = await _userContext.GetCurrentUserIdAsync();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
+        var isAdmin = await _userContext.IsAdminAsync();
 
-        // All users (including admin) can only access their own places
-        if (!string.IsNullOrEmpty(userId) && place.UserId != userId && place.UserId != null)
+        // Admin can access all places, regular users can only access their club's places
+        if (!isAdmin && (!clubId.HasValue || place.ClubId != clubId.Value))
         {
             return null; // User doesn't have access
         }
@@ -86,8 +87,16 @@ public class PlaceService : IPlaceService
         await using var db = await _dbFactory.CreateDbContextAsync();
         if (place.Id == Guid.Empty) place.Id = Guid.NewGuid();
 
-        // Set UserId for the current user
+        // Set ClubId for the current user's club
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var userId = await _userContext.GetCurrentUserIdAsync();
+        
+        if (clubId.HasValue)
+        {
+            place.ClubId = clubId.Value;
+        }
+        
+        // Set UserId for audit/spårning (behålls för att visa vem som skapade)
         if (!string.IsNullOrEmpty(userId))
         {
             place.UserId = userId;
@@ -96,9 +105,10 @@ public class PlaceService : IPlaceService
         db.Places.Add(place);
         await db.SaveChangesAsync();
         
-        // Invalidate places cache for this user
-        var cacheKey = $"places:{userId ?? "anonymous"}";
-        _cache.Remove(cacheKey);
+        // Invalidate places cache
+        var isAdmin = await _userContext.IsAdminAsync();
+        _cache.Remove($"places:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}");
+        _cache.Remove("places:club:*"); // Invalidate all club caches
         
         return place;
     }
@@ -110,10 +120,12 @@ public class PlaceService : IPlaceService
         var existingPlace = await db.Places.FindAsync(place.Id);
         if (existingPlace == null) throw new InvalidOperationException("Place not found");
 
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
+        var isAdmin = await _userContext.IsAdminAsync();
         var userId = await _userContext.GetCurrentUserIdAsync();
 
-        // All users (including admin) can only update their own places
-        if (!string.IsNullOrEmpty(userId) && existingPlace.UserId != userId && existingPlace.UserId != null)
+        // Admin can update all places, regular users can only update their club's places
+        if (!isAdmin && (!clubId.HasValue || existingPlace.ClubId != clubId.Value))
         {
             throw new UnauthorizedAccessException("You don't have permission to update this place");
         }
@@ -122,21 +134,14 @@ public class PlaceService : IPlaceService
         existingPlace.Name = place.Name;
         existingPlace.DefaultDurationMin = place.DefaultDurationMin;
         
-        // Ensure UserId is preserved or set
-        if (string.IsNullOrEmpty(place.UserId))
-        {
-            existingPlace.UserId = existingPlace.UserId ?? userId;
-        }
-        else
-        {
-            existingPlace.UserId = place.UserId;
-        }
+        // UserId behålls för audit/spårning (behålls som det är)
+        // ClubId should not be changed via update (it's set when creating)
 
         await db.SaveChangesAsync();
         
-        // Invalidate places cache for this user
-        var cacheKey = $"places:{userId ?? "anonymous"}";
-        _cache.Remove(cacheKey);
+        // Invalidate places cache
+        _cache.Remove($"places:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}");
+        _cache.Remove("places:club:*"); // Invalidate all club caches
         // Also invalidate areas cache for this place
         _cache.Remove($"areas:place:{place.Id}");
         
@@ -147,15 +152,16 @@ public class PlaceService : IPlaceService
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
         // Verify access
-        var userId = await _userContext.GetCurrentUserIdAsync();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
+        var isAdmin = await _userContext.IsAdminAsync();
 
         // Delete all related data in correct order due to foreign key constraints
         var place = await db.Places.FindAsync(placeId);
         
         if (place == null) return;
 
-        // All users (including admin) can only delete their own places
-        if (!string.IsNullOrEmpty(userId) && place.UserId != userId && place.UserId != null)
+        // Admin can delete all places, regular users can only delete their club's places
+        if (!isAdmin && (!clubId.HasValue || place.ClubId != clubId.Value))
         {
             throw new UnauthorizedAccessException("You don't have permission to delete this place");
         }
@@ -190,8 +196,8 @@ public class PlaceService : IPlaceService
             await db.SaveChangesAsync();
             
             // Invalidate caches
-            var cacheKey = $"places:{userId ?? "anonymous"}";
-            _cache.Remove(cacheKey);
+            _cache.Remove($"places:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}");
+            _cache.Remove("places:club:*"); // Invalidate all club caches
             _cache.Remove($"areas:place:{placeId}");
         }
     }

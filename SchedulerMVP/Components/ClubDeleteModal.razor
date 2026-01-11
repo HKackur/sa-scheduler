@@ -1,0 +1,95 @@
+@using SchedulerMVP.Data.Entities
+@using Microsoft.AspNetCore.Components
+
+@if (IsOpen && Club != null)
+{
+    <div class="modal-container" @onclick="HandleOverlayClick">
+        <div class="bm-modal" @onclick:stopPropagation="true">
+            <div class="bm-header">
+                <h2 class="bm-title">Radera förening</h2>
+            </div>
+            <div class="bm-body">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="message message-error">
+                        @errorMessage
+                    </div>
+                }
+                <div class="user-modal-content">
+                    <p>Är du säker på att du vill radera föreningen <strong>@Club.Name</strong>?</p>
+                    <p>Detta går inte att ångra. All data som är kopplad till föreningen måste migreras eller raderas först.</p>
+                </div>
+            </div>
+            <div class="bm-actions">
+                <button type="button" @onclick="Close" class="btn-outline" disabled="@isDeleting">Avbryt</button>
+                <button type="button" @onclick="Delete" class="btn-danger" disabled="@isDeleting">
+                    @(isDeleting ? "Raderar..." : "Radera")
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px;border:1px solid #e6e7ea;border-radius:12px;width:480px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{margin-bottom:20px}
+        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
+        .bm-body{margin-bottom:16px}
+        .user-modal-content{font-size:14px;line-height:1.6;color:#0f1720}
+        .user-modal-content p{margin:0 0 12px 0}
+        .user-modal-content p:last-child{margin-bottom:0}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
+        .message{padding:12px;border-radius:6px;font-size:13px;margin-bottom:16px}
+        .message-error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+    </style>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnDeleted { get; set; }
+    [Parameter] public Club? Club { get; set; }
+    
+    [Inject] private SchedulerMVP.Services.IClubService ClubService { get; set; } = null!;
+    
+    private string? errorMessage;
+    private bool isDeleting = false;
+
+    private async Task Delete()
+    {
+        if (Club == null) return;
+        if (isDeleting) return;
+        
+        isDeleting = true;
+        errorMessage = null;
+        StateHasChanged();
+        
+        try
+        {
+            await ClubService.DeleteClubAsync(Club.Id);
+            await OnDeleted.InvokeAsync();
+            Close();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fel: {ex.Message}";
+            isDeleting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Close()
+    {
+        if (isDeleting) return;
+        errorMessage = null;
+        OnClose.InvokeAsync();
+    }
+
+    private void HandleOverlayClick()
+    {
+        if (!isDeleting)
+        {
+            Close();
+        }
+    }
+}
+

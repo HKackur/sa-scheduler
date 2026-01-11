@@ -5,6 +5,7 @@ namespace SchedulerMVP.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<Club> Clubs => Set<Club>();
     public DbSet<Place> Places => Set<Place>();
     public DbSet<Area> Areas => Set<Area>();
     public DbSet<Leaf> Leafs => Set<Leaf>();
@@ -67,7 +68,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<BookingTemplate>()
             .HasIndex(b => new { b.ScheduleTemplateId, b.DayOfWeek, b.StartMin });
 
-        // Performance indexes for user filtering
+        // Performance indexes for user filtering (UserId behålls för audit/spårning)
         modelBuilder.Entity<Group>()
             .HasIndex(g => g.UserId);
         
@@ -76,6 +77,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         
         modelBuilder.Entity<ScheduleTemplate>()
             .HasIndex(st => st.UserId);
+        
+        // Performance indexes for club filtering (ClubId används för access control/isolation)
+        modelBuilder.Entity<Group>()
+            .HasIndex(g => g.ClubId);
+        
+        modelBuilder.Entity<Place>()
+            .HasIndex(p => p.ClubId);
+        
+        modelBuilder.Entity<ScheduleTemplate>()
+            .HasIndex(st => st.ClubId);
+        
+        modelBuilder.Entity<GroupType>()
+            .HasIndex(gt => gt.ClubId);
 
         // Performance indexes for CalendarBookings queries
         modelBuilder.Entity<CalendarBooking>()
@@ -89,6 +103,34 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithMany()
             .HasForeignKey(a => a.ParentAreaId)
             .OnDelete(DeleteBehavior.Restrict);
+        
+        // Configure Club relationships
+        // Note: ApplicationUser is in ApplicationDbContext, so we can't configure relationship here
+        // ClubId in ApplicationUser is just a Guid property without navigation/FK in EF Core
+        
+        modelBuilder.Entity<Place>()
+            .HasOne(p => p.Club)
+            .WithMany(c => c.Places)
+            .HasForeignKey(p => p.ClubId)
+            .OnDelete(DeleteBehavior.SetNull);
+        
+        modelBuilder.Entity<Group>()
+            .HasOne(g => g.Club)
+            .WithMany(c => c.Groups)
+            .HasForeignKey(g => g.ClubId)
+            .OnDelete(DeleteBehavior.SetNull);
+        
+        modelBuilder.Entity<ScheduleTemplate>()
+            .HasOne(st => st.Club)
+            .WithMany(c => c.ScheduleTemplates)
+            .HasForeignKey(st => st.ClubId)
+            .OnDelete(DeleteBehavior.SetNull);
+        
+        modelBuilder.Entity<GroupType>()
+            .HasOne(gt => gt.Club)
+            .WithMany(c => c.GroupTypes)
+            .HasForeignKey(gt => gt.ClubId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Configure CalendarBooking.SourceTemplate to reference ScheduleTemplate
         // This matches the database constraint FK_CalendarBookings_ScheduleTemplates_SourceTemplateId

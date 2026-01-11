@@ -24,19 +24,34 @@ public class ScheduleTemplateService : IScheduleTemplateService
            && !string.IsNullOrEmpty(currentUserId)
            && !string.IsNullOrEmpty(resourceOwnerId)
            && !string.Equals(resourceOwnerId, currentUserId, StringComparison.Ordinal);
+    
+    private static bool HasClubConflict(Guid? resourceClubId, Guid? currentClubId, bool isAdmin)
+        => !isAdmin
+           && (!currentClubId.HasValue || resourceClubId != currentClubId.Value);
 
     public async Task<List<ScheduleTemplate>> GetTemplatesForPlaceAsync(Guid placeId)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var userId = _userContext.GetCurrentUserId();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
 
         var query = db.ScheduleTemplates.Where(t => t.PlaceId == placeId);
 
-        // Admin can see all templates, regular users only their own
-        if (!isAdmin && !string.IsNullOrEmpty(userId))
+        // Admin can see all templates, regular users see only their club's templates
+        if (isAdmin)
         {
-            query = query.Where(t => t.UserId == userId);
+            // Admin sees all templates
+            query = query.Where(t => t.ClubId != null);
+        }
+        else if (clubId.HasValue)
+        {
+            // Regular users see only their club's templates
+            query = query.Where(t => t.ClubId == clubId.Value);
+        }
+        else
+        {
+            // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+            query = query.Where(t => t.ClubId == null);
         }
 
         return await query
@@ -49,7 +64,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
     public async Task<List<ScheduleTemplate>> GetTemplatesAsync()
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
-        var userId = _userContext.GetCurrentUserId();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         bool isAdmin = false;
         try
         {
@@ -59,10 +74,21 @@ public class ScheduleTemplateService : IScheduleTemplateService
 
         var query = db.ScheduleTemplates.AsQueryable();
 
-        // Admin can see all templates, regular users only their own
-        if (!isAdmin && !string.IsNullOrEmpty(userId))
+        // Admin can see all templates, regular users see only their club's templates
+        if (isAdmin)
         {
-            query = query.Where(t => t.UserId == userId);
+            // Admin sees all templates
+            query = query.Where(t => t.ClubId != null);
+        }
+        else if (clubId.HasValue)
+        {
+            // Regular users see only their club's templates
+            query = query.Where(t => t.ClubId == clubId.Value);
+        }
+        else
+        {
+            // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
+            query = query.Where(t => t.ClubId == null);
         }
 
         return await query
@@ -77,11 +103,11 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var template = await db.ScheduleTemplates.Include(t => t.Bookings).FirstOrDefaultAsync(t => t.Id == templateId);
         if (template == null) return null;
 
-        var userId = _userContext.GetCurrentUserId();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
 
-        // Check access rights
-        if (HasOwnerConflict(template.UserId, userId, isAdmin))
+        // Check access rights (use ClubId for access control)
+        if (HasClubConflict(template.ClubId, clubId, isAdmin))
         {
             return null; // User doesn't have access
         }
@@ -92,10 +118,17 @@ public class ScheduleTemplateService : IScheduleTemplateService
     public async Task<ScheduleTemplate> CreateAsync(Guid placeId, string name)
     {
         await using var db = await _dbFactory.CreateDbContextAsync();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var userId = _userContext.GetCurrentUserId();
         var t = new ScheduleTemplate { Id = Guid.NewGuid(), PlaceId = placeId, Name = name };
         
-        // Set UserId for the current user
+        // Set ClubId for the current user's club
+        if (clubId.HasValue)
+        {
+            t.ClubId = clubId.Value;
+        }
+        
+        // Set UserId for audit/spårning (behålls för att visa vem som skapade)
         if (!string.IsNullOrEmpty(userId))
         {
             t.UserId = userId;
@@ -111,6 +144,7 @@ public class ScheduleTemplateService : IScheduleTemplateService
         await using var db = await _dbFactory.CreateDbContextAsync();
         // For now, create without binding to a specific place by picking any existing place if available.
         // This keeps current schema stable until we migrate PlaceId to be nullable.
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var userId = _userContext.GetCurrentUserId();
         var anyPlaceId = await db.Places.Select(p => p.Id).FirstOrDefaultAsync();
         if (anyPlaceId == Guid.Empty)
@@ -121,7 +155,13 @@ public class ScheduleTemplateService : IScheduleTemplateService
         }
         var t = new ScheduleTemplate { Id = Guid.NewGuid(), PlaceId = anyPlaceId, Name = name };
         
-        // Set UserId for the current user
+        // Set ClubId for the current user's club
+        if (clubId.HasValue)
+        {
+            t.ClubId = clubId.Value;
+        }
+        
+        // Set UserId for audit/spårning (behålls för att visa vem som skapade)
         if (!string.IsNullOrEmpty(userId))
         {
             t.UserId = userId;
@@ -153,16 +193,18 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var src = await db.ScheduleTemplates.Include(t => t.Bookings).FirstAsync(t => t.Id == sourceTemplateId);
         
         // Check access to source template
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var userId = _userContext.GetCurrentUserId();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (HasOwnerConflict(src.UserId, userId, isAdmin))
+        if (HasClubConflict(src.ClubId, clubId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to copy this template");
         }
 
         var clone = new ScheduleTemplate { Id = Guid.NewGuid(), PlaceId = src.PlaceId, Name = newName };
-        clone.UserId = userId; // New template belongs to current user
+        clone.ClubId = clubId; // New template belongs to current user's club
+        clone.UserId = userId; // UserId for audit/spårning (behålls för att visa vem som skapade)
         db.ScheduleTemplates.Add(clone);
         foreach (var b in src.Bookings)
         {
@@ -188,10 +230,10 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var t = await db.ScheduleTemplates.FirstAsync(x => x.Id == templateId);
         
         // Check access
-        var userId = _userContext.GetCurrentUserId();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (HasOwnerConflict(t.UserId, userId, isAdmin))
+        if (HasClubConflict(t.ClubId, clubId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to update this template");
         }
@@ -207,10 +249,10 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var t = await db.ScheduleTemplates.Include(x => x.Bookings).FirstAsync(x => x.Id == templateId);
         
         // Check access
-        var userId = _userContext.GetCurrentUserId();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (HasOwnerConflict(t.UserId, userId, isAdmin))
+        if (HasClubConflict(t.ClubId, clubId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to delete this template");
         }
@@ -262,10 +304,10 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var b = await db.BookingTemplates.Include(bt => bt.ScheduleTemplate).FirstAsync(x => x.Id == bookingId);
         
         // Check access via ScheduleTemplate
-        var userId = _userContext.GetCurrentUserId();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (HasOwnerConflict(b.ScheduleTemplate?.UserId, userId, isAdmin))
+        if (HasClubConflict(b.ScheduleTemplate?.ClubId, clubId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to update this booking");
         }
@@ -285,10 +327,10 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var b = await db.BookingTemplates.Include(bt => bt.ScheduleTemplate).FirstAsync(x => x.Id == bookingId);
         
         // Check access via ScheduleTemplate
-        var userId = _userContext.GetCurrentUserId();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (HasOwnerConflict(b.ScheduleTemplate?.UserId, userId, isAdmin))
+        if (HasClubConflict(b.ScheduleTemplate?.ClubId, clubId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to delete this booking");
         }
@@ -307,10 +349,10 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var src = await db.BookingTemplates.Include(bt => bt.ScheduleTemplate).FirstAsync(x => x.Id == bookingId);
         
         // Check access via ScheduleTemplate
-        var userId = _userContext.GetCurrentUserId();
+        var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
         
-        if (HasOwnerConflict(src.ScheduleTemplate?.UserId, userId, isAdmin))
+        if (HasClubConflict(src.ScheduleTemplate?.ClubId, clubId, isAdmin))
         {
             throw new UnauthorizedAccessException("You don't have permission to duplicate this booking");
         }

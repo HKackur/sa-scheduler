@@ -17,8 +17,12 @@ public class Group
     [MaxLength(80)]
     public string? GroupType { get; set; }
 
-    // Multi-tenant: UserId for data isolation (nullable for backward compatibility)
+    // Multi-tenant: UserId for audit/spårning (behålls för att visa vem som skapade)
     public string? UserId { get; set; }
+    
+    // Club/Förening association (nullable for migration) - används för access control/isolation
+    public Guid? ClubId { get; set; }
+    public Club? Club { get; set; }
     
     // Source: "Egen" for groups created in app, "Sportadmin" for groups from SportAdmin integration
     [MaxLength(50)]

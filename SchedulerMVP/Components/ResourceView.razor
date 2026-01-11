@@ -140,6 +140,9 @@
         await LoadDataAsync();
     }
     
+    private int? firstBookingStartMin = null;
+    private bool hasScrolledToFirstBooking = false;
+    
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (UI.IsResourceView)
@@ -152,6 +155,15 @@
                 Console.WriteLine("[ResourceView] Calling initResourceViewScroll");
                 await JSRuntime.InvokeVoidAsync("SchedulerMVP.initResourceViewScroll");
                 Console.WriteLine("[ResourceView] initResourceViewScroll called successfully");
+                
+                // Scroll to first booking if available (only once, when bookings are loaded)
+                if (!hasScrolledToFirstBooking && firstBookingStartMin.HasValue)
+                {
+                    await Task.Delay(100); // Small delay to ensure scroll container is ready
+                    await JSRuntime.InvokeVoidAsync("SchedulerMVP.scrollResourceViewToFirstBooking", firstBookingStartMin.Value);
+                    hasScrolledToFirstBooking = true;
+                    Console.WriteLine($"[ResourceView] Scrolled to first booking at {firstBookingStartMin.Value} minutes");
+                }
             }
             catch (Exception ex)
             {
@@ -162,6 +174,39 @@
         else
         {
             Console.WriteLine("[ResourceView] OnAfterRenderAsync - IsResourceView is false");
+        }
+    }
+    
+    private async Task CalculateAndSetScrollPositionAsync()
+    {
+        try
+        {
+            // Find the earliest booking start time across all bookings
+            int? earliestStartMin = null;
+            foreach (var areaKvp in bookingsByAreaAndDay)
+            {
+                foreach (var dayKvp in areaKvp.Value)
+                {
+                    foreach (var bookingWithGhost in dayKvp.Value)
+                    {
+                        if (!earliestStartMin.HasValue || bookingWithGhost.Booking.StartMin < earliestStartMin.Value)
+                        {
+                            earliestStartMin = bookingWithGhost.Booking.StartMin;
+                        }
+                    }
+                }
+            }
+            
+            if (earliestStartMin.HasValue && earliestStartMin != firstBookingStartMin)
+            {
+                firstBookingStartMin = earliestStartMin;
+                hasScrolledToFirstBooking = false; // Reset flag to allow scrolling to new position
+                Console.WriteLine($"[ResourceView] First booking start time: {firstBookingStartMin}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ResourceView] Error calculating scroll position: {ex.Message}");
         }
     }
     
@@ -243,6 +288,7 @@
             await using var db = await DbFactory.CreateDbContextAsync();
             
             var userId = await UserContext.GetCurrentUserIdAsync();
+            var clubId = await UserContext.GetCurrentUserClubIdAsync();
             var isAdmin = await UserContext.IsAdminAsync();
             
             var templatesQuery = db.BookingTemplates
@@ -251,10 +297,15 @@
                     .ThenInclude(a => a.Place)
                 .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value);
             
-            // Filter by user ownership through Group
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
+            // Filter by club through Group
+            if (!isAdmin && clubId.HasValue)
             {
-                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.UserId == userId);
+                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.ClubId == clubId.Value);
+            }
+            else if (!isAdmin && !clubId.HasValue)
+            {
+                // User without club sees nothing (backward compatibility: show groups with null ClubId during migration)
+                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.ClubId == null);
             }
             
             var templates = await templatesQuery.ToListAsync();
@@ -414,6 +465,9 @@
             
             // Trigger UI update
             await InvokeAsync(StateHasChanged);
+            
+            // Calculate first booking time for scrolling
+            await CalculateAndSetScrollPositionAsync();
         }
         catch (Exception ex)
         {

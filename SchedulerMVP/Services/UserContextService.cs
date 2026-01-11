@@ -85,6 +85,18 @@ public class UserContextService
         return null;
     }
 
+    public async Task<Guid?> GetCurrentUserClubIdAsync()
+    {
+        var userId = await GetCurrentUserIdAsync();
+        if (string.IsNullOrEmpty(userId))
+        {
+            return null;
+        }
+
+        var user = await _userManager.FindByIdAsync(userId);
+        return user?.ClubId;
+    }
+
     public async Task<string?> GetCurrentUserIdAsync()
     {
         // Cache userId in HttpContext.Items for request lifetime (performance optimization)

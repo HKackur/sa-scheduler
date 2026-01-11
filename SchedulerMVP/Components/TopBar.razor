@@ -118,7 +118,13 @@
                     {
                         <div class="menu-overlay" @onclick="CloseUserMenu"></div>
                         <div class="tb-menu">
-                            <div class="tb-item user-email">@currentUserEmail</div>
+                            <div class="tb-item user-info">
+                                @if (!string.IsNullOrEmpty(currentUserClubName))
+                                {
+                                    <div class="user-club-name">@currentUserClubName</div>
+                                }
+                                <div class="user-email">@currentUserEmail</div>
+                            </div>
                             <div style="border-top: 1px solid #e4e4e4; margin: 8px 0;"></div>
                             @if (isCurrentUserAdmin == true)
                             {
@@ -201,13 +207,17 @@
     .tb-item:hover { background: #f1f5f9; }
     .tb-item.danger { color: #ef4444; }
     .menu-overlay { position: fixed; inset: 0; z-index: 999; }
-    .user-email { font-size: 12px; color: #64748b; cursor: default; }
+    .user-info { font-size: 12px; color: #64748b; cursor: default; pointer-events: none; display: flex; flex-direction: column; align-items: flex-start; text-align: left; width: 100%; }
+    .user-info:hover { background: transparent !important; }
+    .user-club-name { font-weight: 500; margin-bottom: 2px; line-height: 1.4; width: 100%; }
+    .user-email { line-height: 1.4; width: 100%; }
 </style>
 
 @code {
     private List<ScheduleTemplate> templates = new();
     private bool userMenuOpen;
     private string? currentUserEmail;
+    private string? currentUserClubName;
     private bool? isCurrentUserAdmin; // Nullable to track if loaded
     private List<BreadcrumbItem> breadcrumbItems = new();
 
@@ -328,19 +338,37 @@
     private void ToggleUserMenu() 
     { 
         userMenuOpen = !userMenuOpen;
-        // Ensure admin status is loaded when menu opens (only if not already loaded)
-        if (userMenuOpen && !isCurrentUserAdmin.HasValue)
+        // Load admin status and club name when menu opens
+        if (userMenuOpen)
         {
             _ = InvokeAsync(async () =>
             {
                 try
                 {
-                    isCurrentUserAdmin = await UserContextService.IsAdminAsync();
+                    if (!isCurrentUserAdmin.HasValue)
+                    {
+                        isCurrentUserAdmin = await UserContextService.IsAdminAsync();
+                    }
+                    
+                    // Load club name
+                    if (string.IsNullOrEmpty(currentUserClubName))
+                    {
+                        var clubId = await UserContextService.GetCurrentUserClubIdAsync();
+                        if (clubId.HasValue)
+                        {
+                            await using var db = await DbFactory.CreateDbContextAsync();
+                            var club = await db.Clubs
+                                .AsNoTracking()
+                                .FirstOrDefaultAsync(c => c.Id == clubId.Value);
+                            currentUserClubName = club?.Name;
+                        }
+                    }
+                    
                     StateHasChanged();
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[TopBar] Error loading admin status in menu: {ex.Message}");
+                    Console.WriteLine($"[TopBar] Error loading admin status or club name in menu: {ex.Message}");
                     isCurrentUserAdmin = false;
                     StateHasChanged();
                 }
