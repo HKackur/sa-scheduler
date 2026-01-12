@@ -442,6 +442,8 @@
     {
         await LoadData();
         CloseCreateGroupModal();
+        // Trigger UI refresh so sidebar reloads groups
+        UI.RaiseChanged();
     }
     
     private void ClearFilters()

@@ -110,21 +110,17 @@
             var type = types.FirstOrDefault(x => x.Id.ToString() == selectedTypeId);
             if (type == null) return;
             
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var userId = await UserContext.GetCurrentUserIdAsync();
-            
+            // Use GroupService which handles ClubId and cache invalidation
             var g = new SchedulerMVP.Data.Entities.Group 
             { 
                 Id = Guid.NewGuid(), 
                 Name = name, 
                 GroupType = type.Name, 
-                UserId = userId,
                 Source = "Egen",
                 DisplayColor = selectedDisplayColor
             };
             
-            db.Groups.Add(g);
-            await db.SaveChangesAsync();
+            await GroupService.CreateGroupAsync(g);
             
             newGroupName = string.Empty;
             selectedTypeId = null;

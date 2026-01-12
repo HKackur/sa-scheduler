@@ -96,6 +96,14 @@
             
             UI.OnChanged += async () =>
             {
+                // Reload groups to pick up newly created groups/group types
+                groups = await GroupService.GetGroupsAsync();
+                groupTypes = groups.Select(g => DetermineGroupType(g))
+                                   .Where(t => !string.IsNullOrWhiteSpace(t))
+                                   .Distinct(StringComparer.OrdinalIgnoreCase)
+                                   .OrderBy(t => t)
+                                   .ToList();
+                
                 // Always reload counts on UI change to catch booking create/delete
                 // This ensures counts are updated when bookings are created/deleted
                 await LoadCountsAsync();
