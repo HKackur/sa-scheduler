@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
 using System;
+using System.Text;
 
 namespace SchedulerMVP.Services;
 
@@ -37,16 +38,16 @@ public class ScheduleTemplateService : IScheduleTemplateService
 
         var query = db.ScheduleTemplates.Where(t => t.PlaceId == placeId);
 
-        // Admin can see all templates, regular users see only their club's templates
+        // Admin can see all templates, regular users see ONLY templates with exact ClubId match
         if (!isAdmin && clubId.HasValue)
         {
-            // Regular users see ONLY their club's templates (data must be migrated)
+            // Regular users see ONLY templates with exact ClubId match (no null ClubId data)
             query = query.Where(t => t.ClubId == clubId.Value);
         }
         else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees only templates with null ClubId (backward compatibility)
-            query = query.Where(t => t.ClubId == null);
+            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+            query = query.Where(t => false);
         }
 
         return await query
@@ -69,16 +70,16 @@ public class ScheduleTemplateService : IScheduleTemplateService
 
         var query = db.ScheduleTemplates.AsQueryable();
 
-        // Admin can see all templates, regular users see only their club's templates
+        // Admin can see all templates, regular users see ONLY templates with exact ClubId match
         if (!isAdmin && clubId.HasValue)
         {
-            // Regular users see ONLY their club's templates (data must be migrated)
+            // Regular users see ONLY templates with exact ClubId match (no null ClubId data)
             query = query.Where(t => t.ClubId == clubId.Value);
         }
         else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees only templates with null ClubId (backward compatibility)
-            query = query.Where(t => t.ClubId == null);
+            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+            query = query.Where(t => false);
         }
 
         return await query

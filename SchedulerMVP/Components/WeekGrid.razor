@@ -670,8 +670,8 @@
                     }
                     else if (!currentIsAdmin && !currentClubId.HasValue)
                     {
-                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
-                        templateQuery = templateQuery.Where(t => t.ClubId == null);
+                        // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                        templateQuery = templateQuery.Where(t => false);
                     }
                     
                     templateId = await templateQuery
@@ -760,8 +760,8 @@
                     }
                     else if (!currentIsAdmin && !currentClubId.HasValue)
                     {
-                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
-                        templateQuery = templateQuery.Where(t => t.ClubId == null);
+                        // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                        templateQuery = templateQuery.Where(t => false);
                     }
                     
                     var templateEntity = await templateQuery.FirstOrDefaultAsync();
@@ -785,9 +785,9 @@
                         }
                         else if (!currentIsAdmin && !currentClubId.HasValue)
                         {
-                            // User without club sees nothing (backward compatibility: show groups with null ClubId during migration)
+                            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
                             groupTemplates = groupTemplates
-                                .Where(bt => bt.Group != null && bt.Group.ClubId == null)
+                                .Where(bt => false)
                                 .ToList();
                         }
 
@@ -841,8 +841,8 @@
                     }
                     else if (!currentIsAdmin && !currentClubId.HasValue)
                     {
-                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
-                        templateQuery = templateQuery.Where(t => t.ClubId == null);
+                        // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                        templateQuery = templateQuery.Where(t => false);
                     }
                     
                     templateId = await templateQuery
@@ -931,8 +931,8 @@
                     }
                     else if (!currentIsAdmin && !currentClubId.HasValue)
                     {
-                        // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
-                        templateQuery = templateQuery.Where(t => t.ClubId == null);
+                        // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                        templateQuery = templateQuery.Where(t => false);
                     }
                     
                     var templateEntity = await templateQuery.FirstOrDefaultAsync();
@@ -957,9 +957,9 @@
                         }
                         else if (!currentIsAdmin && !currentClubId.HasValue)
                         {
-                            // User without club sees nothing (backward compatibility: show groups with null ClubId during migration)
+                            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
                             groupTemplates = groupTemplates
-                                .Where(bt => bt.Group != null && bt.Group.ClubId == null)
+                                .Where(bt => false)
                                 .ToList();
                         }
 
@@ -1021,8 +1021,8 @@
                         }
                         else if (!currentIsAdmin && !currentClubId.HasValue)
                         {
-                            // User without club sees nothing (backward compatibility: show templates with groups that have null ClubId during migration)
-                            overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => bt.Group!.ClubId == null);
+                            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                            overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => false);
                         }
 
                         // PERF: Run leaf count and template query in parallel
@@ -1079,8 +1079,8 @@
                         }
                         else if (!currentIsAdmin && !currentClubId.HasValue)
                         {
-                            // User without club sees nothing (backward compatibility: show templates with groups that have null ClubId during migration)
-                            query = query.Where(bt => bt.Group!.ClubId == null);
+                            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                            query = query.Where(bt => false);
                         }
 
                         var templates = await query
@@ -1131,8 +1131,8 @@
                 }
                 else if (!currentIsAdmin && !currentClubId.HasValue)
                 {
-                    // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
-                    groupBookingsQuery = groupBookingsQuery.Where(c => c.Group.ClubId == null);
+                    // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                    groupBookingsQuery = groupBookingsQuery.Where(c => false);
                 }
 
                 var groupBookings = await groupBookingsQuery
@@ -1195,11 +1195,11 @@
                     {
                         overlappingBookingsQuery = overlappingBookingsQuery.Where(c => c.Group.ClubId == currentClubId.Value);
                     }
-                    else if (!currentIsAdmin && !currentClubId.HasValue)
-                    {
-                        // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
-                        overlappingBookingsQuery = overlappingBookingsQuery.Where(c => c.Group.ClubId == null);
-                    }
+                        else if (!currentIsAdmin && !currentClubId.HasValue)
+                        {
+                            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                            overlappingBookingsQuery = overlappingBookingsQuery.Where(c => false);
+                        }
 
                     // PERF: Run leaf count and booking query in parallel
                     var bookingTask = overlappingBookingsQuery
@@ -1263,8 +1263,8 @@
                     }
                     else if (!currentIsAdmin && !currentClubId.HasValue)
                     {
-                        // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
-                        placeBookingsQuery = placeBookingsQuery.Where(c => c.Group.ClubId == null);
+                        // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                        placeBookingsQuery = placeBookingsQuery.Where(c => false);
                     }
 
                     var placeBookings = await placeBookingsQuery
@@ -1314,11 +1314,11 @@
                     {
                         allBookingsQuery = allBookingsQuery.Where(c => c.Group.ClubId == currentClubId.Value);
                     }
-                    else if (!currentIsAdmin && !currentClubId.HasValue)
-                    {
-                        // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
-                        allBookingsQuery = allBookingsQuery.Where(c => c.Group.ClubId == null);
-                    }
+                        else if (!currentIsAdmin && !currentClubId.HasValue)
+                        {
+                            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                            allBookingsQuery = allBookingsQuery.Where(c => false);
+                        }
 
                     var allBookings = await allBookingsQuery
                         .OrderBy(c => c.Date)

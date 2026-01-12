@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Caching.Memory;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
+using System.Text;
 
 namespace SchedulerMVP.Services;
 
@@ -22,13 +23,25 @@ public class PlaceService : IPlaceService
 
     public async Task<List<Place>> GetPlacesAsync()
     {
+        // #region agent log
+        try { var userId = _userContext.GetCurrentUserId(); File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"PlaceService.GetPlacesAsync:entry\",\"message\":\"GetPlacesAsync called\",\"data\":{{\"userId\":\"{userId ?? "null"}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}}\n", Encoding.UTF8); } catch { }
+        // #endregion
+        
         var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
+        
+        // #region agent log
+        try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"PlaceService.GetPlacesAsync:afterContext\",\"message\":\"Context values retrieved\",\"data\":{{\"clubId\":\"{clubId?.ToString() ?? "null"}\",\"isAdmin\":{isAdmin.ToString().ToLower()}}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}}\n", Encoding.UTF8); } catch { }
+        // #endregion
+        
         var cacheKey = $"places:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}";
 
         // Try to get from cache
         if (_cache.TryGetValue(cacheKey, out List<Place>? cachedPlaces) && cachedPlaces != null)
         {
+            // #region agent log
+            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"PlaceService.GetPlacesAsync:cacheHit\",\"message\":\"Returning cached places\",\"data\":{{\"count\":{cachedPlaces.Count},\"clubIds\":[{string.Join(",", cachedPlaces.Select(p => $"\"{p.ClubId?.ToString() ?? "null"}\""))}]}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"B\"}}\n", Encoding.UTF8); } catch { }
+            // #endregion
             return cachedPlaces;
         }
 
@@ -36,22 +49,38 @@ public class PlaceService : IPlaceService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var query = db.Places.AsQueryable();
 
-        // Admin can see all places, regular users see only their club's places
+        // Admin can see all places, regular users see ONLY places with exact ClubId match
         if (!isAdmin && clubId.HasValue)
         {
-            // Regular users see ONLY their club's places (data must be migrated)
+            // Regular users see ONLY places with exact ClubId match (no null ClubId data)
             query = query.Where(p => p.ClubId == clubId.Value);
+            // #region agent log
+            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"PlaceService.GetPlacesAsync:filterApplied\",\"message\":\"Applied ClubId filter for regular user\",\"data\":{{\"filterClubId\":\"{clubId.Value}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
+            // #endregion
         }
         else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees only places with null ClubId (backward compatibility)
-            query = query.Where(p => p.ClubId == null);
+            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+            query = query.Where(p => false);
+            // #region agent log
+            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"PlaceService.GetPlacesAsync:filterApplied\",\"message\":\"Applied empty filter for user without club (security)\",\"data\":{{}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
+            // #endregion
+        }
+        else
+        {
+            // #region agent log
+            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"PlaceService.GetPlacesAsync:noFilter\",\"message\":\"No filter applied (admin)\",\"data\":{{\"isAdmin\":true}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
+            // #endregion
         }
 
         var places = await query
             .AsNoTracking()
             .OrderBy(p => p.Name)
             .ToListAsync();
+
+        // #region agent log
+        try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"PlaceService.GetPlacesAsync:queryResult\",\"message\":\"Query executed\",\"data\":{{\"count\":{places.Count},\"clubIds\":[{string.Join(",", places.Take(20).Select(p => $"\"{p.ClubId?.ToString() ?? "null"}\""))}]}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}}\n", Encoding.UTF8); } catch { }
+        // #endregion
 
         // Cache for 60 seconds
         _cache.Set(cacheKey, places, TimeSpan.FromSeconds(CacheTTLSeconds));

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
+using System.Text;
 
 namespace SchedulerMVP.Services;
 
@@ -35,16 +36,16 @@ public class GroupService : IGroupService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var query = db.Groups.AsQueryable();
 
-        // Admin can see all groups, regular users see only their club's groups
+        // Admin can see all groups, regular users see ONLY groups with exact ClubId match
         if (!isAdmin && clubId.HasValue)
         {
-            // Regular users see ONLY their club's groups (data must be migrated)
+            // Regular users see ONLY groups with exact ClubId match (no null ClubId data)
             query = query.Where(g => g.ClubId == clubId.Value);
         }
         else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees only groups with null ClubId (backward compatibility)
-            query = query.Where(g => g.ClubId == null);
+            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+            query = query.Where(g => false);
         }
 
         var groups = await query
