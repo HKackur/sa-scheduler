@@ -179,6 +179,36 @@
 <ScheduleTemplateCopyModal IsOpen="@copyOpen" OnClose="CloseCopy" OnCopied="AfterTemplateSaved" />
 <PublishToSportAdminModal IsOpen="@publishModalOpen" OnClose="ClosePublishModal" />
 
+@if (clearWeekConfirmOpen)
+{
+    <div class="modal-container" @onclick="CloseClearWeekConfirm">
+        <div class="bm-modal" @onclick:stopPropagation="true">
+            <div class="bm-header">
+                <h2 class="bm-title">Rensa vecka</h2>
+            </div>
+            <div class="bm-body">
+                <p style="margin:0; color:#64748b; line-height:1.5;">@clearWeekConfirmText</p>
+            </div>
+            <div class="bm-actions">
+                <button class="btn-outline" @onclick="CloseClearWeekConfirm">Avbryt</button>
+                <button class="btn-danger" @onclick="ConfirmClearWeek">Rensa</button>
+            </div>
+        </div>
+    </div>
+    <style>
+        .modal-container{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:4000;display:flex;justify-content:center;align-items:flex-start;padding-top:50px;overflow-y:auto}
+        .bm-modal{background:#fff;color:#0f1720;padding:28px 28px 0 28px;border:1px solid #e6e7ea;border-radius:12px;width:480px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+        .bm-header{margin-bottom:20px}
+        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
+        .bm-body{margin-bottom:16px}
+        .bm-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:8px;position:sticky;bottom:0;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10}
+        .btn-outline{padding:8px 16px;border:1px solid #e5e7eb;background:#fff;color:#64748b;border-radius:6px;cursor:pointer;font-weight:500;font-size:14px}
+        .btn-outline:hover{background:#f9fafb}
+        .btn-danger{padding:8px 16px;border:none;background:#dc2626;color:#fff;border-radius:6px;cursor:pointer;font-weight:500;font-size:14px}
+        .btn-danger:hover{background:#b91c1c}
+    </style>
+}
+
 <style>
     .view-type-bar-container {
         display: flex !important;
@@ -395,6 +425,8 @@
     private Dictionary<Guid, List<Area>> areasByPlace = new();
     private bool listFilterDropdownOpen = false;
     private bool shareDropdownOpen = false;
+    private bool clearWeekConfirmOpen = false;
+    private string clearWeekConfirmText = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -621,9 +653,91 @@
     private async Task AfterTemplateSaved() { await ReloadTemplatesForPlace(true); UI.RaiseChanged(); }
     private void OpenPublishModal() { moreMenuOpen = false; publishModalOpen = true; }
     private void ClosePublishModal() => publishModalOpen = false;
-    private async Task CopyWeekToClipboard() { UI.ClipboardWeek = (await CalendarBookingService.GetBookingsForWeekAsync(UI.CurrentWeekStart)); moreMenuOpen = false; UI.RaiseChanged(); }
-    private async Task PasteWeekFromClipboard() { /* paste logic */ moreMenuOpen = false; UI.RaiseChanged(); }
-    private bool CanPasteWeek() => UI.IsCalendarViewMode && UI.ClipboardWeek?.Count > 0;
+    private async Task CopyWeekToClipboard() 
+    { 
+        moreMenuOpen = false;
+        var weekStart = UI.CurrentWeekStart;
+        var bookings = await CalendarBookingService.GetBookingsForWeekAsync(weekStart);
+        UI.ClipboardWeek = bookings.ToList();
+        UI.ClipboardWeekStart = weekStart;
+        UI.RaiseChanged();
+    }
+    
+    private async Task PasteWeekFromClipboard() 
+    { 
+        if (!CanPasteWeek() || UI.ClipboardWeek == null || !UI.ClipboardWeekStart.HasValue) return;
+        
+        moreMenuOpen = false;
+        var targetWeekStart = UI.CurrentWeekStart;
+        var sourceWeekStart = UI.ClipboardWeekStart.Value;
+        var deltaDays = targetWeekStart.DayNumber - sourceWeekStart.DayNumber;
+        
+        foreach (var src in UI.ClipboardWeek)
+        {
+            // Calculate new date: preserve the day of week from source, but adjust to target week
+            var sourceDayOfWeek = src.Date.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)src.Date.DayOfWeek;
+            var newDate = targetWeekStart.AddDays(sourceDayOfWeek - 1);
+            
+            await CalendarBookingService.CreateBookingAsync(new CalendarBooking
+            {
+                Id = Guid.NewGuid(),
+                AreaId = src.AreaId,
+                GroupId = src.GroupId,
+                Date = newDate,
+                StartMin = src.StartMin,
+                EndMin = src.EndMin,
+                Notes = src.Notes,
+                SourceTemplateId = src.SourceTemplateId,
+                ContactName = src.ContactName,
+                ContactEmail = src.ContactEmail,
+                ContactPhone = src.ContactPhone,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+        
+        // Trigger refresh in WeekGrid
+        UI.ForceRefresh = true;
+        UI.RaiseChanged();
+    }
+    
+    private bool CanPasteWeek() => UI.IsCalendarViewMode && UI.ClipboardWeek != null && UI.ClipboardWeek.Count > 0 && UI.ClipboardWeekStart.HasValue;
+    
     private void OpenCopyTemplateModal() { moreMenuOpen = false; UI.ShouldOpenCopyTemplateModal = true; UI.RaiseChanged(); }
-    private void OpenClearWeekConfirm() { /* clear logic */ }
+    
+    private async Task OpenClearWeekConfirm() 
+    { 
+        moreMenuOpen = false;
+        var weekStart = UI.CurrentWeekStart;
+        var bookings = await CalendarBookingService.GetBookingsForWeekAsync(weekStart);
+        var count = bookings.Count;
+        clearWeekConfirmText = count > 0 
+            ? $"Vill du ta bort {count} bokningar från veckan? Denna åtgärd kan inte ångras."
+            : "Det finns inga bokningar att ta bort denna vecka.";
+        clearWeekConfirmOpen = true;
+        StateHasChanged();
+    }
+    
+    private void CloseClearWeekConfirm()
+    {
+        clearWeekConfirmOpen = false;
+        clearWeekConfirmText = string.Empty;
+    }
+    
+    private async Task ConfirmClearWeek()
+    {
+        var weekStart = UI.CurrentWeekStart;
+        var bookings = await CalendarBookingService.GetBookingsForWeekAsync(weekStart);
+        foreach (var booking in bookings)
+        {
+            await CalendarBookingService.DeleteBookingAsync(booking.Id);
+        }
+        clearWeekConfirmOpen = false;
+        clearWeekConfirmText = string.Empty;
+        
+        // Trigger refresh in WeekGrid
+        UI.ForceRefresh = true;
+        UI.RaiseChanged();
+        StateHasChanged();
+    }
 }
