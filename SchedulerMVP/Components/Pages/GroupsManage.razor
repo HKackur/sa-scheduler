@@ -384,6 +384,8 @@
     {
         await LoadData();
         CloseGroupTypeModal();
+        // Trigger UI refresh so sidebar reloads groups and group types
+        UI.RaiseChanged();
     }
     
     private void ToggleGroupTypeActionMenu(Guid groupTypeId)
