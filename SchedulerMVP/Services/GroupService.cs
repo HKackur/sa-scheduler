@@ -102,10 +102,9 @@ public class GroupService : IGroupService
         db.Groups.Add(group);
         await db.SaveChangesAsync();
         
-        // Invalidate cache
+        // Invalidate cache for current user's club
         var isAdmin = await _userContext.IsAdminAsync();
         _cache.Remove($"groups:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}");
-        _cache.Remove("groups:club:*"); // Invalidate all club caches
         
         return group;
     }
@@ -139,9 +138,8 @@ public class GroupService : IGroupService
         
         await db.SaveChangesAsync();
         
-        // Invalidate cache
+        // Invalidate cache for current user's club
         _cache.Remove($"groups:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}");
-        _cache.Remove("groups:club:*"); // Invalidate all club caches
         
         return existingGroup;
     }
