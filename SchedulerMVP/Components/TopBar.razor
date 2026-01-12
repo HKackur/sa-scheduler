@@ -15,6 +15,7 @@
 @inject UserManager<ApplicationUser> UserManager
 @inject AuthenticationStateProvider AuthStateProvider
 @inject SchedulerMVP.Services.UserContextService UserContextService
+@inject SchedulerMVP.Services.IClubService ClubService
 @implements IDisposable
 
 @{
@@ -118,7 +119,7 @@
                     {
                         <div class="menu-overlay" @onclick="CloseUserMenu"></div>
                         <div class="tb-menu">
-                            <div class="tb-item user-info">
+                            <div class="tb-item user-info-block">
                                 @if (!string.IsNullOrEmpty(currentUserClubName))
                                 {
                                     <div class="user-club-name">@currentUserClubName</div>
@@ -356,10 +357,7 @@
                         var clubId = await UserContextService.GetCurrentUserClubIdAsync();
                         if (clubId.HasValue)
                         {
-                            await using var db = await DbFactory.CreateDbContextAsync();
-                            var club = await db.Clubs
-                                .AsNoTracking()
-                                .FirstOrDefaultAsync(c => c.Id == clubId.Value);
+                            var club = await ClubService.GetClubAsync(clubId.Value);
                             currentUserClubName = club?.Name;
                         }
                     }

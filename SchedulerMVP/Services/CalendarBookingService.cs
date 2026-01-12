@@ -31,13 +31,13 @@ namespace SchedulerMVP.Services
             // Admin can see all bookings (no filter)
             if (!isAdmin && clubId.HasValue)
             {
-                // Regular users see only their club's bookings
-                query = query.Where(cb => cb.Group != null && cb.Group.ClubId == clubId.Value);
+                // Regular users see their club's bookings OR bookings with groups that have null ClubId (backward compatibility during migration)
+                query = query.Where(cb => cb.Group != null && (cb.Group.ClubId == clubId.Value || cb.Group.ClubId == null));
             }
             else if (!isAdmin && !clubId.HasValue)
             {
-                // User without club sees nothing
-                query = query.Where(cb => false);
+                // User without club sees only bookings with groups that have null ClubId
+                query = query.Where(cb => cb.Group != null && cb.Group.ClubId == null);
             }
 
             return await query
@@ -63,13 +63,13 @@ namespace SchedulerMVP.Services
             // Admin can see all bookings (no filter)
             if (!isAdmin && clubId.HasValue)
             {
-                // Regular users see only their club's bookings
-                query = query.Where(cb => cb.Group != null && cb.Group.ClubId == clubId.Value);
+                // Regular users see their club's bookings OR bookings with groups that have null ClubId (backward compatibility during migration)
+                query = query.Where(cb => cb.Group != null && (cb.Group.ClubId == clubId.Value || cb.Group.ClubId == null));
             }
             else if (!isAdmin && !clubId.HasValue)
             {
-                // User without club sees nothing
-                query = query.Where(cb => false);
+                // User without club sees only bookings with groups that have null ClubId
+                query = query.Where(cb => cb.Group != null && cb.Group.ClubId == null);
             }
 
             return await query
