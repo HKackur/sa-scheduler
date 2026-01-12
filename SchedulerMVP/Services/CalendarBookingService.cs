@@ -6,12 +6,12 @@ namespace SchedulerMVP.Services
 {
     public class CalendarBookingService : ICalendarBookingService
     {
-        private readonly AppDbContext _context;
+        private readonly IDbContextFactory<AppDbContext> _dbFactory;
         private readonly UserContextService _userContext;
 
-        public CalendarBookingService(AppDbContext context, UserContextService userContext)
+        public CalendarBookingService(IDbContextFactory<AppDbContext> dbFactory, UserContextService userContext)
         {
-            _context = context;
+            _dbFactory = dbFactory;
             _userContext = userContext;
         }
 
@@ -21,20 +21,23 @@ namespace SchedulerMVP.Services
             var clubId = await _userContext.GetCurrentUserClubIdAsync();
             var isAdmin = await _userContext.IsAdminAsync();
 
-            var query = _context.CalendarBookings
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var query = db.CalendarBookings
                 .Include(cb => cb.Area)
                     .ThenInclude(a => a.Place)
                 .Include(cb => cb.Group)
                 .Where(cb => cb.Date >= weekStart && cb.Date <= weekEnd);
 
+            // Admin can see all bookings (no filter)
             if (!isAdmin && clubId.HasValue)
             {
-                query = query.Where(cb => cb.Group.ClubId == clubId.Value);
+                // Regular users see only their club's bookings
+                query = query.Where(cb => cb.Group != null && cb.Group.ClubId == clubId.Value);
             }
             else if (!isAdmin && !clubId.HasValue)
             {
-                // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
-                query = query.Where(cb => cb.Group.ClubId == null);
+                // User without club sees nothing
+                query = query.Where(cb => false);
             }
 
             return await query
@@ -50,20 +53,23 @@ namespace SchedulerMVP.Services
             var clubId = await _userContext.GetCurrentUserClubIdAsync();
             var isAdmin = await _userContext.IsAdminAsync();
 
-            var query = _context.CalendarBookings
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var query = db.CalendarBookings
                 .Include(cb => cb.Area)
                     .ThenInclude(a => a.Place)
                 .Include(cb => cb.Group)
                 .Where(cb => cb.AreaId == areaId && cb.Date >= weekStart && cb.Date <= weekEnd);
 
+            // Admin can see all bookings (no filter)
             if (!isAdmin && clubId.HasValue)
             {
-                query = query.Where(cb => cb.Group.ClubId == clubId.Value);
+                // Regular users see only their club's bookings
+                query = query.Where(cb => cb.Group != null && cb.Group.ClubId == clubId.Value);
             }
             else if (!isAdmin && !clubId.HasValue)
             {
-                // User without club sees nothing (backward compatibility: show bookings with groups that have null ClubId during migration)
-                query = query.Where(cb => cb.Group.ClubId == null);
+                // User without club sees nothing
+                query = query.Where(cb => false);
             }
 
             return await query
@@ -75,32 +81,36 @@ namespace SchedulerMVP.Services
 
         public async Task<CalendarBooking> CreateBookingAsync(CalendarBooking booking)
         {
-            _context.CalendarBookings.Add(booking);
-            await _context.SaveChangesAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            db.CalendarBookings.Add(booking);
+            await db.SaveChangesAsync();
             return booking;
         }
 
         public async Task<CalendarBooking> UpdateBookingAsync(CalendarBooking booking)
         {
-            _context.CalendarBookings.Update(booking);
-            await _context.SaveChangesAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            db.CalendarBookings.Update(booking);
+            await db.SaveChangesAsync();
             return booking;
         }
 
         public async Task DeleteBookingAsync(Guid bookingId)
         {
-            var booking = await _context.CalendarBookings.FindAsync(bookingId);
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var booking = await db.CalendarBookings.FindAsync(bookingId);
             if (booking != null)
             {
-                _context.CalendarBookings.Remove(booking);
-                await _context.SaveChangesAsync();
+                db.CalendarBookings.Remove(booking);
+                await db.SaveChangesAsync();
             }
         }
 
         public async Task<List<CalendarBooking>> CopyTemplateToWeekAsync(Guid templateId, DateOnly weekStart)
         {
+            await using var db = await _dbFactory.CreateDbContextAsync();
             // Get all booking templates for the given template
-            var bookingTemplates = await _context.BookingTemplates
+            var bookingTemplates = await db.BookingTemplates
                 .Include(bt => bt.Area)
                 .Include(bt => bt.Group)
                 .Where(bt => bt.ScheduleTemplateId == templateId)
@@ -129,8 +139,8 @@ namespace SchedulerMVP.Services
             }
 
             // Add all bookings to the database
-            _context.CalendarBookings.AddRange(calendarBookings);
-            await _context.SaveChangesAsync();
+            db.CalendarBookings.AddRange(calendarBookings);
+            await db.SaveChangesAsync();
 
             return calendarBookings;
         }
@@ -142,8 +152,9 @@ namespace SchedulerMVP.Services
                 throw new ArgumentException("weekEndInclusive must be >= weekStartInclusive");
             }
 
+            await using var db = await _dbFactory.CreateDbContextAsync();
             // Load template bookings once
-            var bookingTemplates = await _context.BookingTemplates
+            var bookingTemplates = await db.BookingTemplates
                 .Include(bt => bt.Area)
                 .Include(bt => bt.Group)
                 .Where(bt => bt.ScheduleTemplateId == templateId)
@@ -172,8 +183,8 @@ namespace SchedulerMVP.Services
                 }
             }
 
-            _context.CalendarBookings.AddRange(all);
-            await _context.SaveChangesAsync();
+            db.CalendarBookings.AddRange(all);
+            await db.SaveChangesAsync();
             return all;
         }
 
@@ -186,7 +197,8 @@ namespace SchedulerMVP.Services
 
             Console.WriteLine($"[CalendarBookingService] CopyTemplateToDateRangeAsync: templateId={templateId}, start={startDateInclusive}, end={endDateInclusive}");
 
-            var bookingTemplates = await _context.BookingTemplates
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var bookingTemplates = await db.BookingTemplates
                 .Include(bt => bt.Area)
                 .Include(bt => bt.Group)
                 .Where(bt => bt.ScheduleTemplateId == templateId)
@@ -203,12 +215,12 @@ namespace SchedulerMVP.Services
             var areaIds = bookingTemplates.Select(bt => bt.AreaId).Distinct().ToList();
             var groupIds = bookingTemplates.Select(bt => bt.GroupId).Distinct().ToList();
 
-            var existingAreas = await _context.Areas
+            var existingAreas = await db.Areas
                 .Where(a => areaIds.Contains(a.Id))
                 .Select(a => a.Id)
                 .ToListAsync();
 
-            var existingGroups = await _context.Groups
+            var existingGroups = await db.Groups
                 .Where(g => groupIds.Contains(g.Id))
                 .Select(g => g.Id)
                 .ToListAsync();
@@ -227,7 +239,7 @@ namespace SchedulerMVP.Services
             }
 
             // Check for existing bookings to avoid duplicates
-            var existingBookings = await _context.CalendarBookings
+            var existingBookings = await db.CalendarBookings
                 .Where(cb => cb.Date >= startDateInclusive && cb.Date <= endDateInclusive)
                 .Select(cb => new { cb.AreaId, cb.GroupId, cb.Date, cb.StartMin, cb.EndMin })
                 .ToListAsync();
@@ -300,8 +312,8 @@ namespace SchedulerMVP.Services
             {
                 try
                 {
-                    _context.CalendarBookings.AddRange(created);
-                    var saved = await _context.SaveChangesAsync();
+                    db.CalendarBookings.AddRange(created);
+                    var saved = await db.SaveChangesAsync();
                     Console.WriteLine($"[CalendarBookingService] Saved {saved} changes to database");
                 }
                 catch (DbUpdateException dbEx)
@@ -338,16 +350,33 @@ namespace SchedulerMVP.Services
         public async Task<bool> HasBookingsForWeekAsync(DateOnly weekStart)
         {
             var weekEnd = weekStart.AddDays(6);
+            var clubId = await _userContext.GetCurrentUserClubIdAsync();
+            var isAdmin = await _userContext.IsAdminAsync();
             
-            return await _context.CalendarBookings
-                .AnyAsync(cb => cb.Date >= weekStart && cb.Date <= weekEnd);
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var query = db.CalendarBookings
+                .Where(cb => cb.Date >= weekStart && cb.Date <= weekEnd);
+            
+            // Admin can see all bookings (no filter)
+            if (!isAdmin && clubId.HasValue)
+            {
+                query = query.Where(cb => cb.Group != null && cb.Group.ClubId == clubId.Value);
+            }
+            else if (!isAdmin && !clubId.HasValue)
+            {
+                // User without club sees nothing
+                query = query.Where(cb => false);
+            }
+            
+            return await query.AnyAsync();
         }
 
         public async Task ClearAllCalendarBookingsAsync()
         {
-            var allCalendarBookings = await _context.CalendarBookings.ToListAsync();
-            _context.CalendarBookings.RemoveRange(allCalendarBookings);
-            await _context.SaveChangesAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var allCalendarBookings = await db.CalendarBookings.ToListAsync();
+            db.CalendarBookings.RemoveRange(allCalendarBookings);
+            await db.SaveChangesAsync();
         }
     }
 }

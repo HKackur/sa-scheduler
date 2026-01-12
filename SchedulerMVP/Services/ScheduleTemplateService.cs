@@ -38,20 +38,15 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var query = db.ScheduleTemplates.Where(t => t.PlaceId == placeId);
 
         // Admin can see all templates, regular users see only their club's templates
-        if (isAdmin)
-        {
-            // Admin sees all templates
-            query = query.Where(t => t.ClubId != null);
-        }
-        else if (clubId.HasValue)
+        if (!isAdmin && clubId.HasValue)
         {
             // Regular users see only their club's templates
             query = query.Where(t => t.ClubId == clubId.Value);
         }
-        else
+        else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
-            query = query.Where(t => t.ClubId == null);
+            // User without club sees nothing
+            query = query.Where(t => false);
         }
 
         return await query
@@ -75,20 +70,15 @@ public class ScheduleTemplateService : IScheduleTemplateService
         var query = db.ScheduleTemplates.AsQueryable();
 
         // Admin can see all templates, regular users see only their club's templates
-        if (isAdmin)
-        {
-            // Admin sees all templates
-            query = query.Where(t => t.ClubId != null);
-        }
-        else if (clubId.HasValue)
+        if (!isAdmin && clubId.HasValue)
         {
             // Regular users see only their club's templates
             query = query.Where(t => t.ClubId == clubId.Value);
         }
-        else
+        else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
-            query = query.Where(t => t.ClubId == null);
+            // User without club sees nothing
+            query = query.Where(t => false);
         }
 
         return await query

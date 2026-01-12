@@ -36,20 +36,15 @@ public class GroupService : IGroupService
         var query = db.Groups.AsQueryable();
 
         // Admin can see all groups, regular users see only their club's groups
-        if (isAdmin)
-        {
-            // Admin sees all groups
-            query = query.Where(g => g.ClubId != null);
-        }
-        else if (clubId.HasValue)
+        if (!isAdmin && clubId.HasValue)
         {
             // Regular users see only their club's groups
             query = query.Where(g => g.ClubId == clubId.Value);
         }
-        else
+        else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees nothing (backward compatibility: show groups with null ClubId during migration)
-            query = query.Where(g => g.ClubId == null);
+            // User without club sees nothing
+            query = query.Where(g => false);
         }
 
         var groups = await query

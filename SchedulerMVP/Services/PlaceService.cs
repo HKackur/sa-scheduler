@@ -37,20 +37,15 @@ public class PlaceService : IPlaceService
         var query = db.Places.AsQueryable();
 
         // Admin can see all places, regular users see only their club's places
-        if (isAdmin)
-        {
-            // Admin sees all places
-            query = query.Where(p => p.ClubId != null);
-        }
-        else if (clubId.HasValue)
+        if (!isAdmin && clubId.HasValue)
         {
             // Regular users see only their club's places
             query = query.Where(p => p.ClubId == clubId.Value);
         }
-        else
+        else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees nothing (backward compatibility: show places with null ClubId during migration)
-            query = query.Where(p => p.ClubId == null);
+            // User without club sees nothing
+            query = query.Where(p => false);
         }
 
         var places = await query
