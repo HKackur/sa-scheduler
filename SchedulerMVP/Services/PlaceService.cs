@@ -39,12 +39,12 @@ public class PlaceService : IPlaceService
         // Admin can see all places, regular users see only their club's places
         if (!isAdmin && clubId.HasValue)
         {
-            // Regular users see their club's places OR places with null ClubId (backward compatibility during migration)
-            query = query.Where(p => p.ClubId == clubId.Value || p.ClubId == null);
+            // Regular users see ONLY their club's places (data must be migrated)
+            query = query.Where(p => p.ClubId == clubId.Value);
         }
         else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees only places with null ClubId
+            // User without club sees only places with null ClubId (backward compatibility)
             query = query.Where(p => p.ClubId == null);
         }
 

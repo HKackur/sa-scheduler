@@ -38,12 +38,12 @@ public class GroupService : IGroupService
         // Admin can see all groups, regular users see only their club's groups
         if (!isAdmin && clubId.HasValue)
         {
-            // Regular users see their club's groups OR groups with null ClubId (backward compatibility during migration)
-            query = query.Where(g => g.ClubId == clubId.Value || g.ClubId == null);
+            // Regular users see ONLY their club's groups (data must be migrated)
+            query = query.Where(g => g.ClubId == clubId.Value);
         }
         else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees only groups with null ClubId
+            // User without club sees only groups with null ClubId (backward compatibility)
             query = query.Where(g => g.ClubId == null);
         }
 

@@ -40,12 +40,12 @@ public class ScheduleTemplateService : IScheduleTemplateService
         // Admin can see all templates, regular users see only their club's templates
         if (!isAdmin && clubId.HasValue)
         {
-            // Regular users see their club's templates OR templates with null ClubId (backward compatibility during migration)
-            query = query.Where(t => t.ClubId == clubId.Value || t.ClubId == null);
+            // Regular users see ONLY their club's templates (data must be migrated)
+            query = query.Where(t => t.ClubId == clubId.Value);
         }
         else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees only templates with null ClubId
+            // User without club sees only templates with null ClubId (backward compatibility)
             query = query.Where(t => t.ClubId == null);
         }
 
@@ -72,12 +72,12 @@ public class ScheduleTemplateService : IScheduleTemplateService
         // Admin can see all templates, regular users see only their club's templates
         if (!isAdmin && clubId.HasValue)
         {
-            // Regular users see their club's templates OR templates with null ClubId (backward compatibility during migration)
-            query = query.Where(t => t.ClubId == clubId.Value || t.ClubId == null);
+            // Regular users see ONLY their club's templates (data must be migrated)
+            query = query.Where(t => t.ClubId == clubId.Value);
         }
         else if (!isAdmin && !clubId.HasValue)
         {
-            // User without club sees only templates with null ClubId
+            // User without club sees only templates with null ClubId (backward compatibility)
             query = query.Where(t => t.ClubId == null);
         }
 
