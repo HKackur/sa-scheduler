@@ -56,11 +56,17 @@ public class ClubService : IClubService
 
     public async Task<Club?> GetClubAsync(Guid id)
     {
-        // Only admin can see any club
+        // Allow any authenticated user to get their own club (for display purposes)
+        // Admin can see any club
         var isAdmin = await _userContext.IsAdminAsync();
         if (!isAdmin)
         {
-            return null;
+            // Regular users can only see their own club
+            var userClubId = await _userContext.GetCurrentUserClubIdAsync();
+            if (!userClubId.HasValue || userClubId.Value != id)
+            {
+                return null;
+            }
         }
 
         await using var db = await _dbFactory.CreateDbContextAsync();
