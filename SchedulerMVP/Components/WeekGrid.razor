@@ -721,8 +721,8 @@
                             }
                             else if (!currentIsAdmin && !currentClubId.HasValue)
                             {
-                                // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
-                                templateQuery = templateQuery.Where(t => t.ClubId == null);
+                                // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                                templateQuery = templateQuery.Where(t => false);
                             }
                             
                             templateId = await templateQuery
@@ -892,8 +892,8 @@
                             }
                             else if (!currentIsAdmin && !currentClubId.HasValue)
                             {
-                                // User without club sees nothing (backward compatibility: show templates with null ClubId during migration)
-                                templateQuery = templateQuery.Where(t => t.ClubId == null);
+                                // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                                templateQuery = templateQuery.Where(t => false);
                             }
                             
                             templateId = await templateQuery
