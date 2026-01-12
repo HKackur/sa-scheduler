@@ -252,9 +252,9 @@
 
     protected override async Task OnInitializedAsync() {
         await LoadBreadcrumbsAsync();
-        // Load admin status asynchronously to avoid blocking
+        // Load admin status and club name asynchronously to avoid blocking
         // Only load if not already loaded to avoid multiple calls
-        if (!isCurrentUserAdmin.HasValue)
+        if (!isCurrentUserAdmin.HasValue || string.IsNullOrEmpty(currentUserClubName))
         {
             try {
                 if (string.IsNullOrEmpty(currentUserEmail))
@@ -263,10 +263,25 @@
                     currentUserEmail = user?.FindFirstValue(ClaimTypes.Email) ?? user?.Identity?.Name;
                 }
                 // Use UserContext service for reliable admin check - it has built-in caching
-                isCurrentUserAdmin = await UserContextService.IsAdminAsync();
+                if (!isCurrentUserAdmin.HasValue)
+                {
+                    isCurrentUserAdmin = await UserContextService.IsAdminAsync();
+                }
+                
+                // Load club name
+                if (string.IsNullOrEmpty(currentUserClubName))
+                {
+                    var clubId = await UserContextService.GetCurrentUserClubIdAsync();
+                    if (clubId.HasValue)
+                    {
+                        var club = await ClubService.GetClubAsync(clubId.Value);
+                        currentUserClubName = club?.Name;
+                    }
+                }
+                
                 StateHasChanged();
             } catch (Exception ex) {
-                Console.WriteLine($"[TopBar] Error loading admin status: {ex.Message}");
+                Console.WriteLine($"[TopBar] Error loading admin status or club name: {ex.Message}");
                 isCurrentUserAdmin = false;
             }
         }
