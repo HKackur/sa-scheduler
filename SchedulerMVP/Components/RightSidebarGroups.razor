@@ -5,6 +5,7 @@
 @inject IDbContextFactory<SchedulerMVP.Data.AppDbContext> DbFactory
 @inject SchedulerMVP.Services.ICalendarBookingService CalendarBookingService
 @inject SchedulerMVP.Services.UserContextService UserContext
+@inject SchedulerMVP.Services.IGroupService GroupService
 
 <div class="sa-panel">
     <div class="sa-panel-header">
@@ -79,20 +80,8 @@
     {
         try
         {
-            // Use GroupService for caching (injected via CombinedSidebar parent component pattern)
-            // For now, load directly but will update when we inject GroupService
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var userId = await UserContext.GetCurrentUserIdAsync();
-            var query = db.Groups.AsQueryable();
-            // All users (including admin) only see their own groups
-            if (!string.IsNullOrEmpty(userId))
-            {
-                query = query.Where(g => g.UserId == userId);
-            }
-            groups = await query
-                .AsNoTracking()
-                .OrderBy(g => g.Name)
-                .ToListAsync();
+            // Use GroupService which handles ClubId filtering and caching
+            groups = await GroupService.GetGroupsAsync();
             groupTypes = groups.Select(g => DetermineGroupType(g))
                                .Where(t => !string.IsNullOrWhiteSpace(t))
                                .Distinct(StringComparer.OrdinalIgnoreCase)

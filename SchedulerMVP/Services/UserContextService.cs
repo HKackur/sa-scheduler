@@ -14,6 +14,7 @@ public class UserContextService
     
     private const string UserIdCacheKey = "UserContextService_UserId";
     private const string IsAdminCacheKey = "UserContextService_IsAdmin";
+    private const string ClubIdCacheKey = "UserContextService_ClubId";
 
     public UserContextService(AuthenticationStateProvider authenticationStateProvider, IHttpContextAccessor httpContextAccessor, UserManager<ApplicationUser> userManager)
     {
@@ -87,14 +88,38 @@ public class UserContextService
 
     public async Task<Guid?> GetCurrentUserClubIdAsync()
     {
+        // Cache ClubId in HttpContext.Items for request lifetime (performance optimization)
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext?.Items.TryGetValue(ClubIdCacheKey, out var cachedClubId) == true)
+        {
+            return cachedClubId as Guid?;
+        }
+
         var userId = await GetCurrentUserIdAsync();
         if (string.IsNullOrEmpty(userId))
         {
+            if (httpContext != null)
+                httpContext.Items[ClubIdCacheKey] = null;
             return null;
         }
 
-        var user = await _userManager.FindByIdAsync(userId);
-        return user?.ClubId;
+        try
+        {
+            var user = await _userManager.FindByIdAsync(userId);
+            var clubId = user?.ClubId;
+            
+            // Cache result for request lifetime
+            if (httpContext != null)
+                httpContext.Items[ClubIdCacheKey] = clubId;
+            
+            return clubId;
+        }
+        catch
+        {
+            if (httpContext != null)
+                httpContext.Items[ClubIdCacheKey] = null;
+            return null;
+        }
     }
 
     public async Task<string?> GetCurrentUserIdAsync()
