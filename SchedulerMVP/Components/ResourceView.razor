@@ -119,6 +119,57 @@
     </div>
 </div>
 
+@if (popoverOpen && popoverTemplate != null)
+{
+    var areaName = popoverTemplate.Area?.Name ?? "Okänd area";
+    var groupName = popoverTemplate.Group?.Name ?? "Okänd grupp";
+    var startMin = popoverTemplate.StartMin;
+    var endMin = popoverTemplate.EndMin;
+    var notes = popoverTemplate.Notes;
+    var contactName = popoverTemplate.ContactName;
+    var contactPhone = popoverTemplate.ContactPhone;
+    var contactEmail = popoverTemplate.ContactEmail;
+    
+    // Format time and day on same line
+    var timeAndDay = $"{GetFullDayName(popoverTemplate.DayOfWeek)} {FormatTime(startMin)} – {FormatTime(endMin)}";
+    
+    <div @onclick:stopPropagation="true" style="position:fixed; left:@(popoverX)px; top:@(popoverY)px; transform: translate(8px, 8px); background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 10px 24px rgba(16,24,40,.18); width:320px; z-index:5000;">
+        <div style="display:flex; align-items:center; padding:12px 14px; border-bottom:1px solid #eef2f7;">
+            <div style="font-size:16px; font-weight:600; color:#0b1e34; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@areaName</div>
+            <div style="display:flex; gap:4px;">
+                <button @onclick="EditFromPopover" style="border:none; background:#f8fafc; color:#475569; width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s;" title="Redigera">
+                    <span class="material-symbols-outlined" style="font-size:18px;">edit</span>
+                </button>
+                <button @onclick="DeleteFromPopover" style="border:none; background:#f8fafc; color:#475569; width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s;" title="Ta bort">
+                    <span class="material-symbols-outlined" style="font-size:18px;">delete</span>
+                </button>
+                <button @onclick="ClosePopover" style="border:none; background:transparent; color:#94a3b8; width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s;" title="Stäng">
+                    <span class="material-symbols-outlined" style="font-size:20px;">close</span>
+                </button>
+            </div>
+        </div>
+        <div style="padding:12px 14px; display:flex; flex-direction:column; gap:8px; color:#0b1e34;">
+            <div style="font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@groupName</div>
+            <div style="font-size:13px; color:#475569;">@timeAndDay</div>
+            @if (!string.IsNullOrWhiteSpace(notes))
+            {
+                <div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@notes</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(contactName))
+            {
+                <div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@contactName</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(contactPhone) || !string.IsNullOrWhiteSpace(contactEmail))
+            {
+                <div style="font-size:12px; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    @contactPhone@if(!string.IsNullOrWhiteSpace(contactPhone) && !string.IsNullOrWhiteSpace(contactEmail)){<text> • </text>}@contactEmail
+                </div>
+            }
+        </div>
+    </div>
+    <div @onclick="ClosePopover" style="position:fixed; inset:0; z-index:4999; background:transparent;"></div>
+}
+
 @code {
     [Parameter] public EventCallback<(int dayOfWeek, string startTime, Guid areaId)> OnOpenModal { get; set; }
     [Parameter] public EventCallback<Guid> OnOpenTemplateEdit { get; set; }
@@ -129,6 +180,12 @@
     private Dictionary<Guid, List<BookingTemplate>> bookingsByArea = new();
     private Dictionary<Guid, Area> areaCache = new(); // Cache for area lookups
     private Dictionary<Guid, Dictionary<int, List<BookingWithGhost>>> bookingsByAreaAndDay = new(); // AreaId -> DayOfWeek -> List of bookings with ghost flag
+    
+    // Popover state
+    private bool popoverOpen = false;
+    private BookingTemplate? popoverTemplate = null;
+    private double popoverX = 0;
+    private double popoverY = 0;
     
     protected override async Task OnInitializedAsync()
     {
@@ -747,6 +804,11 @@
         };
     }
     
+    private string GetFullDayName(int dayOfWeek)
+    {
+        return GetDayName(dayOfWeek);
+    }
+    
     // Helper class to hold booking with ghost flag
     private class BookingWithGhost
     {
@@ -780,12 +842,16 @@
         // Only allow editing non-ghost bookings
         if (booking.Id != Guid.Empty)
         {
-            Console.WriteLine($"[ResourceView] Opening template edit modal for booking {booking.Id}");
-            await OnOpenTemplateEdit.InvokeAsync(booking.Id);
+            // Open popover instead of edit modal directly
+            popoverTemplate = booking;
+            popoverX = e.ClientX;
+            popoverY = e.ClientY;
+            popoverOpen = true;
+            StateHasChanged();
         }
         else
         {
-            Console.WriteLine($"[ResourceView] Booking has empty ID, not opening modal");
+            Console.WriteLine($"[ResourceView] Booking has empty ID, not opening popover");
         }
     }
     
@@ -899,6 +965,49 @@
         var shown = areaNames.Take(shownCount);
         var remaining = areaNames.Count - shownCount;
         return string.Join(", ", shown) + $" +{remaining}";
+    }
+    
+    private void ClosePopover()
+    {
+        popoverOpen = false;
+        popoverTemplate = null;
+        StateHasChanged();
+    }
+    
+    private async Task EditFromPopover()
+    {
+        if (popoverTemplate != null)
+        {
+            var templateId = popoverTemplate.Id;
+            ClosePopover();
+            await OnOpenTemplateEdit.InvokeAsync(templateId);
+        }
+    }
+    
+    private async Task DeleteFromPopover()
+    {
+        if (popoverTemplate != null)
+        {
+            try
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var template = await db.BookingTemplates.FindAsync(popoverTemplate.Id);
+                if (template != null)
+                {
+                    db.BookingTemplates.Remove(template);
+                    await db.SaveChangesAsync();
+                    ClosePopover();
+                    
+                    // Reload bookings to refresh the view
+                    await LoadBookingsAsync();
+                    UI.RaiseChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error deleting template booking: {ex.Message}");
+            }
+        }
     }
 }
 
