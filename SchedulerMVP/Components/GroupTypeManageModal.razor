@@ -133,18 +133,8 @@
             }
             else
             {
-                // Create new group type
-                var userId = await UserContext.GetCurrentUserIdAsync();
-                var gt = new SchedulerMVP.Data.Entities.GroupType 
-                { 
-                    Id = Guid.NewGuid(), 
-                    Name = name, 
-                    UserId = userId,
-                    StandardDisplayColor = standardDisplayColor
-                };
-                
-                db.GroupTypes.Add(gt);
-                await db.SaveChangesAsync();
+                // Create new group type using service (ensures ClubId is set correctly)
+                await GroupTypes.CreateAsync(name, standardDisplayColor);
             }
             
             groupTypeName = string.Empty;
