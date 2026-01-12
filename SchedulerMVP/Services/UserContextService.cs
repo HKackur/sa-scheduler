@@ -2,6 +2,8 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
 using System.Text;
 
@@ -12,16 +14,18 @@ public class UserContextService
     private readonly AuthenticationStateProvider _authenticationStateProvider;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IDbContextFactory<ApplicationDbContext> _identityDbFactory;
     
     private const string UserIdCacheKey = "UserContextService_UserId";
     private const string IsAdminCacheKey = "UserContextService_IsAdmin";
     private const string ClubIdCacheKey = "UserContextService_ClubId";
 
-    public UserContextService(AuthenticationStateProvider authenticationStateProvider, IHttpContextAccessor httpContextAccessor, UserManager<ApplicationUser> userManager)
+    public UserContextService(AuthenticationStateProvider authenticationStateProvider, IHttpContextAccessor httpContextAccessor, UserManager<ApplicationUser> userManager, IDbContextFactory<ApplicationDbContext> identityDbFactory)
     {
         _authenticationStateProvider = authenticationStateProvider;
         _httpContextAccessor = httpContextAccessor;
         _userManager = userManager;
+        _identityDbFactory = identityDbFactory;
     }
 
     public string? GetCurrentUserId()
@@ -112,7 +116,11 @@ public class UserContextService
 
         try
         {
-            var user = await _userManager.FindByIdAsync(userId);
+            // Use IDbContextFactory to avoid concurrency issues (same pattern as ClubService)
+            await using var identityDb = await _identityDbFactory.CreateDbContextAsync();
+            var user = await identityDb.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId);
             var clubId = user?.ClubId;
             
             // #region agent log
