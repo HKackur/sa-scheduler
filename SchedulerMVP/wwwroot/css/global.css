@@ -877,7 +877,7 @@ body .app-root .sa-topbar,
     border-radius: 12px !important;
     width: 480px !important;
     box-shadow: 0 8px 28px rgba(16,24,40,.18) !important;
-    max-height: 80vh !important;
+    max-height: 90vh !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
@@ -886,8 +886,10 @@ body .app-root .sa-topbar,
 
 /* Modal content area - scrollable */
 .bm-modal-content {
-    flex: 1 !important;
+    flex: 1 1 auto !important;
     overflow-y: auto !important;
+    overflow-x: hidden !important;
+    min-height: 0 !important; /* Critical for flexbox scrolling */
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
@@ -909,6 +911,7 @@ div.bm-modal.bm-modal-wide {
     margin-bottom: 0 !important;
     margin-top: 0 !important;
     padding-top: 0 !important;
+    flex-shrink: 0 !important; /* Prevent header from shrinking */
 }
 
 /* Gap between title and first field */
