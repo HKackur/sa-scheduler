@@ -924,7 +924,7 @@ div.bm-modal.bm-modal-wide {
     bottom: 0 !important;
     background: #fff !important;
     border-top: 1px solid #e6e7ea !important;
-    padding: 12px 28px 28px 28px !important;
+    padding: 12px 28px 12px 28px !important;
     margin: 0 !important; /* Remove negative margins - footer should match content width */
     border-bottom-left-radius: 12px !important; /* Match modal border-radius */
     border-bottom-right-radius: 12px !important; /* Match modal border-radius */
