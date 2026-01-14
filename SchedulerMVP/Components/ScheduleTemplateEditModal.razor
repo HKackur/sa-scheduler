@@ -8,9 +8,11 @@
             <div class="bm-header">
                 <h2 class="bm-title">Ändra veckomall</h2>
             </div>
-            <div class="bm-field">
-                <label class="bm-label">Mallnamn</label>
-                <input class="bm-input" value="@name" @oninput="OnNameInput" />
+            <div class="bm-modal-content">
+                <div class="bm-field">
+                    <label class="bm-label">Mallnamn</label>
+                    <input class="bm-input" value="@name" @oninput="OnNameInput" />
+                </div>
             </div>
             <div class="bm-actions">
                 <button type="button" @onclick="OnDelete" class="btn-danger-left">Radera mall</button>

@@ -13,18 +13,20 @@
             <div class="bm-header">
                 <h2 class="bm-title">Skapa användare</h2>
             </div>
-            <div class="bm-field">
-                <label class="bm-label">E-post</label>
-                <input class="bm-input" type="email" @bind="newEmail" placeholder="Ange e-postadress" />
+            <div class="bm-modal-content">
+                <div class="bm-field">
+                    <label class="bm-label">E-post</label>
+                    <input class="bm-input" type="email" @bind="newEmail" placeholder="Ange e-postadress" />
+                </div>
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div class="message message-success">@successMessage</div>
+                }
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="message message-error">@errorMessage</div>
+                }
             </div>
-            @if (!string.IsNullOrEmpty(successMessage))
-            {
-                <div class="message message-success">@successMessage</div>
-            }
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="message message-error">@errorMessage</div>
-            }
             <div class="bm-actions">
                 <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
                 <button type="button" @onclick="OnSave" class="btn-primary" disabled="@(string.IsNullOrWhiteSpace(newEmail) || isCreating)">

@@ -10,7 +10,8 @@
             <div class="bm-header">
                 <h2 class="bm-title">Redigera grupp</h2>
             </div>
-            <div class="bm-field">
+            <div class="bm-modal-content">
+                <div class="bm-field">
                 <label class="bm-label">Gruppnamn</label>
                 <input class="bm-input" value="@editName" @oninput="OnNameInput" />
             </div>
@@ -32,6 +33,7 @@
                         <option value="@color">@color</option>
                     }
                 </select>
+            </div>
             </div>
             <div class="bm-actions">
                 <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>

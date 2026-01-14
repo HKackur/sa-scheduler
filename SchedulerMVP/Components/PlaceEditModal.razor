@@ -8,7 +8,8 @@
             <div class="bm-header">
                 <h2 class="bm-title">Redigera plats</h2>
             </div>
-            <div class="bm-field">
+            <div class="bm-modal-content">
+                <div class="bm-field">
                 <label class="bm-label">Platsnamn</label>
                 <input class="bm-input" value="@name" @oninput="OnNameInput" placeholder="Ange platsnamn" />
             </div>
@@ -19,12 +20,13 @@
                     <span class="bm-suffix">min</span>
                 </div>
             </div>
-            @if (!string.IsNullOrWhiteSpace(errorMessage))
-            {
-                <div style="color: #dc2626; font-size: 12px; padding: 8px; background: #fee2e2; border-radius: 4px;">
-                    @errorMessage
-                </div>
-            }
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div style="color: #dc2626; font-size: 12px; padding: 8px; background: #fee2e2; border-radius: 4px;">
+                        @errorMessage
+                    </div>
+                }
+            </div>
             <div class="bm-actions">
                 <button type="button" @onclick="OnDelete" class="btn-danger-left">Ta bort</button>
                 <div style="margin-left:auto;display:flex;gap:12px;">

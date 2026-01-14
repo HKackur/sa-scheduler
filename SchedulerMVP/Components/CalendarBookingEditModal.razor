@@ -14,7 +14,7 @@
         <div class="bm-header">
             <h2 class="bm-title">Redigera bokning</h2>
         </div>
-        
+        <div class="bm-modal-content">
         @* Loading indicator while data loads *@
         @if (Booking == null)
         {
@@ -170,7 +170,8 @@
                 </div>
             </div>
         }
-        
+        }
+        </div>
         @* Action Buttons *@
         <div class="bm-actions" @onclick:stopPropagation="true">
             <button type="button" @onclick="DeleteBooking" @onclick:stopPropagation="true" class="btn-danger" style="margin-right: auto;">Ta bort</button>

@@ -8,7 +8,7 @@
             <div class="bm-header">
                 <h2 class="bm-title">@(IsEditMode ? "Redigera modal" : "Ny modal")</h2>
             </div>
-            
+            <div class="bm-modal-content">
             <div class="bm-field">
                 <label class="bm-label">Titel</label>
                 <input class="bm-input" type="text" @bind="modal.Title" placeholder="Ange titel" maxlength="200" />
@@ -60,7 +60,7 @@
             {
                 <div class="message message-error">@errorMessage</div>
             }
-
+            </div>
             <div class="bm-actions">
                 <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
                 <button type="button" @onclick="OnSave" class="btn-primary" disabled="@(string.IsNullOrWhiteSpace(modal.Title) || string.IsNullOrWhiteSpace(modal.Content) || isSaving)">

@@ -8,9 +8,11 @@
             <div class="bm-header">
                 <h3 class="bm-title">Skapa kopia</h3>
             </div>
-            <div class="bm-field">
-                <label class="bm-label">Mallnamn</label>
-                <input class="bm-input" value="@name" @oninput="OnNameInput" placeholder="Ange namn" />
+            <div class="bm-modal-content">
+                <div class="bm-field">
+                    <label class="bm-label">Mallnamn</label>
+                    <input class="bm-input" value="@name" @oninput="OnNameInput" placeholder="Ange namn" />
+                </div>
             </div>
             <div class="bm-actions">
                 <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
