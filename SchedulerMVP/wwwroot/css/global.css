@@ -890,7 +890,7 @@ body .app-root .sa-topbar,
     flex: 1 1 auto !important;
     min-height: 0 !important; /* Critical for flexbox scrolling */
     overflow-y: auto !important; /* Content scrolls here */
-    padding: 12px 28px 0px 28px !important;
+    padding: 12px 20px 0px 20px !important;
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
@@ -906,7 +906,7 @@ div.bm-modal.bm-modal-wide {
 .bm-header {
     flex-shrink: 0 !important; /* Prevent header from shrinking */
     background: #fff !important;
-    padding: 28px 28px 0 28px !important; /* Padding matches content */
+    padding: 28px 20px 0 20px !important; /* Padding matches content */
     z-index: 12 !important;
 }
 
@@ -924,7 +924,7 @@ div.bm-modal.bm-modal-wide {
     bottom: 0 !important;
     background: #fff !important;
     border-top: 1px solid #e6e7ea !important;
-    padding: 12px 28px 12px 28px !important;
+    padding: 12px 20px 12px 20px !important;
     margin: 0 !important; /* Remove negative margins - footer should match content width */
     border-bottom-left-radius: 12px !important; /* Match modal border-radius */
     border-bottom-right-radius: 12px !important; /* Match modal border-radius */
