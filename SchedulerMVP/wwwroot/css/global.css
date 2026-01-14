@@ -880,7 +880,6 @@ body .app-root .sa-topbar,
     max-height: 90vh !important;
     display: flex !important;
     flex-direction: column !important;
-    overflow: hidden !important;
     padding: 28px 28px 0 28px !important;
 }
 
@@ -889,7 +888,6 @@ body .app-root .sa-topbar,
     flex: 1 1 auto !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
-    min-height: 0 !important; /* Critical for flexbox scrolling */
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
