@@ -877,16 +877,17 @@ body .app-root .sa-topbar,
     border-radius: 12px !important;
     width: 480px !important;
     box-shadow: 0 8px 28px rgba(16,24,40,.18) !important;
-    max-height: 95vh !important;
+    max-height: calc(95vh - 50px) !important; /* Account for top: 50px */
     display: flex !important;
     flex-direction: column !important;
-    overflow-y: auto !important;
     padding: 28px 28px 0 28px !important;
 }
 
-/* Modal content area */
+/* Modal content area - scrollable inner content */
 .bm-modal-content {
-    flex: 1 1 auto !important;
+    flex: 1 !important;
+    overflow-y: auto !important;
+    min-height: 0 !important; /* Critical for flexbox scrolling */
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
