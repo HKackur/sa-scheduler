@@ -332,18 +332,19 @@
                 await using var db = await DbFactory.CreateDbContextAsync();
                 EditingTemplate = await db.BookingTemplates
                     .Include(b => b.Area)
+                        .ThenInclude(a => a.Place)
                     .Include(b => b.Group)
                     .FirstOrDefaultAsync(b => b.Id == TemplateId.Value);
 
                 if (EditingTemplate != null)
                 {
                     // Build time options based on place snap (fallback 30 min)
+                    // Use Place from Area navigation property (already loaded via ThenInclude)
                     var snap = 30;
-                    if (EditingTemplate.Area != null)
+                    if (EditingTemplate.Area?.Place != null)
                     {
-                        var place = await db.Places.FirstOrDefaultAsync(p => p.Id == EditingTemplate.Area.PlaceId);
-                        if (place != null && place.SnapMin > 0) snap = place.SnapMin;
-                        placeName = place?.Name;
+                        if (EditingTemplate.Area.Place.SnapMin > 0) snap = EditingTemplate.Area.Place.SnapMin;
+                        placeName = EditingTemplate.Area.Place.Name;
                     }
                     timeOptions = GenerateTimes(snap);
                     StartTime = MinutesToString(EditingTemplate.StartMin);
@@ -360,11 +361,12 @@
                     groups = await groupsTask;
                     AvailablePlaces = await placesTask;
                     
+                    // Set selected place and area, but defer loading areas until user opens dropdown
                     if (EditingTemplate.Area != null)
                     {
                         SelectedPlaceId = EditingTemplate.Area.PlaceId;
                         SelectedAreaId = EditingTemplate.Area.Id;
-                        await LoadAvailableAreasAsync();
+                        // Don't load areas here - load lazily when user opens area dropdown
                     }
                     Notes = EditingTemplate.Notes;
                     ContactName = EditingTemplate.ContactName;
@@ -375,7 +377,7 @@
                                  || !string.IsNullOrWhiteSpace(ContactName)
                                  || !string.IsNullOrWhiteSpace(ContactPhone)
                                  || !string.IsNullOrWhiteSpace(ContactEmail);
-                    await RecheckConflictsAsync();
+                    // Don't check conflicts on modal open - defer until user interaction
                 }
             }
         }
@@ -502,6 +504,12 @@
     
     private async Task ToggleAreaDropdown()
     {
+        // Load areas lazily when dropdown is opened for the first time
+        if (!showAreaDropdown && AvailableAreas == null && SelectedPlaceId.HasValue)
+        {
+            await LoadAvailableAreasAsync();
+        }
+        
         if (!showAreaDropdown && AvailableAreas != null)
         {
             await CheckAllAreasAvailabilityAsync();

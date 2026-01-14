@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
-using System.Text;
 
 namespace SchedulerMVP.Services;
 
@@ -11,7 +10,7 @@ public class GroupService : IGroupService
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly UserContextService _userContext;
     private readonly IMemoryCache _cache;
-    private const int CacheTTLSeconds = 60; // Cache for 60 seconds
+    private const int CacheTTLSeconds = 300; // Cache for 5 minutes (reduces database load)
 
     public GroupService(IDbContextFactory<AppDbContext> dbFactory, UserContextService userContext, IMemoryCache cache)
     {
@@ -22,24 +21,13 @@ public class GroupService : IGroupService
 
     public async Task<List<Group>> GetGroupsAsync()
     {
-        // #region agent log
-        try { var userId = _userContext.GetCurrentUserId(); File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"GroupService.GetGroupsAsync:entry\",\"message\":\"GetGroupsAsync called\",\"data\":{{\"userId\":\"{userId ?? "null"}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
-        // #endregion
-        
         var clubId = await _userContext.GetCurrentUserClubIdAsync();
         var isAdmin = await _userContext.IsAdminAsync();
         var cacheKey = $"groups:club:{clubId?.ToString() ?? "null"}:admin:{isAdmin}";
 
-        // #region agent log
-        try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"GroupService.GetGroupsAsync:afterContext\",\"message\":\"Context values retrieved\",\"data\":{{\"clubId\":\"{clubId?.ToString() ?? "null"}\",\"isAdmin\":{isAdmin.ToString().ToLower()}}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
-        // #endregion
-
         // Try to get from cache
         if (_cache.TryGetValue(cacheKey, out List<Group>? cachedGroups) && cachedGroups != null)
         {
-            // #region agent log
-            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"GroupService.GetGroupsAsync:cacheHit\",\"message\":\"Returning cached groups\",\"data\":{{\"count\":{cachedGroups.Count}}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
-            // #endregion
             return cachedGroups;
         }
 
@@ -52,33 +40,17 @@ public class GroupService : IGroupService
         {
             // Regular users see ONLY groups with exact ClubId match (no null ClubId data)
             query = query.Where(g => g.ClubId == clubId.Value);
-            // #region agent log
-            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"GroupService.GetGroupsAsync:filterApplied\",\"message\":\"Applied ClubId filter for regular user\",\"data\":{{\"filterClubId\":\"{clubId.Value}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
-            // #endregion
         }
         else if (!isAdmin && !clubId.HasValue)
         {
             // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
             query = query.Where(g => false);
-            // #region agent log
-            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"GroupService.GetGroupsAsync:filterApplied\",\"message\":\"Applied empty filter for user without club (security)\",\"data\":{{}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
-            // #endregion
-        }
-        else
-        {
-            // #region agent log
-            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"GroupService.GetGroupsAsync:noFilter\",\"message\":\"No filter applied (admin)\",\"data\":{{\"isAdmin\":true}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
-            // #endregion
         }
 
         var groups = await query
             .AsNoTracking()
             .OrderBy(g => g.Name)
             .ToListAsync();
-
-        // #region agent log
-        try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"GroupService.GetGroupsAsync:queryResult\",\"message\":\"Query executed\",\"data\":{{\"count\":{groups.Count},\"clubIds\":[{string.Join(",", groups.Take(20).Select(g => $"\"{g.ClubId?.ToString() ?? "null"}\""))}]}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}}\n", Encoding.UTF8); } catch { }
-        // #endregion
 
         // Cache for 60 seconds
         _cache.Set(cacheKey, groups, TimeSpan.FromSeconds(CacheTTLSeconds));

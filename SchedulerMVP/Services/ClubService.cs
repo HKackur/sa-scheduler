@@ -13,7 +13,7 @@ public class ClubService : IClubService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly UserContextService _userContext;
     private readonly IMemoryCache _cache;
-    private const int CacheTTLSeconds = 60;
+    private const int CacheTTLSeconds = 300; // Cache for 5 minutes (reduces database load)
 
     public ClubService(
         IDbContextFactory<AppDbContext> dbFactory,

@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
-using System.Text;
 
 namespace SchedulerMVP.Services;
 
@@ -97,16 +96,10 @@ public class UserContextService
         var httpContext = _httpContextAccessor.HttpContext;
         if (httpContext?.Items.TryGetValue(ClubIdCacheKey, out var cachedClubId) == true)
         {
-            // #region agent log
-            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"UserContextService.GetCurrentUserClubIdAsync:cacheHit\",\"message\":\"Returning cached ClubId\",\"data\":{{\"clubId\":\"{cachedClubId?.ToString() ?? "null"}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"D\"}}\n", Encoding.UTF8); } catch { }
-            // #endregion
             return cachedClubId as Guid?;
         }
 
         var userId = await GetCurrentUserIdAsync();
-        // #region agent log
-        try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"UserContextService.GetCurrentUserClubIdAsync:beforeDb\",\"message\":\"About to query database for ClubId\",\"data\":{{\"userId\":\"{userId ?? "null"}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}}\n", Encoding.UTF8); } catch { }
-        // #endregion
         if (string.IsNullOrEmpty(userId))
         {
             if (httpContext != null)
@@ -122,10 +115,6 @@ public class UserContextService
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Id == userId);
             var clubId = user?.ClubId;
-            
-            // #region agent log
-            try { File.AppendAllText("/Users/henrikkackur/SchedulerMVP/.cursor/debug.log", $"{{\"timestamp\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()},\"location\":\"UserContextService.GetCurrentUserClubIdAsync:afterDb\",\"message\":\"Database query completed\",\"data\":{{\"userId\":\"{userId}\",\"userFound\":{(user != null).ToString().ToLower()},\"clubId\":\"{clubId?.ToString() ?? "null"}\"}},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}}\n", Encoding.UTF8); } catch { }
-            // #endregion
             
             // Cache result for request lifetime
             if (httpContext != null)

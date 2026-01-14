@@ -443,21 +443,23 @@
     {
         try
         {
-            loadingMessage = "Läser in platser...";
+            loadingMessage = "Läser in data...";
             await InvokeAsync(StateHasChanged);
             
-            // Preload all places and areas
-            var places = await PlaceService.GetPlacesAsync();
-            foreach (var place in places.Take(3)) // Preload first 3 places' areas
-            {
-                await PlaceService.GetAreasForPlaceAsync(place.Id);
-            }
+            // Preload places, areas, and templates in parallel for better performance
+            var placesTask = PlaceService.GetPlacesAsync();
+            var templatesTask = TemplateService.GetTemplatesAsync();
             
-            loadingMessage = "Läser in veckomallar...";
-            await InvokeAsync(StateHasChanged);
+            // Wait for places first (needed for areas)
+            var places = await placesTask;
             
-            // Preload templates
-            await TemplateService.GetTemplatesAsync();
+            // Preload areas for first 3 places in parallel
+            var areaTasks = places.Take(3)
+                .Select(place => PlaceService.GetAreasForPlaceAsync(place.Id))
+                .ToArray();
+            
+            // Wait for templates and areas in parallel
+            await Task.WhenAll(templatesTask, Task.WhenAll(areaTasks));
             
             loadingMessage = "Nästan klart...";
             await InvokeAsync(StateHasChanged);
