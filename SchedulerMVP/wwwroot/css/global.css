@@ -880,14 +880,13 @@ body .app-root .sa-topbar,
     max-height: 90vh !important;
     display: flex !important;
     flex-direction: column !important;
+    overflow-y: auto !important;
     padding: 28px 28px 0 28px !important;
 }
 
-/* Modal content area - scrollable */
+/* Modal content area */
 .bm-modal-content {
     flex: 1 1 auto !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
