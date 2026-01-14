@@ -14,11 +14,10 @@
     <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="CloseModal"></div>
     
     <div class="bm-modal" @onclick="CloseAreaDropdown">
-        <div class="bm-modal-content">
         <div class="bm-header">
             <h2 class="bm-title">Skapa bokning</h2>
         </div>
-        
+        <div class="bm-modal-content">
         @* Loading indicator while groups are loading *@
         @if (Groups == null)
         {

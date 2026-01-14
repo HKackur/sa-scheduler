@@ -904,17 +904,14 @@ div.bm-modal.bm-modal-wide {
 
 /* Modal header - white background to prevent transparency */
 .bm-header {
-    position: sticky !important;
-    top: 0 !important;
-    background: #fff !important;
-    z-index: 12 !important;
-    padding: 0 !important;
-    margin: 0 0 0 0 !important; /* No margin - padding in content handles spacing */
     flex-shrink: 0 !important; /* Prevent header from shrinking */
+    background: #fff !important;
+    padding: 28px 28px 0 28px !important; /* Padding matches content */
+    z-index: 12 !important;
 }
 
-/* Gap between title and first field */
-.bm-header + .bm-field {
+/* Gap between title and first field in content */
+.bm-modal-content > .bm-field:first-child {
     margin-top: 12px !important;
 }
 
