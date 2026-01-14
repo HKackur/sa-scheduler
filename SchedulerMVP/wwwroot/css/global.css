@@ -864,7 +864,7 @@ body .app-root .sa-topbar,
     transform: translateY(1px) !important;
 }
 
-/* Modal styles */
+/* Modal styles - Best practice: flex column container with overflow hidden */
 .bm-modal {
     position: fixed !important;
     top: 50px !important;
@@ -880,16 +880,17 @@ body .app-root .sa-topbar,
     max-height: calc(95vh - 50px) !important; /* Account for top: 50px */
     display: flex !important;
     flex-direction: column !important;
-    overflow: hidden !important; /* Don't scroll modal itself */
-    padding: 0 !important; /* No padding on modal - padding is on content */
+    overflow: hidden !important; /* Container doesn't scroll - content does */
+    padding: 0 !important; /* No padding on container */
 }
 
-/* Modal content area - scrollable, padding applied here so scrollbar is at edge */
+/* Modal content area - scrollable body (like Bootstrap modal-body) */
+/* Best practice: content scrolls, scrollbar at right edge (no padding on scrollable container) */
 .bm-modal-content {
     flex: 1 1 auto !important;
     min-height: 0 !important; /* Critical for flexbox scrolling */
-    overflow-y: auto !important; /* Content area scrolls */
-    padding: 28px 28px 0 28px !important; /* Padding moved here */
+    overflow-y: auto !important; /* Content scrolls here */
+    padding: 28px 28px 0 28px !important; /* Padding on content - scrollbar inside padding (standard) */
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
@@ -907,10 +908,8 @@ div.bm-modal.bm-modal-wide {
     top: 0 !important;
     background: #fff !important;
     z-index: 12 !important;
-    padding-bottom: 0 !important;
-    margin-bottom: 0 !important;
-    margin-top: 0 !important;
-    padding-top: 0 !important;
+    padding: 0 !important;
+    margin: 0 0 0 0 !important; /* No margin - padding in content handles spacing */
     flex-shrink: 0 !important; /* Prevent header from shrinking */
 }
 
