@@ -891,6 +891,7 @@ body .app-root .sa-topbar,
     min-height: 0 !important; /* Critical for flexbox scrolling */
     overflow-y: auto !important; /* Content scrolls here */
     padding: 28px 28px 0 28px !important; /* Padding on content - scrollbar inside padding (standard) */
+    margin-bottom: 32px !important; /* Add space so content doesn't hide behind footer */
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
@@ -928,7 +929,7 @@ div.bm-modal.bm-modal-wide {
     background: #fff !important;
     border-top: 1px solid #e6e7ea !important;
     padding: 12px 28px 28px 28px !important;
-    margin: 0 -28px -28px -28px !important;
+    margin: 0 !important; /* Remove negative margins - footer should match content width */
     border-bottom-left-radius: 12px !important; /* Match modal border-radius */
     border-bottom-right-radius: 12px !important; /* Match modal border-radius */
     z-index: 10 !important;
