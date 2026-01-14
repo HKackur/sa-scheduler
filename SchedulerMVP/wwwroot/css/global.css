@@ -880,14 +880,16 @@ body .app-root .sa-topbar,
     max-height: calc(95vh - 50px) !important; /* Account for top: 50px */
     display: flex !important;
     flex-direction: column !important;
-    overflow-y: auto !important; /* Scroll on modal itself so scrollbar is at right edge */
-    padding: 28px 28px 0 28px !important;
+    overflow: hidden !important; /* Don't scroll modal itself */
+    padding: 0 !important; /* No padding on modal - padding is on content */
 }
 
-/* Modal content area - no scrolling here, modal itself scrolls */
+/* Modal content area - scrollable, padding applied here so scrollbar is at edge */
 .bm-modal-content {
     flex: 1 1 auto !important;
-    min-height: 0 !important; /* Critical for flexbox */
+    min-height: 0 !important; /* Critical for flexbox scrolling */
+    overflow-y: auto !important; /* Content area scrolls */
+    padding: 28px 28px 0 28px !important; /* Padding moved here */
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
