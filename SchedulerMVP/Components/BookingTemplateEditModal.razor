@@ -4,6 +4,8 @@
 @inject SchedulerMVP.Services.UserContextService UserContext
 @inject SchedulerMVP.Services.UIState UI
 @inject SchedulerMVP.Services.IConflictService ConflictService
+@inject SchedulerMVP.Services.IGroupService GroupService
+@inject SchedulerMVP.Services.IPlaceService PlaceService
 
 @if (IsOpen && EditingTemplate != null)
 {
@@ -329,17 +331,12 @@
                 SelectedGroupId = EditingTemplate.GroupId;
                 SelectedDay = EditingTemplate.DayOfWeek;
 
-                // Load groups for dropdown
-                var userId = await UserContext.GetCurrentUserIdAsync();
-                var isAdmin = await UserContext.IsAdminAsync();
-                var query = db.Groups.AsQueryable();
-                if (!isAdmin && !string.IsNullOrEmpty(userId))
-                {
-                    query = query.Where(g => g.UserId == userId);
-                }
-                groups = await query.OrderBy(g => g.Name).ToListAsync();
+                // Load groups FIRST - use GroupService for caching and consistent filtering (ClubId-based)
+                Console.WriteLine($"[BookingTemplateEditModal] Loading groups using GroupService...");
+                groups = await GroupService.GetGroupsAsync();
+                Console.WriteLine($"[BookingTemplateEditModal] Groups loaded: {groups?.Count ?? 0} groups");
                 
-                // Load places and areas
+                // Load places FIRST - use PlaceService for caching and consistent filtering (ClubId-based)
                 await LoadAvailablePlacesAsync();
                 if (EditingTemplate.Area != null)
                 {
@@ -357,6 +354,9 @@
                              || !string.IsNullOrWhiteSpace(ContactPhone)
                              || !string.IsNullOrWhiteSpace(ContactEmail);
                 await RecheckConflictsAsync();
+                
+                // Ensure UI updates after data is loaded
+                StateHasChanged();
             }
         }
     }
@@ -391,16 +391,10 @@
     {
         try
         {
-            await using var db = await DbFactory.CreateDbContextAsync();
-            var userId = await UserContext.GetCurrentUserIdAsync();
-            var isAdmin = await UserContext.IsAdminAsync();
-            var query = db.Places.AsQueryable();
-            // Filter by user - only show places created by the current user (unless admin)
-            if (!isAdmin && !string.IsNullOrEmpty(userId))
-            {
-                query = query.Where(p => p.UserId == userId);
-            }
-            AvailablePlaces = await query.OrderBy(p => p.Name).ToListAsync();
+            // Use PlaceService for caching and consistent filtering (ClubId-based)
+            Console.WriteLine($"[BookingTemplateEditModal] Loading places using PlaceService...");
+            AvailablePlaces = await PlaceService.GetPlacesAsync();
+            Console.WriteLine($"[BookingTemplateEditModal] Places loaded: {AvailablePlaces?.Count ?? 0} places");
         }
         catch (Exception ex)
         {

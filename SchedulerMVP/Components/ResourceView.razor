@@ -712,13 +712,17 @@
                         var leftPos = booking.StartMin;
                         var width = booking.EndMin - booking.StartMin;
                         var isGhost = bookingWithGhost.IsGhost;
-                        var bookingClass = isGhost ? "resource-booking-block resource-booking-ghost" : "resource-booking-block";
+                        var bookingClass = "resource-booking-block";
+                        if (isGhost)
+                        {
+                            bookingClass += " resource-booking-ghost";
+                        }
                         var contentClass = "resource-booking-content"; // Same structure for both
                         
-                        // Get color style for non-ghost bookings (ghost bookings use CSS class)
-                        var colorStyle = isGhost ? string.Empty : GetResourceBookingColorStyle(booking);
+                        // Get color style for all bookings (ghost bookings use group color with dashed border and opacity)
+                        var colorStyle = GetResourceBookingColorStyle(booking, isGhost);
                         var positionStyle = $"left: {leftPos}px; width: {width}px;";
-                        var fullStyle = isGhost ? positionStyle : $"{positionStyle} {colorStyle}";
+                        var fullStyle = $"{positionStyle} {colorStyle}";
                         
                         // For ghost bookings: show blocking areas on line 1, time on line 2
                         // For direct bookings: show group name on line 1, time on line 2
@@ -737,8 +741,7 @@
                         // Only add click handler for non-ghost bookings
                         if (!isGhost)
                         {
-                            builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnBookingBlockClick(booking, e)));
-                            builder.AddAttribute(sequence++, "onclick:stopPropagation", "true");
+                            builder.AddAttribute(sequence++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, async (e) => await OnBookingBlockClick(booking, e)));
                         }
                         
                         builder.OpenElement(sequence++, "div");
@@ -818,23 +821,33 @@
         public string DisplayText { get; set; } = string.Empty; // Formatted text for display
     }
     
-    private string GetResourceBookingColorStyle(BookingTemplate booking)
+    private string GetResourceBookingColorStyle(BookingTemplate booking, bool isGhost = false)
     {
-        if (booking.Group == null)
+        // Get color from group, default to Ljusblå if no group
+        var defaultColor = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"];
+        var colorInfo = defaultColor;
+        
+        if (booking.Group != null)
         {
-            // Default colors if no group
-            var defaultColor = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"];
-            return $"background-color: {defaultColor.Background}; border: 1px solid {defaultColor.Border}; color: {defaultColor.Text};";
+            // Get color from group's DisplayColor, default to Ljusblå if not found
+            var displayColor = booking.Group.DisplayColor ?? "Ljusblå";
+            colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
+                displayColor, 
+                defaultColor);
         }
         
-        // Get color from group's DisplayColor, default to Ljusblå if not found
-        var displayColor = booking.Group.DisplayColor ?? "Ljusblå";
-        var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
-            displayColor, 
-            SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
+        // Ghost bookings use group color but with dashed border and reduced opacity
+        if (isGhost)
+        {
+            return $"background-color: {colorInfo.Background}; border: 1px dashed {colorInfo.Border}; color: {colorInfo.Text}; opacity: 0.87;";
+        }
         
+        // Direct bookings use solid border and full opacity
         return $"background-color: {colorInfo.Background}; border: 1px solid {colorInfo.Border}; color: {colorInfo.Text};";
     }
+    
+    private DateTime _lastBookingClickTime = DateTime.MinValue;
+    private const int CLICK_COOLDOWN_MS = 100; // 100ms cooldown between booking click and grid click
     
     private async Task OnBookingBlockClick(BookingTemplate booking, MouseEventArgs e)
     {
@@ -842,6 +855,9 @@
         // Only allow editing non-ghost bookings
         if (booking.Id != Guid.Empty)
         {
+            // Record the time of this click
+            _lastBookingClickTime = DateTime.UtcNow;
+            
             // Open popover instead of edit modal directly
             popoverTemplate = booking;
             popoverX = e.ClientX;
@@ -857,6 +873,21 @@
     
     private async Task OnDayGridColumnClick(MouseEventArgs e, int day, Guid areaId)
     {
+        // Don't open modal if a booking was just clicked (within cooldown period)
+        var timeSinceBookingClick = (DateTime.UtcNow - _lastBookingClickTime).TotalMilliseconds;
+        if (timeSinceBookingClick < CLICK_COOLDOWN_MS)
+        {
+            Console.WriteLine($"[ResourceView] OnDayGridColumnClick ignored - booking was clicked {timeSinceBookingClick:F0}ms ago");
+            return;
+        }
+        
+        // Also check if popover is currently open
+        if (popoverOpen)
+        {
+            Console.WriteLine($"[ResourceView] OnDayGridColumnClick ignored - popover is open");
+            return;
+        }
+        
         Console.WriteLine($"[ResourceView] OnDayGridColumnClick called: day={day}, areaId={areaId}, offsetX={e.OffsetX}, offsetY={e.OffsetY}");
         
         // Calculate which hour was clicked based on offsetX
@@ -1351,10 +1382,9 @@
     /* resource-booking-primary removed - using inline styles with DisplayColor instead */
     
     .resource-booking-ghost {
-        background: #e2e8f0; /* slate-200 */
-        border: 1px dashed #9ca3af; /* slate-400 */
-        color: #334155; /* slate-700 */
-        opacity: 0.85;
+        /* Colors are now handled by inline styles from GetResourceBookingColorStyle() */
+        /* Border style is set inline (dashed), background and text colors come from group colors */
+        /* Opacity is set inline (0.87) */
         z-index: 1; /* Below primary bookings */
         cursor: default; /* Ghost bookings are not clickable */
         pointer-events: none; /* Allow clicks to pass through to grid cells below */

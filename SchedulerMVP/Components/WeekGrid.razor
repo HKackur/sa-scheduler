@@ -1899,25 +1899,26 @@
     
     private string GetBookingColorStyle(TemplateView template, bool isGhost)
     {
-        // Ghost bookings ALWAYS use gray colors for better contrast
+        // Get color from group, default to Ljusblå if no group
+        var defaultColor = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"];
+        var colorInfo = defaultColor;
+        
+        if (template.Group != null)
+        {
+            // Get color from group's DisplayColor, default to Ljusblå if not found
+            var displayColor = template.Group.DisplayColor ?? "Ljusblå";
+            colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
+                displayColor, 
+                defaultColor);
+        }
+        
+        // Ghost bookings use group color but with dashed border and reduced opacity
         if (isGhost)
         {
-            return "background-color: #f3f4f6; border: 1px dashed #d1d5db; color: #6b7280;";
+            return $"background-color: {colorInfo.Background}; border: 1px dashed {colorInfo.Border}; color: {colorInfo.Text}; opacity: 0.87;";
         }
         
-        if (template.Group == null)
-        {
-            // Default colors if no group
-            var defaultColor = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"];
-            return $"background-color: {defaultColor.Background}; border: 1px solid {defaultColor.Border}; color: {defaultColor.Text};";
-        }
-        
-        // Get color from group's DisplayColor, default to Ljusblå if not found
-        var displayColor = template.Group.DisplayColor ?? "Ljusblå";
-        var colorInfo = SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.GetValueOrDefault(
-            displayColor, 
-            SchedulerMVP.Data.Entities.GroupDisplayColors.Colors["Ljusblå"]);
-        
+        // Direct bookings use solid border and full opacity
         return $"background-color: {colorInfo.Background}; border: 1px solid {colorInfo.Border}; color: {colorInfo.Text};";
     }
     

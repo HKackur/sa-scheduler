@@ -527,10 +527,9 @@ body .app-root .sa-topbar,
 
 /* ghost booking (from other areas) */
 .booking--ghost {
-    /* Slightly darker neutrals for better contrast, still secondary to blue primaries */
-    background-color: #e2e8f0; /* slate-200 */
-    border: 1px dashed #9ca3af; /* slate-400 */
-    color: #334155; /* slate-700 text */
+    /* Colors are now handled by inline styles from GetBookingColorStyle() */
+    /* Border style is set inline (dashed), background and text colors come from group colors */
+    /* This class is kept for potential future styling needs, but doesn't override colors */
 }
 
 .booking-content {
