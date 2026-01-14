@@ -54,7 +54,7 @@ public class PlaceService : IPlaceService
             .OrderBy(p => p.Name)
             .ToListAsync();
 
-        // Cache for 60 seconds
+        // Cache for 5 minutes
         _cache.Set(cacheKey, places, TimeSpan.FromSeconds(CacheTTLSeconds));
 
         return places;
@@ -217,7 +217,7 @@ public class PlaceService : IPlaceService
             .OrderBy(a => a.Path)
             .ToListAsync();
 
-        // Cache for 60 seconds
+        // Cache for 5 minutes
         _cache.Set(cacheKey, areas, TimeSpan.FromSeconds(CacheTTLSeconds));
 
         return areas;

@@ -52,7 +52,7 @@ public class GroupService : IGroupService
             .OrderBy(g => g.Name)
             .ToListAsync();
 
-        // Cache for 60 seconds
+        // Cache for 5 minutes
         _cache.Set(cacheKey, groups, TimeSpan.FromSeconds(CacheTTLSeconds));
 
         return groups;
