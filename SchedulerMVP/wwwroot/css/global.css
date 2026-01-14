@@ -880,14 +880,14 @@ body .app-root .sa-topbar,
     max-height: calc(95vh - 50px) !important; /* Account for top: 50px */
     display: flex !important;
     flex-direction: column !important;
+    overflow-y: auto !important; /* Scroll on modal itself so scrollbar is at right edge */
     padding: 28px 28px 0 28px !important;
 }
 
-/* Modal content area - scrollable inner content */
+/* Modal content area - no scrolling here, modal itself scrolls */
 .bm-modal-content {
-    flex: 1 !important;
-    overflow-y: auto !important;
-    min-height: 0 !important; /* Critical for flexbox scrolling */
+    flex: 1 1 auto !important;
+    min-height: 0 !important; /* Critical for flexbox */
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
@@ -928,6 +928,8 @@ div.bm-modal.bm-modal-wide {
     border-top: 1px solid #e6e7ea !important;
     padding: 12px 28px 28px 28px !important;
     margin: 0 -28px -28px -28px !important;
+    border-bottom-left-radius: 12px !important; /* Match modal border-radius */
+    border-bottom-right-radius: 12px !important; /* Match modal border-radius */
     z-index: 10 !important;
     flex-shrink: 0 !important;
 }
