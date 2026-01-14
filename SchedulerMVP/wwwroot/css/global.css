@@ -877,7 +877,7 @@ body .app-root .sa-topbar,
     border-radius: 12px !important;
     width: 480px !important;
     box-shadow: 0 8px 28px rgba(16,24,40,.18) !important;
-    max-height: 90vh !important;
+    max-height: 95vh !important;
     display: flex !important;
     flex-direction: column !important;
     overflow-y: auto !important;
