@@ -885,13 +885,12 @@ body .app-root .sa-topbar,
 }
 
 /* Modal content area - scrollable body (like Bootstrap modal-body) */
-/* Best practice: content scrolls, scrollbar at right edge (no padding on scrollable container) */
+/* Best practice: content scrolls, padding-bottom ensures content doesn't hide behind footer */
 .bm-modal-content {
     flex: 1 1 auto !important;
     min-height: 0 !important; /* Critical for flexbox scrolling */
     overflow-y: auto !important; /* Content scrolls here */
-    padding: 28px 28px 0 28px !important; /* Padding on content - scrollbar inside padding (standard) */
-    margin-bottom: 32px !important; /* Add space so content doesn't hide behind footer */
+    padding: 28px 28px 28px 28px !important; /* Padding on all sides - padding-bottom prevents content hiding behind footer */
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
