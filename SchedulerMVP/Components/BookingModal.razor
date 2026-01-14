@@ -14,7 +14,7 @@
     <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="CloseModal"></div>
     
     <div class="bm-modal" @onclick="CloseAreaDropdown">
-        <div style="flex: 1; overflow-y: auto;">
+        <div class="bm-modal-content">
         <div class="bm-header">
             <h2 class="bm-title">Skapa bokning</h2>
         </div>
@@ -256,74 +256,6 @@
             <button type="button" @onclick="SaveBookingTemplate" @onclick:stopPropagation="true" class="btn-primary" disabled="@(hasConflicts || saveInProgress)">Spara</button>
         </div>
     </div>
-    
-    <style>
-        /* ============================================
-           BOOKING MODAL - STRUCTURE
-           ============================================ */
-        .bm-modal{position:fixed;top:50px;left:50%;transform:translateX(-50%);background:#fff;color:#0f1720;padding:28px 28px 0 28px;z-index:4000;border:1px solid #e6e7ea;border-radius:12px;width:480px;box-shadow:0 8px 28px rgba(16,24,40,.18);max-height:80vh;display:flex;flex-direction:column;overflow:hidden}
-        
-        .bm-header{margin-bottom:20px}
-        .bm-title{font-size:18px;font-weight:700;color:#0f1720;margin:0}
-        .bm-field{margin-bottom:16px}
-        .bm-label{display:block;font-size:12px;font-weight:500;color:#374151;margin-bottom:6px}
-        
-        /* ============================================
-           BOOKING MODAL - INPUT STYLING
-           All inputs use .bm-input for consistency
-           All inputs have same height (40px) except textarea (80px)
-           ============================================ */
-        .bm-input{width:100%;padding:10px 12px;border-radius:4px;border:1px solid #dcdee2;background-color:#f3f5f7;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;box-sizing:border-box;min-height:40px}
-        .bm-input[type="time"],.bm-input[type="date"]{padding:10px 12px}
-        .bm-input[type="time"]::-webkit-calendar-picker-indicator,.bm-input[type="date"]::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer}
-        textarea.bm-input{min-height:80px;padding:10px 12px;resize:vertical}
-        select.bm-input{appearance:none;-webkit-appearance:none;-moz-appearance:none;cursor:pointer;padding-right:40px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 24 24' width='20'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;background-size:20px 20px}
-        
-        /* ============================================
-           BOOKING MODAL - DAY SELECTION
-           ============================================ */
-        .bm-days{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-start;margin-top:4px;margin-bottom:4px}
-        .bm-day{display:flex;flex-direction:column;align-items:center;width:44px}
-        .bm-day-label{font-weight:600;margin-bottom:6px;color:#0f1720;font-size:12px;text-align:center}
-        .bm-checkbox{appearance:none;width:20px;height:20px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;position:relative;display:inline-block}
-        .bm-checkbox:checked{background:#1761a5;border-color:#1761a5}
-        .bm-checkbox:checked::after{content:"";position:absolute;left:5px;top:2px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
-        
-        /* ============================================
-           BOOKING MODAL - TIME SELECTION
-           ============================================ */
-        .bm-time-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-        .bm-time-row > div{box-sizing:border-box;min-width:0}
-        
-        /* ============================================
-           BOOKING MODAL - CUSTOM SELECTS (Place/Area)
-           ============================================ */
-        .bm-custom-select{position:relative;width:100%;box-sizing:border-box}
-        .bm-custom-select-trigger{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #dcdee2;border-radius:4px;background-color:#f3f5f7;cursor:pointer;box-shadow:0 2px 8px 0 rgba(0,0,0,0.02);font-size:12px;min-height:40px;box-sizing:border-box;width:100%}
-        .bm-custom-select-trigger:hover{border-color:#cbd5e1}
-        .bm-selected-area{display:flex;align-items:center;gap:8px;flex:1}
-        .bm-placeholder{color:#9ca3af}
-        .bm-area-name{flex:1;font-size:12px;font-weight:400;color:#000}
-        .bm-availability-icon{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-        .bm-availability-icon.available{background-color:#10b981}
-        .bm-availability-icon.unavailable{background-color:#ef4444}
-        .bm-unavailable-text{color:#9ca3af;font-size:11px}
-        .bm-dropdown-icon{display:inline-block;width:20px;height:20px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 24 24' width='20'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23666'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:center;background-size:20px 20px;flex-shrink:0;transition:transform 0.2s}
-        .bm-dropdown-icon.open{transform:rotate(180deg)}
-        .bm-custom-select-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #E3E8EE;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:1000;max-height:200px;overflow-y:auto;margin-top:2px}
-        .bm-dropdown-option{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-size:12px}
-        .bm-dropdown-option:last-child{border-bottom:none}
-        .bm-dropdown-option:hover{background-color:#f8fafc}
-        .bm-dropdown-option.selected{background-color:#eff6ff;color:#1d4ed8}
-        .bm-dropdown-option.unavailable{color:#9ca3af;cursor:not-allowed}
-        .bm-dropdown-option.unavailable:hover{background-color:#fef2f2}
-        
-        /* ============================================
-           BOOKING MODAL - ACTIONS
-           ============================================ */
-        .bm-actions{display:flex;gap:12px;justify-content:flex-end;background:#fff;border-top:1px solid #e6e7ea;padding-top:12px;padding-bottom:28px;z-index:10;flex-shrink:0;margin-top:8px}
-        .bm-option-unavailable{color:#9ca3af;background-color:#f9fafb}
-    </style>
 }
 
 @code {
