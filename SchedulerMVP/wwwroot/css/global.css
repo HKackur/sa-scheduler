@@ -890,7 +890,7 @@ body .app-root .sa-topbar,
     flex: 1 1 auto !important;
     min-height: 0 !important; /* Critical for flexbox scrolling */
     overflow-y: auto !important; /* Content scrolls here */
-    padding: 28px 28px 28px 28px !important; /* Padding on all sides - padding-bottom prevents content hiding behind footer */
+    padding: 12px 28px 0px 28px !important;
 }
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
