@@ -968,6 +968,249 @@ div.bm-modal.bm-modal-wide {
     margin-bottom: 16px !important;
 }
 
+/* Modal input styling */
+.bm-input {
+    width: 100% !important;
+    padding: 10px 12px !important;
+    border-radius: 4px !important;
+    border: 1px solid #dcdee2 !important;
+    background-color: #f3f5f7 !important;
+    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.02) !important;
+    font-size: 12px !important;
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif !important;
+    box-sizing: border-box !important;
+    min-height: 40px !important;
+}
+
+.bm-input[type="time"],
+.bm-input[type="date"] {
+    padding: 10px 12px !important;
+}
+
+.bm-input[type="time"]::-webkit-calendar-picker-indicator,
+.bm-input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 1 !important;
+    cursor: pointer !important;
+}
+
+textarea.bm-input {
+    min-height: 80px !important;
+    padding: 10px 12px !important;
+    resize: vertical !important;
+}
+
+select.bm-input {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    cursor: pointer !important;
+    padding-right: 40px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 24 24' width='20'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23666'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 8px center !important;
+    background-size: 20px 20px !important;
+}
+
+/* Day selection */
+.bm-days {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 12px !important;
+    justify-content: flex-start !important;
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+}
+
+.bm-day {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    width: 44px !important;
+}
+
+.bm-day-label {
+    font-weight: 600 !important;
+    margin-bottom: 6px !important;
+    color: #0f1720 !important;
+    font-size: 12px !important;
+    text-align: center !important;
+}
+
+.bm-checkbox {
+    appearance: none !important;
+    width: 20px !important;
+    height: 20px !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6px !important;
+    background: #fff !important;
+    cursor: pointer !important;
+    position: relative !important;
+    display: inline-block !important;
+}
+
+.bm-checkbox:checked {
+    background: #1761a5 !important;
+    border-color: #1761a5 !important;
+}
+
+.bm-checkbox:checked::after {
+    content: "" !important;
+    position: absolute !important;
+    left: 5px !important;
+    top: 2px !important;
+    width: 5px !important;
+    height: 10px !important;
+    border: solid #fff !important;
+    border-width: 0 2px 2px 0 !important;
+    transform: rotate(45deg) !important;
+}
+
+/* Time selection */
+.bm-time-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 16px !important;
+}
+
+.bm-time-row > div {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+}
+
+/* Custom selects (Place/Area) */
+.bm-custom-select {
+    position: relative !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.bm-custom-select-trigger {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 10px 12px !important;
+    border: 1px solid #dcdee2 !important;
+    border-radius: 4px !important;
+    background-color: #f3f5f7 !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.02) !important;
+    font-size: 12px !important;
+    min-height: 40px !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+}
+
+.bm-custom-select-trigger:hover {
+    border-color: #cbd5e1 !important;
+}
+
+.bm-selected-area {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex: 1 !important;
+}
+
+.bm-placeholder {
+    color: #9ca3af !important;
+}
+
+.bm-place-name,
+.bm-area-name {
+    flex: 1 !important;
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    color: #000 !important;
+}
+
+.bm-availability-icon {
+    width: 8px !important;
+    height: 8px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+}
+
+.bm-availability-icon.available {
+    background-color: #10b981 !important;
+}
+
+.bm-availability-icon.unavailable {
+    background-color: #ef4444 !important;
+}
+
+.bm-unavailable-text {
+    color: #9ca3af !important;
+    font-size: 11px !important;
+}
+
+.bm-dropdown-icon {
+    display: inline-block !important;
+    width: 20px !important;
+    height: 20px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' height='20' viewBox='0 0 24 24' width='20'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23666'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 20px 20px !important;
+    flex-shrink: 0 !important;
+    transition: transform 0.2s !important;
+}
+
+.bm-dropdown-icon.open {
+    transform: rotate(180deg) !important;
+}
+
+.bm-custom-select-dropdown {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    right: 0 !important;
+    background: #fff !important;
+    border: 1px solid #E3E8EE !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    z-index: 1000 !important;
+    max-height: 200px !important;
+    overflow-y: auto !important;
+    margin-top: 2px !important;
+}
+
+.bm-dropdown-option {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+    cursor: pointer !important;
+    border-bottom: 1px solid #f3f4f6 !important;
+    font-size: 12px !important;
+}
+
+.bm-dropdown-option:last-child {
+    border-bottom: none !important;
+}
+
+.bm-dropdown-option:hover {
+    background-color: #f8fafc !important;
+}
+
+.bm-dropdown-option.selected {
+    background-color: #eff6ff !important;
+    color: #1d4ed8 !important;
+}
+
+.bm-dropdown-option.unavailable {
+    color: #9ca3af !important;
+    cursor: not-allowed !important;
+}
+
+.bm-dropdown-option.unavailable:hover {
+    background-color: #fef2f2 !important;
+}
+
+.bm-option-unavailable {
+    color: #9ca3af !important;
+    background-color: #f9fafb !important;
+}
+
 /* Dropdown */
 .dropdown {
     position: relative;
