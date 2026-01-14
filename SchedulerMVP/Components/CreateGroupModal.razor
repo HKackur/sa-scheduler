@@ -12,28 +12,30 @@
             <div class="bm-header">
                 <h2 class="bm-title">Skapa ny grupp</h2>
             </div>
-            <div class="bm-field">
-                <label class="bm-label">Gruppnamn</label>
-                <input class="bm-input" @bind="newGroupName" />
-            </div>
-            <div class="bm-field">
-                <label class="bm-label">Grupptyp</label>
-                <select class="bm-input" value="@selectedTypeId" @onchange="OnTypeChanged">
-                    <option value="">Välj grupptyp</option>
-                    @foreach (var t in types)
-                    {
-                        <option value="@t.Id">@t.Name</option>
-                    }
-                </select>
-            </div>
-            <div class="bm-field">
-                <label class="bm-label">Visningsfärg</label>
-                <select class="bm-input" @bind="selectedDisplayColor" @bind:event="onchange">
-                    @foreach (var color in SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.Keys)
-                    {
-                        <option value="@color">@color</option>
-                    }
-                </select>
+            <div class="bm-modal-content">
+                <div class="bm-field">
+                    <label class="bm-label">Gruppnamn</label>
+                    <input class="bm-input" @bind="newGroupName" />
+                </div>
+                <div class="bm-field">
+                    <label class="bm-label">Grupptyp</label>
+                    <select class="bm-input" value="@selectedTypeId" @onchange="OnTypeChanged">
+                        <option value="">Välj grupptyp</option>
+                        @foreach (var t in types)
+                        {
+                            <option value="@t.Id">@t.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="bm-field">
+                    <label class="bm-label">Visningsfärg</label>
+                    <select class="bm-input" @bind="selectedDisplayColor" @bind:event="onchange">
+                        @foreach (var color in SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.Keys)
+                        {
+                            <option value="@color">@color</option>
+                        }
+                    </select>
+                </div>
             </div>
             <div class="bm-actions">
                 <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>

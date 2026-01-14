@@ -11,35 +11,37 @@
             <div class="bm-header">
                 <h2 class="bm-title">@(EditingGroupType != null ? "Redigera grupptyp" : "Skapa ny grupptyp")</h2>
             </div>
-            <div class="bm-field">
-                <label class="bm-label">Grupptypnamn</label>
-                <input class="bm-input" @bind="groupTypeName" />
-            </div>
-            <div class="bm-field">
-                <label class="bm-label">Standard visningsfärg</label>
-                <select class="bm-input" @bind="standardDisplayColor" @bind:event="onchange">
-                    @foreach (var color in SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.Keys)
-                    {
-                        <option value="@color">@color</option>
-                    }
-                </select>
-            </div>
-            @if (EditingGroupType != null)
-            {
+            <div class="bm-modal-content">
                 <div class="bm-field">
-                    <label class="bm-label" style="margin-bottom:8px;">Vid uppdatering av visningsfärg</label>
-                    <div style="display:flex; flex-direction:column; gap:8px;">
-                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:400;">
-                            <input type="radio" name="colorUpdateMode" checked="@(colorUpdateMode == "updateAll")" @onchange='() => colorUpdateMode = "updateAll"' style="cursor:pointer;" />
-                            <span>Uppdatera alla befintliga gruppers visningsfärg</span>
-                        </label>
-                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:400;">
-                            <input type="radio" name="colorUpdateMode" checked="@(colorUpdateMode == "newOnly")" @onchange='() => colorUpdateMode = "newOnly"' style="cursor:pointer;" />
-                            <span>Använd endast visningsfärgen på nya grupper</span>
-                        </label>
-                    </div>
+                    <label class="bm-label">Grupptypnamn</label>
+                    <input class="bm-input" @bind="groupTypeName" />
                 </div>
-            }
+                <div class="bm-field">
+                    <label class="bm-label">Standard visningsfärg</label>
+                    <select class="bm-input" @bind="standardDisplayColor" @bind:event="onchange">
+                        @foreach (var color in SchedulerMVP.Data.Entities.GroupDisplayColors.Colors.Keys)
+                        {
+                            <option value="@color">@color</option>
+                        }
+                    </select>
+                </div>
+                @if (EditingGroupType != null)
+                {
+                    <div class="bm-field">
+                        <label class="bm-label" style="margin-bottom:8px;">Vid uppdatering av visningsfärg</label>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:400;">
+                                <input type="radio" name="colorUpdateMode" checked="@(colorUpdateMode == "updateAll")" @onchange='() => colorUpdateMode = "updateAll"' style="cursor:pointer;" />
+                                <span>Uppdatera alla befintliga gruppers visningsfärg</span>
+                            </label>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:400;">
+                                <input type="radio" name="colorUpdateMode" checked="@(colorUpdateMode == "newOnly")" @onchange='() => colorUpdateMode = "newOnly"' style="cursor:pointer;" />
+                                <span>Använd endast visningsfärgen på nya grupper</span>
+                            </label>
+                        </div>
+                    </div>
+                }
+            </div>
             <div class="bm-actions">
                 <button type="button" @onclick="OnCancel" class="btn-outline">Avbryt</button>
                 <button type="button" @onclick="OnSave" class="btn-primary" disabled="@string.IsNullOrWhiteSpace(groupTypeName)">@(EditingGroupType != null ? "Spara" : "Skapa grupptyp")</button>
