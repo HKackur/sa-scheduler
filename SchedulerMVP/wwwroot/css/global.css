@@ -895,11 +895,17 @@ body .app-root .sa-topbar,
 
 /* Exception: PlaceCreateModal needs to be wider for two-column layout - higher specificity */
 .bm-modal.bm-modal-wide,
-div.bm-modal.bm-modal-wide {
+div.bm-modal.bm-modal-wide,
+.bm-modal.bm-modal-wide.bm-modal,
+div.bm-modal.bm-modal-wide.bm-modal {
     width: 900px !important;
     min-width: 900px !important;
     max-width: 900px !important;
     padding: 0 !important; /* No padding on container - header/content/actions handle padding */
+    padding-top: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0 !important;
 }
 
 /* Modal header - white background to prevent transparency */
