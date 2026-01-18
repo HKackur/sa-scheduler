@@ -55,11 +55,29 @@
     private Dictionary<int, Dictionary<int, Dictionary<string, List<BookingTemplate>>>>? groupedTemplates;
     private string printTitle = "Veckoschema";
     
+    private Guid? _lastLoadedTemplateId;
+    private bool _lastLoadedIsWeekListView;
+    
     protected override async Task OnInitializedAsync()
     {
         UI.OnChanged += OnUIChanged;
+        _lastLoadedTemplateId = UI.SelectedTemplateId;
+        _lastLoadedIsWeekListView = UI.IsWeekListView;
         await LoadDataAsync();
         await UpdatePrintTitleAsync();
+    }
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reload data if template or view changed when component is remounted
+        if (_lastLoadedTemplateId != UI.SelectedTemplateId || _lastLoadedIsWeekListView != UI.IsWeekListView)
+        {
+            _lastLoadedTemplateId = UI.SelectedTemplateId;
+            _lastLoadedIsWeekListView = UI.IsWeekListView;
+            await LoadDataAsync();
+            await UpdatePrintTitleAsync();
+            StateHasChanged();
+        }
     }
     
     public void Dispose()
@@ -69,9 +87,18 @@
     
     private async void OnUIChanged()
     {
-        await LoadDataAsync();
-        await UpdatePrintTitleAsync();
-        await InvokeAsync(StateHasChanged);
+        // Only reload if template changed or if we're switching to list view
+        var templateChanged = _lastLoadedTemplateId != UI.SelectedTemplateId;
+        var viewChanged = _lastLoadedIsWeekListView != UI.IsWeekListView;
+        
+        if (templateChanged || (viewChanged && UI.IsWeekListView))
+        {
+            _lastLoadedTemplateId = UI.SelectedTemplateId;
+            _lastLoadedIsWeekListView = UI.IsWeekListView;
+            await LoadDataAsync();
+            await UpdatePrintTitleAsync();
+            await InvokeAsync(StateHasChanged);
+        }
     }
     
     private async Task UpdatePrintTitleAsync()
@@ -121,15 +148,19 @@
             var isAdmin = await UserContext.IsAdminAsync();
             
             // First verify template ownership
+            // Skip filtering for shared schedule views (read-only public access)
             var templateQuery = db.ScheduleTemplates.Where(t => t.Id == UI.SelectedTemplateId.Value);
-            if (!isAdmin && clubId.HasValue)
+            if (!UI.IsSharedScheduleView)
             {
-                templateQuery = templateQuery.Where(t => t.ClubId == clubId.Value);
-            }
-            else if (!isAdmin && !clubId.HasValue)
-            {
-                // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
-                templateQuery = templateQuery.Where(t => false);
+                if (!isAdmin && clubId.HasValue)
+                {
+                    templateQuery = templateQuery.Where(t => t.ClubId == clubId.Value);
+                }
+                else if (!isAdmin && !clubId.HasValue)
+                {
+                    // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                    templateQuery = templateQuery.Where(t => false);
+                }
             }
             var templateExists = await templateQuery.AnyAsync();
             
@@ -146,14 +177,18 @@
                 .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value);
             
             // Filter by club through Group
-            if (!isAdmin && clubId.HasValue)
+            // Skip filtering for shared schedule views (read-only public access)
+            if (!UI.IsSharedScheduleView)
             {
-                templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.ClubId == clubId.Value);
-            }
-            else if (!isAdmin && !clubId.HasValue)
-            {
-                // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
-                templatesQuery = templatesQuery.Where(bt => false);
+                if (!isAdmin && clubId.HasValue)
+                {
+                    templatesQuery = templatesQuery.Where(bt => bt.Group != null && bt.Group.ClubId == clubId.Value);
+                }
+                else if (!isAdmin && !clubId.HasValue)
+                {
+                    // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                    templatesQuery = templatesQuery.Where(bt => false);
+                }
             }
             
             var templates = await templatesQuery.ToListAsync();

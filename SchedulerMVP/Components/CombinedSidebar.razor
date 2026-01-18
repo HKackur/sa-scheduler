@@ -18,7 +18,10 @@
     <div class="sidebar-section" style="@(UI.IsGroupFilterActive ? "opacity: 0.5; pointer-events: none;" : "")">
         <div class="ls-header-row">
             <h6 class="sa-panel-title">Platser & ytor</h6>
-            <button class="ls-plus @(placeOpen ? "hide-tooltip" : "")" @onclick="OpenCreatePlace" @onclick:preventDefault disabled="@UI.IsGroupFilterActive">+</button>
+            @if (!IsReadOnly)
+            {
+                <button class="ls-plus @(placeOpen ? "hide-tooltip" : "")" @onclick="OpenCreatePlace" @onclick:preventDefault disabled="@UI.IsGroupFilterActive">+</button>
+            }
         </div>
         
         @if (!placesLoaded)
@@ -29,7 +32,10 @@
         {
             <div class="empty-state" style="margin:8px 0 12px 0;color:#6b7280;font-size:12px;">
                 <div class="empty-text" style="margin-bottom:6px;">Du har inte lagt till några platser</div>
-                <button class="sa-btn" style="font-size:12px;padding:6px 10px;border-radius:6px;border:none;background:#f3f4f6;color:#111827;cursor:pointer;" @onclick="OpenCreatePlace" @onclick:preventDefault disabled="@UI.IsGroupFilterActive">Lägg till en plats</button>
+                @if (!IsReadOnly)
+                {
+                    <button class="sa-btn" style="font-size:12px;padding:6px 10px;border-radius:6px;border:none;background:#f3f4f6;color:#111827;cursor:pointer;" @onclick="OpenCreatePlace" @onclick:preventDefault disabled="@UI.IsGroupFilterActive">Lägg till en plats</button>
+                }
             </div>
         }
         else
@@ -331,10 +337,15 @@
     }
 </style>
 
-<PlaceCreateModal IsOpen="@placeOpen" OnClose="ClosePlaceCreate" OnCreated="AfterPlaceCreated" />
-<PlaceEditModal IsOpen="@placeEditOpen" PlaceId="@editingPlaceId" OnClose="ClosePlaceEdit" OnSaved="AfterPlaceSaved" OnDeleted="AfterPlaceDeleted" />
+@if (!IsReadOnly)
+{
+    <PlaceCreateModal IsOpen="@placeOpen" OnClose="ClosePlaceCreate" OnCreated="AfterPlaceCreated" />
+    <PlaceEditModal IsOpen="@placeEditOpen" PlaceId="@editingPlaceId" OnClose="ClosePlaceEdit" OnSaved="AfterPlaceSaved" OnDeleted="AfterPlaceDeleted" />
+}
 
 @code {
+    [Parameter] public bool IsReadOnly { get; set; } = false;
+    
     // Platser data
     private SchedulerMVP.Data.Entities.Place? place;
     private List<SchedulerMVP.Data.Entities.Place> places = new();
@@ -356,6 +367,9 @@
     private HashSet<string> selectedTypes = new(StringComparer.OrdinalIgnoreCase);
     private List<string> groupTypes = new();
     
+    // Security: Track which areas are used in template for read-only filtering
+    private HashSet<Guid>? _usedAreaIdsForTemplate = null;
+    
     // Track previous state for count updates
     private DateOnly? _lastWeekStart;
     private Guid? _lastTemplateId;
@@ -375,7 +389,47 @@
         try
         {
             // Load places
-            places = await PlaceService.GetPlacesAsync();
+            var allPlaces = await PlaceService.GetPlacesAsync();
+            
+            // SECURITY: In read-only mode, filter to only places/areas used in the template
+            if (IsReadOnly && UI.SelectedTemplateId.HasValue)
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var templateBookings = await db.BookingTemplates
+                    .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value)
+                    .Include(bt => bt.Area)
+                        .ThenInclude(a => a.Place)
+                    .Include(bt => bt.Group)
+                    .AsNoTracking()
+                    .ToListAsync();
+                
+                // Get unique place IDs and area IDs from template bookings
+                var usedPlaceIds = templateBookings
+                    .Where(bt => bt.Area?.PlaceId != null)
+                    .Select(bt => bt.Area!.PlaceId)
+                    .Distinct()
+                    .ToHashSet();
+                
+                var usedAreaIds = templateBookings
+                    .Where(bt => bt.AreaId != null)
+                    .Select(bt => bt.AreaId)
+                    .Distinct()
+                    .ToHashSet();
+                
+                // Filter places to only those used in the template
+                places = allPlaces
+                    .Where(p => usedPlaceIds.Contains(p.Id))
+                    .ToList();
+                
+                // Store used area IDs for filtering areas later
+                _usedAreaIdsForTemplate = usedAreaIds;
+            }
+            else
+            {
+                places = allPlaces;
+                _usedAreaIdsForTemplate = null;
+            }
+            
             placesLoaded = true;
             await LoadFavoritesAsync();
             await BuildPlaceTree();
@@ -406,7 +460,35 @@
         // Load groups using GroupService (with caching)
         try
         {
-            groups = await GroupService.GetGroupsAsync();
+            var allGroups = await GroupService.GetGroupsAsync();
+            
+            // SECURITY: In read-only mode, filter to only groups used in the template
+            if (IsReadOnly && UI.SelectedTemplateId.HasValue)
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var templateBookings = await db.BookingTemplates
+                    .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value)
+                    .Include(bt => bt.Group)
+                    .AsNoTracking()
+                    .ToListAsync();
+                
+                // Get unique group IDs from template bookings
+                var usedGroupIds = templateBookings
+                    .Where(bt => bt.GroupId != null)
+                    .Select(bt => bt.GroupId)
+                    .Distinct()
+                    .ToHashSet();
+                
+                // Filter groups to only those used in the template
+                groups = allGroups
+                    .Where(g => usedGroupIds.Contains(g.Id))
+                    .ToList();
+            }
+            else
+            {
+                groups = allGroups;
+            }
+            
             groupsLoaded = true;
             groupTypes = groups.Select(g => DetermineGroupType(g))
                                .Where(t => !string.IsNullOrWhiteSpace(t))
@@ -434,7 +516,35 @@
             try
             {
                 // Reload groups to pick up newly created groups/group types
-                groups = await GroupService.GetGroupsAsync();
+                var allGroups = await GroupService.GetGroupsAsync();
+                
+                // SECURITY: In read-only mode, filter to only groups used in the template
+                if (IsReadOnly && UI.SelectedTemplateId.HasValue)
+                {
+                    await using var db = await DbFactory.CreateDbContextAsync();
+                    var templateBookings = await db.BookingTemplates
+                        .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value)
+                        .Include(bt => bt.Group)
+                        .AsNoTracking()
+                        .ToListAsync();
+                    
+                    // Get unique group IDs from template bookings
+                    var usedGroupIds = templateBookings
+                        .Where(bt => bt.GroupId != null)
+                        .Select(bt => bt.GroupId)
+                        .Distinct()
+                        .ToHashSet();
+                    
+                    // Filter groups to only those used in the template
+                    groups = allGroups
+                        .Where(g => usedGroupIds.Contains(g.Id))
+                        .ToList();
+                }
+                else
+                {
+                    groups = allGroups;
+                }
+                
                 groupTypes = groups.Select(g => DetermineGroupType(g))
                                    .Where(t => !string.IsNullOrWhiteSpace(t))
                                    .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -489,7 +599,46 @@
         _isInitialized = true;
         
         // Load all places and build the new tree structure
-        places = await PlaceService.GetPlacesAsync();
+        var allPlaces = await PlaceService.GetPlacesAsync();
+        
+        // SECURITY: In read-only mode, filter to only places/areas used in the template
+        if (IsReadOnly && UI.SelectedTemplateId.HasValue)
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var templateBookings = await db.BookingTemplates
+                .Where(bt => bt.ScheduleTemplateId == UI.SelectedTemplateId.Value)
+                .Include(bt => bt.Area)
+                    .ThenInclude(a => a.Place)
+                .AsNoTracking()
+                .ToListAsync();
+            
+            // Get unique place IDs and area IDs from template bookings
+            var usedPlaceIds = templateBookings
+                .Where(bt => bt.Area?.PlaceId != null)
+                .Select(bt => bt.Area!.PlaceId)
+                .Distinct()
+                .ToHashSet();
+            
+            var usedAreaIds = templateBookings
+                .Where(bt => bt.AreaId != null)
+                .Select(bt => bt.AreaId)
+                .Distinct()
+                .ToHashSet();
+            
+            // Filter places to only those used in the template
+            places = allPlaces
+                .Where(p => usedPlaceIds.Contains(p.Id))
+                .ToList();
+            
+            // Store used area IDs for filtering areas later
+            _usedAreaIdsForTemplate = usedAreaIds;
+        }
+        else
+        {
+            places = allPlaces;
+            _usedAreaIdsForTemplate = null;
+        }
+        
         placesLoaded = true;
         await LoadFavoritesAsync();
         await BuildPlaceTree();
@@ -671,30 +820,36 @@
         builder.AddContent(seq++, placeNode.Place.Name);
         builder.CloseElement();
 
-        // Favorite star directly after the name
-        builder.OpenElement(seq++, "span");
-        builder.AddAttribute(seq++, "class", "sa-tree-fav");
-        var favTitle = isFav ? "Ta bort som favorit" : "Gör till favorit";
-        builder.AddAttribute(seq++, "title", favTitle);
-        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceFavoriteClick(placeNode.Place.Id, e)));
-        builder.OpenElement(seq++, "span");
-        builder.AddAttribute(seq++, "class", "material-symbols-outlined");
-        var fill = isFav ? 1 : 0;
-        builder.AddAttribute(seq++, "style", $"font-size:16px;line-height:1;font-variation-settings:\"FILL\" {fill};");
-        builder.AddContent(seq++, "star");
-        builder.CloseElement();
-        builder.CloseElement();
+        // Favorite star directly after the name (only if not read-only)
+        if (!IsReadOnly)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-fav");
+            var favTitle = isFav ? "Ta bort som favorit" : "Gör till favorit";
+            builder.AddAttribute(seq++, "title", favTitle);
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceFavoriteClick(placeNode.Place.Id, e)));
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "material-symbols-outlined");
+            var fill = isFav ? 1 : 0;
+            builder.AddAttribute(seq++, "style", $"font-size:16px;line-height:1;font-variation-settings:\"FILL\" {fill};");
+            builder.AddContent(seq++, "star");
+            builder.CloseElement();
+            builder.CloseElement();
+        }
 
-        // Edit icon that appears on hover/selection
-        builder.OpenElement(seq++, "span");
-        builder.AddAttribute(seq++, "class", "sa-tree-edit");
-        builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceEditClick(placeNode.Place.Id, e)));
-        builder.OpenElement(seq++, "span");
-        builder.AddAttribute(seq++, "class", "material-symbols-outlined");
-        builder.AddAttribute(seq++, "style", "font-size:16px;line-height:1;");
-        builder.AddContent(seq++, "edit");
-        builder.CloseElement();
-        builder.CloseElement();
+        // Edit icon that appears on hover/selection (only if not read-only)
+        if (!IsReadOnly)
+        {
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "sa-tree-edit");
+            builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create<MouseEventArgs>(this, (e) => OnPlaceEditClick(placeNode.Place.Id, e)));
+            builder.OpenElement(seq++, "span");
+            builder.AddAttribute(seq++, "class", "material-symbols-outlined");
+            builder.AddAttribute(seq++, "style", "font-size:16px;line-height:1;");
+            builder.AddContent(seq++, "edit");
+            builder.CloseElement();
+            builder.CloseElement();
+        }
 
         builder.CloseElement(); // row
 

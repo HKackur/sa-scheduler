@@ -1,0 +1,407 @@
+@page "/s/{token}"
+@layout Layout.MainLayout
+@using SchedulerMVP.Data.Entities
+@using SchedulerMVP.Services
+@using Microsoft.JSInterop
+@inject ISharedScheduleService SharedScheduleService
+@inject UIState UI
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@implements IDisposable
+
+<PageTitle>Delat veckoschema</PageTitle>
+
+@if (isLoading)
+{
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f7f7f7;">
+        <div style="text-align: center;">
+            <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+            <div style="margin-top: 16px; font-size: 14px; color: #6b7280;">Laddar veckoschema...</div>
+        </div>
+    </div>
+}
+else if (sharedLink == null || !sharedLink.IsActive || sharedLink.ScheduleTemplate == null)
+{
+    @* Empty state - länk inaktiv eller template raderad *@
+    <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f7f7f7;">
+        <div style="text-align: center; max-width: 400px; padding: 40px;">
+            <span class="material-symbols-outlined" style="font-size: 64px; color: #9ca3af; margin-bottom: 16px; display: block;">link_off</span>
+            <h1 style="font-size: 20px; font-weight: 600; color: #0f1720; margin: 0 0 8px 0;">Kalendern är inte längre aktiv för delning</h1>
+            <p style="font-size: 14px; color: #6b7280; margin: 0;">Denna länk är inte längre tillgänglig. Kontakta administratören om du behöver tillgång till veckoschemat.</p>
+        </div>
+    </div>
+}
+else
+{
+    @* Read-only veckoschema - exactly like Index.razor structure *@
+    <div class="sa-app shared-schedule-view" style="min-height: 100vh; background: #fff;">
+        <div class="sa-shell-new">
+            <main class="sa-panel @(isListView ? "sa-center-full" : "sa-center-new")">
+                @* View toggle bar - exactly like ViewToggleBar in editor *@
+                @if (hasMultipleViews)
+                {
+                    <div class="view-type-bar-container">
+                        <div class="view-actions-left">
+                            <div class="toggle-group">
+                                @if (sharedLink.AllowWeekView)
+                                {
+                                    <button class="view-btn @(!isListView && !isDayView ? "active" : "")" 
+                                            @onclick="() => SetView(false, false)" 
+                                            disabled="@isLoading"
+                                            title="Veckovy">
+                                        <span class="material-symbols-outlined">calendar_view_week</span>
+                                        <span class="btn-label">Vecka</span>
+                                    </button>
+                                }
+                                @if (sharedLink.AllowDayView)
+                                {
+                                    <button class="view-btn @(isDayView ? "active" : "")" 
+                                            @onclick="() => SetView(false, true)" 
+                                            disabled="@isLoading"
+                                            title="Dagsvy">
+                                        <span class="material-symbols-outlined">calendar_view_day</span>
+                                        <span class="btn-label">Dag</span>
+                                    </button>
+                                }
+                                @if (sharedLink.AllowListView)
+                                {
+                                    <button class="view-btn @(isListView ? "active" : "")" 
+                                            @onclick="() => SetView(true, false)" 
+                                            disabled="@isLoading"
+                                            title="Listvy">
+                                        <span class="material-symbols-outlined">view_list</span>
+                                        <span class="btn-label">Lista</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                        
+                        @* Centered navigation for day view *@
+                        @if (isDayView)
+                        {
+                            <div class="view-nav-center">
+                                <div class="nav-group">
+                                    <button class="btn btn-nav" @onclick="NavigateToPreviousDayWeekSchedule" title="Föregående dag">
+                                        <span class="material-symbols-outlined">chevron_left</span>
+                                    </button>
+                                    <button class="btn btn-nav" @onclick="NavigateToNextDayWeekSchedule" title="Nästa dag">
+                                        <span class="material-symbols-outlined">chevron_right</span>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @* WeekGrid - exactly like in Index.razor (editor) *@
+                <WeekGrid OnOpenModal="() => Task.CompletedTask" OnOpenCalendarBookingEdit="(_) => Task.CompletedTask" OnOpenTemplateEdit="(_) => Task.CompletedTask" />
+            </main>
+            @if (!isListView)
+            {
+                <aside class="sa-panel sa-right-new">
+                    <CombinedSidebar IsReadOnly="true" />
+                </aside>
+            }
+        </div>
+    </div>
+}
+
+<style>
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* Exact same styles as ViewToggleBar.razor */
+    .view-type-bar-container {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 12px 16px !important;
+        margin-top: 16px !important;
+        margin-bottom: 8px !important;
+        background: #f8fafc !important; /* Light blue-gray background */
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+    }
+    
+    .view-actions-left {
+        display: flex !important;
+        align-items: center !important;
+        gap: 12px !important;
+    }
+    
+    .view-nav-center {
+        position: absolute !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+    
+    .nav-group {
+        display: flex !important;
+        align-items: center !important;
+        gap: 4px !important;
+        background: #fff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 6px !important;
+        padding: 2px !important;
+    }
+    
+    .btn.btn-nav {
+        border: none !important;
+        background: transparent !important;
+        padding: 6px 8px !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        color: #64748b !important;
+    }
+    
+    .btn.btn-nav:hover {
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+    }
+    
+    .btn.btn-nav .material-symbols-outlined {
+        font-size: 20px !important;
+    }
+
+    .toggle-group {
+        display: flex !important;
+        background: #f1f5f9 !important;
+        border-radius: 8px !important;
+        padding: 2px !important;
+        gap: 2px !important;
+    }
+    
+    .view-btn {
+        border: none !important;
+        background: transparent !important;
+        padding: 6px 16px !important;
+        border-radius: 6px !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        color: #64748b !important;
+        cursor: pointer !important;
+        height: 32px !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+    
+    .view-btn.active {
+        background: #fff !important;
+        color: #0f172a !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+    }
+    
+    .btn-label { font-size: 13px !important; }
+    .view-btn .material-symbols-outlined { font-size: 20px !important; }
+    
+    .view-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Make all interactive elements read-only in shared schedule view */
+    .shared-schedule-view .booking-block {
+        cursor: default !important;
+        pointer-events: none !important;
+    }
+
+    .shared-schedule-view .day-content {
+        cursor: default !important;
+        pointer-events: none !important;
+    }
+
+    .shared-schedule-view .resize-handle {
+        display: none !important;
+    }
+
+    .shared-schedule-view .booking-block:hover {
+        opacity: 1 !important;
+    }
+    
+    /* Ensure week-grid-container and week-grid get flex and can scroll */
+    /* CRITICAL: Must constrain height so scroll works - use viewport-based height calculation */
+    .shared-schedule-view .week-grid-container {
+        flex: 1 1 0% !important; /* Shrink and grow, but start from 0 */
+        min-height: 0 !important; /* Critical for flex scrolling */
+        max-height: calc(100vh - 80px) !important; /* Constrain to viewport minus view toggle bar */
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important; /* Container doesn't scroll */
+    }
+    
+    .shared-schedule-view .week-grid {
+        flex: 1 1 0% !important; /* Shrink and grow, but start from 0 */
+        min-height: 0 !important; /* Critical for flex scrolling */
+        overflow-y: auto !important; /* Content scrolls here */
+        overflow-x: hidden !important;
+        height: 100% !important; /* Use 100% of container height, not content height */
+        max-height: 100% !important; /* Prevent growing beyond container */
+    }
+</style>
+
+@code {
+    [Parameter] public string Token { get; set; } = string.Empty;
+
+    private SharedScheduleLink? sharedLink;
+    private bool isLoading = true;
+    private bool isListView = false;
+    private bool isDayView = false;
+    private bool hasMultipleViews = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSharedLinkAsync();
+    }
+
+    private async Task LoadSharedLinkAsync()
+    {
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            sharedLink = await SharedScheduleService.GetByTokenAsync(Token);
+
+            if (sharedLink != null && sharedLink.IsActive && sharedLink.ScheduleTemplate != null)
+            {
+                // Set template ID in UI state for WeekGrid
+                UI.SelectedTemplateId = sharedLink.ScheduleTemplateId;
+                UI.IsCalendarViewMode = false; // Ensure we're in template mode, not calendar mode
+                UI.IsSharedScheduleView = true; // Enable shared view mode to bypass authentication filtering
+                
+                // Set club name and template name for TopBar display
+                UI.SharedScheduleClubName = sharedLink.ScheduleTemplate.Club?.Name;
+                UI.SharedScheduleTemplateName = sharedLink.ScheduleTemplate.Name;
+
+                // Determine which views are enabled
+                var enabledViews = new List<bool> { sharedLink.AllowWeekView, sharedLink.AllowDayView, sharedLink.AllowListView };
+                hasMultipleViews = enabledViews.Count(v => v) > 1;
+
+                // Set default view: ListView if enabled, otherwise first enabled view
+                if (sharedLink.AllowListView)
+                {
+                    isListView = true;
+                    isDayView = false;
+                }
+                else if (sharedLink.AllowDayView)
+                {
+                    isListView = false;
+                    isDayView = true;
+                }
+                else if (sharedLink.AllowWeekView)
+                {
+                    isListView = false;
+                    isDayView = false;
+                }
+
+                // Update UI state
+                UI.IsWeekListView = isListView;
+                UI.IsDayView = isDayView;
+                UI.RaiseChanged();
+                
+                // Scroll to 08:00 after initial render (same as editor)
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(800); // Wait for WeekGrid to fully render
+                    try
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            await JSRuntime.InvokeVoidAsync("SchedulerMVP.scrollToPos", 480); // 08:00 = 8 * 60 = 480px
+                        });
+                    }
+                    catch { }
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SharedSchedule] Error loading shared link: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SetView(bool list, bool day)
+    {
+        isListView = list;
+        isDayView = day;
+        UI.IsWeekListView = list;
+        UI.IsDayView = day;
+        UI.ForceRefresh = true; // Force reload when switching views
+        UI.RaiseChanged();
+        
+        // Scroll to 08:00 when switching to week view (same as editor)
+        if (!list && !day)
+        {
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(300); // Wait for WeekGrid to render
+                try
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await JSRuntime.InvokeVoidAsync("SchedulerMVP.scrollToPos", 480); // 08:00 = 8 * 60 = 480px
+                    });
+                }
+                catch { }
+            });
+        }
+        
+        StateHasChanged();
+    }
+
+    private int GetCurrentDayOfWeekForSchedule()
+    {
+        var d = (int)UI.CurrentWeekStart.DayOfWeek;
+        return d == 0 ? 7 : d; // Convert Sunday (0) to 7
+    }
+
+    private void SetCurrentDayForSchedule(int d)
+    {
+        var start = UI.CurrentWeekStart;
+        var diff = (int)start.DayOfWeek;
+        if (diff == 0) diff = 7; // Convert Sunday (0) to 7
+        UI.CurrentWeekStart = start.AddDays(-(diff - 1)).AddDays(d - 1);
+        UI.RaiseChanged();
+    }
+
+    private void NavigateToPreviousDayWeekSchedule()
+    {
+        var currentDay = GetCurrentDayOfWeekForSchedule();
+        var newDay = currentDay == 1 ? 7 : currentDay - 1; // Wrap from Monday (1) to Sunday (7)
+        SetCurrentDayForSchedule(newDay);
+    }
+
+    private void NavigateToNextDayWeekSchedule()
+    {
+        var currentDay = GetCurrentDayOfWeekForSchedule();
+        var newDay = currentDay == 7 ? 1 : currentDay + 1; // Wrap from Sunday (7) to Monday (1)
+        SetCurrentDayForSchedule(newDay);
+    }
+
+    public void Dispose()
+    {
+        // Clean up UI state when leaving shared page
+        UI.SelectedTemplateId = null;
+        UI.IsWeekListView = false;
+        UI.IsDayView = false;
+        UI.IsSharedScheduleView = false;
+        UI.SharedScheduleClubName = null;
+        UI.SharedScheduleTemplateName = null;
+    }
+}

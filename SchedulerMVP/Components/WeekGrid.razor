@@ -396,6 +396,8 @@
     private bool _lastLoadedCalendarMode;
     private DateOnly _lastLoadedWeekStart;
     private Guid? _lastLoadedFilteredGroupId;
+    private bool _lastLoadedIsWeekListView;
+    private bool _lastLoadedIsDayView;
     
     // CRITICAL FIX: Semaphore to prevent concurrent LoadDataAsync execution (race condition fix)
     // When UI.OnChanged fires multiple times in rapid succession (e.g., when multiple properties change),
@@ -414,10 +416,12 @@
                 var viewModeChanged = _lastLoadedCalendarMode != UI.IsCalendarViewMode;
                 var weekChanged = _lastLoadedWeekStart != UI.CurrentWeekStart;
                 var groupFilterChanged = _lastLoadedFilteredGroupId != UI.FilteredGroupId;
+                var listViewChanged = _lastLoadedIsWeekListView != UI.IsWeekListView;
+                var dayViewChanged = _lastLoadedIsDayView != UI.IsDayView;
                 
                 // Always reload if state changed OR if force refresh is requested
                 // This ensures new bookings appear immediately
-                if (areaChanged || templateChanged || viewModeChanged || weekChanged || groupFilterChanged || UI.ForceRefresh)
+                if (areaChanged || templateChanged || viewModeChanged || weekChanged || groupFilterChanged || listViewChanged || dayViewChanged || UI.ForceRefresh)
                 {
                     // CRITICAL FIX: Use semaphore to prevent concurrent LoadDataAsync execution
                     // This fixes race conditions where multiple OnChanged events fire in rapid succession
@@ -430,6 +434,8 @@
                         _lastLoadedCalendarMode = UI.IsCalendarViewMode;
                         _lastLoadedWeekStart = UI.CurrentWeekStart;
                         _lastLoadedFilteredGroupId = UI.FilteredGroupId;
+                        _lastLoadedIsWeekListView = UI.IsWeekListView;
+                        _lastLoadedIsDayView = UI.IsDayView;
                         UI.ForceRefresh = false; // Reset flag after reload
                         await InvokeAsync(StateHasChanged);
                     }
@@ -449,6 +455,14 @@
         {
             await LoadTemplates();
             await LoadDataAsync();
+            // Initialize tracking variables after first load
+            _lastLoadedAreaId = UI.SelectedAreaId;
+            _lastLoadedTemplateId = UI.SelectedTemplateId;
+            _lastLoadedCalendarMode = UI.IsCalendarViewMode;
+            _lastLoadedWeekStart = UI.CurrentWeekStart;
+            _lastLoadedFilteredGroupId = UI.FilteredGroupId;
+            _lastLoadedIsWeekListView = UI.IsWeekListView;
+            _lastLoadedIsDayView = UI.IsDayView;
         }
         catch (Exception ex)
         {
@@ -462,7 +476,7 @@
         {
             try
             {
-                // 08:00 => 8 * 60 = 480px
+                // 08:00 => 8 * 60 = 480px (scroll to show 08:00 at top)
                 await JSRuntime.InvokeVoidAsync("SchedulerMVP.scrollToPos", 480);
             }
             catch { }
@@ -1015,14 +1029,18 @@
                             .ThenInclude(a => a.Place)
                             .AsNoTracking();
 
-                        if (!currentIsAdmin && currentClubId.HasValue)
+                        // Skip filtering for shared schedule views (read-only public access)
+                        if (!UI.IsSharedScheduleView)
                         {
-                            overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => bt.Group!.ClubId == currentClubId.Value);
-                        }
-                        else if (!currentIsAdmin && !currentClubId.HasValue)
-                        {
-                            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
-                            overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => false);
+                            if (!currentIsAdmin && currentClubId.HasValue)
+                            {
+                                overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => bt.Group!.ClubId == currentClubId.Value);
+                            }
+                            else if (!currentIsAdmin && !currentClubId.HasValue)
+                            {
+                                // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                                overlappingTemplatesQuery = overlappingTemplatesQuery.Where(bt => false);
+                            }
                         }
 
                         // PERF: Run leaf count and template query in parallel
@@ -1062,7 +1080,12 @@
                     else
                     {
                         // Load templates normally when no specific area is selected
-                        var query = db.BookingTemplates.Where(bt => bt.ScheduleTemplateId == templateId);
+                        var query = db.BookingTemplates
+                            .Include(bt => bt.Group)
+                            .Include(bt => bt.Area)
+                            .ThenInclude(a => a.Place)
+                            .Where(bt => bt.ScheduleTemplateId == templateId)
+                            .AsNoTracking();
 
                         if (UI.SelectedPlaceId.HasValue)
                         {
@@ -1073,22 +1096,21 @@
                             query = query.Where(bt => placeAreaIds.Contains(bt.AreaId));
                         }
 
-                        if (!currentIsAdmin && currentClubId.HasValue)
+                        // Skip filtering for shared schedule views (read-only public access)
+                        if (!UI.IsSharedScheduleView)
                         {
-                            query = query.Where(bt => bt.Group!.ClubId == currentClubId.Value);
-                        }
-                        else if (!currentIsAdmin && !currentClubId.HasValue)
-                        {
-                            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
-                            query = query.Where(bt => false);
+                            if (!currentIsAdmin && currentClubId.HasValue)
+                            {
+                                query = query.Where(bt => bt.Group!.ClubId == currentClubId.Value);
+                            }
+                            else if (!currentIsAdmin && !currentClubId.HasValue)
+                            {
+                                // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                                query = query.Where(bt => false);
+                            }
                         }
 
-                        var templates = await query
-                            .Include(bt => bt.Group)
-                            .Include(bt => bt.Area)
-                            .ThenInclude(a => a.Place)
-                            .AsNoTracking()
-                            .ToListAsync();
+                        var templates = await query.ToListAsync();
 
                         allTemplates = templates.Select(t => new TemplateView
                         {

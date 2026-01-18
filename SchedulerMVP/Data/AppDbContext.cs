@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CalendarBooking> CalendarBookings => Set<CalendarBooking>();
     public DbSet<Modal> Modals => Set<Modal>();
     public DbSet<ModalReadBy> ModalReadBy => Set<ModalReadBy>();
+    public DbSet<SharedScheduleLink> SharedScheduleLinks => Set<SharedScheduleLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -166,6 +167,22 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         // Performance index for ModalReadBy - critical for fast "has read" checks
         modelBuilder.Entity<ModalReadBy>()
             .HasIndex(mrb => new { mrb.ModalId, mrb.UserId });
+
+        // Configure SharedScheduleLink relationship and indexes
+        modelBuilder.Entity<SharedScheduleLink>()
+            .HasOne(ssl => ssl.ScheduleTemplate)
+            .WithMany()
+            .HasForeignKey(ssl => ssl.ScheduleTemplateId)
+            .OnDelete(DeleteBehavior.Cascade); // Cascade delete when template is deleted
+        
+        // Critical index for O(1) token lookup
+        modelBuilder.Entity<SharedScheduleLink>()
+            .HasIndex(ssl => ssl.ShareToken)
+            .IsUnique();
+        
+        // Index for template lookup
+        modelBuilder.Entity<SharedScheduleLink>()
+            .HasIndex(ssl => ssl.ScheduleTemplateId);
     }
 }
 

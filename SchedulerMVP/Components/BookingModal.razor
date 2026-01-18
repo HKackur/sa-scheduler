@@ -328,8 +328,37 @@
                 
                 // Set the initially selected place (default to the place the user clicked on)
                 // This must be set BEFORE loading areas, as LoadAvailableAreasAsync depends on SelectedPlaceId
-                if (SelectedPlace != null)
+                // CRITICAL: UI.SelectedAreaId is the source of truth - use it to find the correct place
+                // This ensures correct values even if parent component has stale data
+                if (UI.SelectedAreaId.HasValue)
                 {
+                    // Find the place that contains the selected area - this ensures we use the current area
+                    try
+                    {
+                        var allPlaces = await PlaceService.GetPlacesAsync();
+                        foreach (var place in allPlaces)
+                        {
+                            var areas = await PlaceService.GetAreasForPlaceAsync(place.Id);
+                            if (areas.Any(a => a.Id == UI.SelectedAreaId.Value))
+                            {
+                                SelectedPlaceId = place.Id;
+                                break;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[BookingModal] Error finding place for area: {ex.Message}");
+                        // Fallback to SelectedPlace parameter if available
+                        if (SelectedPlace != null)
+                        {
+                            SelectedPlaceId = SelectedPlace.Id;
+                        }
+                    }
+                }
+                else if (SelectedPlace != null)
+                {
+                    // No selected area in UI - use SelectedPlace parameter
                     SelectedPlaceId = SelectedPlace.Id;
                 }
                 
@@ -360,10 +389,22 @@
                 // Load available areas for the place (now that SelectedPlaceId is set)
                 await LoadAvailableAreasAsync();
                 
-                // Set the initially selected area (default to the area the user clicked on)
+                // Set the initially selected area
                 // This must be set AFTER loading areas, so AvailableAreas is populated
-                if (SelectedArea != null)
+                // CRITICAL: Always use UI.SelectedAreaId as the source of truth
+                // This ensures correct values even if parent component has stale data
+                if (UI.SelectedAreaId.HasValue && AvailableAreas != null)
                 {
+                    // UI.SelectedAreaId is the source of truth - use it if available in the list
+                    var areaInList = AvailableAreas.FirstOrDefault(a => a.Id == UI.SelectedAreaId.Value);
+                    if (areaInList != null)
+                    {
+                        SelectedAreaId = UI.SelectedAreaId.Value;
+                    }
+                }
+                else if (SelectedArea != null)
+                {
+                    // Fallback to SelectedArea parameter if UI.SelectedAreaId is not set
                     SelectedAreaId = SelectedArea.Id;
                 }
                 

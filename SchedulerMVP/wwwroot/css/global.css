@@ -1846,6 +1846,34 @@ input.sa-input-field,
 }
 
 /* ============================================
+   SHARED SCHEDULE - READ-ONLY STYLING
+   ============================================ */
+
+/* Make all interactive elements read-only in shared schedule view */
+.shared-schedule-readonly .booking-block {
+    cursor: default !important;
+    pointer-events: none !important;
+}
+
+.shared-schedule-readonly .day-content {
+    cursor: default !important;
+    pointer-events: none !important;
+}
+
+.shared-schedule-readonly .resize-handle {
+    display: none !important;
+}
+
+.shared-schedule-readonly .booking-block:hover {
+    opacity: 1 !important;
+    transform: none !important;
+}
+
+.shared-schedule-readonly .booking-block:active {
+    transform: none !important;
+}
+
+/* ============================================
    BLAZOR CONNECTION - SPINNER ANIMATION
    ============================================ */
 @keyframes spin {

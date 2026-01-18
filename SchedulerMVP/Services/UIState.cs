@@ -77,6 +77,9 @@ public class UIState
     
     // Calendar view mode
     private bool _isCalendarViewMode = false;
+    
+    // Shared schedule view mode (read-only, bypasses authentication filtering)
+    private bool _isSharedScheduleView = false;
     private DateOnly _currentWeekStart = GetCurrentWeekStart();
     private string _pageTitle = "Veckoschema";
     private Guid? _filteredGroupId = null;
@@ -171,6 +174,19 @@ public class UIState
             if (_isResourceView != value)
             {
                 _isResourceView = value;
+                OnChanged?.Invoke();
+            }
+        }
+    }
+    
+    public bool IsSharedScheduleView
+    {
+        get => _isSharedScheduleView;
+        set
+        {
+            if (_isSharedScheduleView != value)
+            {
+                _isSharedScheduleView = value;
                 OnChanged?.Invoke();
             }
         }
@@ -311,6 +327,10 @@ public class UIState
     // Force refresh flag - when set to true, WeekGrid will reload data even if state hasn't changed
     // Used when bookings are created/updated to ensure they appear immediately
     public bool ForceRefresh { get; set; } = false;
+
+    // Shared schedule info for TopBar display
+    public string? SharedScheduleClubName { get; set; }
+    public string? SharedScheduleTemplateName { get; set; }
     
     // Expanded areas in Resource View (persisted across view switches)
     public HashSet<Guid> ResourceViewExpandedAreas { get; set; } = new();

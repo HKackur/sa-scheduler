@@ -373,6 +373,7 @@ builder.Services.AddScoped<IPlaceService, PlaceService>();
 builder.Services.AddScoped<IGroupService, GroupService>();
 builder.Services.AddScoped<ICalendarBookingService, CalendarBookingService>();
 builder.Services.AddScoped<IModalService, ModalService>();
+builder.Services.AddScoped<ISharedScheduleService, SharedScheduleService>();
 builder.Services.AddScoped<BookingDialogService>();
 builder.Services.AddScoped<UIState>();
 builder.Services.AddScoped<DbSeeder>();
@@ -397,6 +398,27 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     KnownProxies = { },
     // Azure App Service requirement: require at least one header
     RequireHeaderSymmetry = false
+});
+
+// Allow iframe embedding for public shared schedule pages (/s/*)
+// This enables embedding the shared schedule view on other websites
+app.Use(async (context, next) =>
+{
+    // Check if this is a public shared schedule page
+    if (context.Request.Path.StartsWithSegments("/s"))
+    {
+        // Remove X-Frame-Options to allow iframe embedding
+        context.Response.Headers.Remove("X-Frame-Options");
+        // Set Content-Security-Policy to allow embedding from any origin
+        context.Response.Headers["Content-Security-Policy"] = "frame-ancestors *";
+    }
+    else
+    {
+        // For other pages, set X-Frame-Options to DENY for security
+        context.Response.Headers["X-Frame-Options"] = "DENY";
+    }
+    
+    await next();
 });
 
 // Configure the HTTP request pipeline.
@@ -1287,6 +1309,40 @@ _ = Task.Run(async () =>
                             ");
                             Console.WriteLine("[MIGRATION] ✅ Created ModalReadBy table (SQLite)");
                             logger.LogInformation("✅ Created ModalReadBy table (SQLite)");
+                        }
+                        
+                        // Check and create SharedScheduleLinks table if it doesn't exist (SQLite)
+                        var sharedScheduleLinksTableExists = false;
+                        using (var sharedScheduleLinksCheckCommand = connection.CreateCommand())
+                        {
+                            sharedScheduleLinksCheckCommand.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='SharedScheduleLinks'";
+                            using (var sharedScheduleLinksCheckReader = await sharedScheduleLinksCheckCommand.ExecuteReaderAsync())
+                            {
+                                sharedScheduleLinksTableExists = await sharedScheduleLinksCheckReader.ReadAsync();
+                            }
+                        }
+                        
+                        if (!sharedScheduleLinksTableExists)
+                        {
+                            await context.Database.ExecuteSqlRawAsync(@"
+                                CREATE TABLE IF NOT EXISTS SharedScheduleLinks (
+                                    Id TEXT NOT NULL PRIMARY KEY,
+                                    ScheduleTemplateId TEXT NOT NULL,
+                                    ShareToken TEXT NOT NULL,
+                                    IsActive INTEGER NOT NULL,
+                                    AllowWeekView INTEGER NOT NULL,
+                                    AllowDayView INTEGER NOT NULL,
+                                    AllowListView INTEGER NOT NULL,
+                                    CreatedAt TEXT NOT NULL,
+                                    LastAccessedAt TEXT,
+                                    AllowBookingRequests INTEGER NOT NULL,
+                                    FOREIGN KEY (ScheduleTemplateId) REFERENCES ScheduleTemplates(Id) ON DELETE CASCADE
+                                );
+                                CREATE UNIQUE INDEX IF NOT EXISTS IX_SharedScheduleLinks_ShareToken ON SharedScheduleLinks(ShareToken);
+                                CREATE INDEX IF NOT EXISTS IX_SharedScheduleLinks_ScheduleTemplateId ON SharedScheduleLinks(ScheduleTemplateId);
+                            ");
+                            Console.WriteLine("[MIGRATION] ✅ Created SharedScheduleLinks table (SQLite)");
+                            logger.LogInformation("✅ Created SharedScheduleLinks table (SQLite)");
                         }
                     }
                     

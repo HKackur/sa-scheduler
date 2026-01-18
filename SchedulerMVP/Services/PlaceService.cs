@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Caching.Memory;
 using SchedulerMVP.Data;
 using SchedulerMVP.Data.Entities;
+using SchedulerMVP.Services;
 
 namespace SchedulerMVP.Services;
 
@@ -11,13 +12,15 @@ public class PlaceService : IPlaceService
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly UserContextService _userContext;
     private readonly IMemoryCache _cache;
+    private readonly UIState? _uiState;
     private const int CacheTTLSeconds = 300; // Cache for 5 minutes (reduces database load)
 
-    public PlaceService(IDbContextFactory<AppDbContext> dbFactory, UserContextService userContext, IMemoryCache cache)
+    public PlaceService(IDbContextFactory<AppDbContext> dbFactory, UserContextService userContext, IMemoryCache cache, UIState? uiState = null)
     {
         _dbFactory = dbFactory;
         _userContext = userContext;
         _cache = cache;
+        _uiState = uiState;
     }
 
     public async Task<List<Place>> GetPlacesAsync()
@@ -37,16 +40,20 @@ public class PlaceService : IPlaceService
         await using var db = await _dbFactory.CreateDbContextAsync();
         var query = db.Places.AsQueryable();
 
-        // Admin can see all places, regular users see ONLY places with exact ClubId match
-        if (!isAdmin && clubId.HasValue)
+        // Skip filtering for shared schedule views (read-only public access)
+        if (_uiState?.IsSharedScheduleView != true)
         {
-            // Regular users see ONLY places with exact ClubId match (no null ClubId data)
-            query = query.Where(p => p.ClubId == clubId.Value);
-        }
-        else if (!isAdmin && !clubId.HasValue)
-        {
-            // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
-            query = query.Where(p => false);
+            // Admin can see all places, regular users see ONLY places with exact ClubId match
+            if (!isAdmin && clubId.HasValue)
+            {
+                // Regular users see ONLY places with exact ClubId match (no null ClubId data)
+                query = query.Where(p => p.ClubId == clubId.Value);
+            }
+            else if (!isAdmin && !clubId.HasValue)
+            {
+                // User without club sees NOTHING (security: don't show null ClubId data to avoid data leakage)
+                query = query.Where(p => false);
+            }
         }
 
         var places = await query
@@ -66,13 +73,17 @@ public class PlaceService : IPlaceService
         var place = await db.Places.FirstOrDefaultAsync(p => p.Id == id);
         if (place == null) return null;
 
-        var clubId = await _userContext.GetCurrentUserClubIdAsync();
-        var isAdmin = await _userContext.IsAdminAsync();
-
-        // Admin can access all places, regular users can only access their club's places
-        if (!isAdmin && (!clubId.HasValue || place.ClubId != clubId.Value))
+        // Skip filtering for shared schedule views (read-only public access)
+        if (_uiState?.IsSharedScheduleView != true)
         {
-            return null; // User doesn't have access
+            var clubId = await _userContext.GetCurrentUserClubIdAsync();
+            var isAdmin = await _userContext.IsAdminAsync();
+
+            // Admin can access all places, regular users can only access their club's places
+            if (!isAdmin && (!clubId.HasValue || place.ClubId != clubId.Value))
+            {
+                return null; // User doesn't have access
+            }
         }
 
         return place;

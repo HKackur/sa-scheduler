@@ -12,6 +12,16 @@ var SchedulerMVP = {
             const weekGrid = document.querySelector('.week-grid');
             if (weekGrid) {
                 weekGrid.scrollTop = Math.max(0, topPx);
+                
+                // CRITICAL FIX: If scrollTop was reset (element can't scroll yet), 
+                // wait and retry after layout stabilizes
+                if (weekGrid.scrollTop === 0 && topPx > 0 && weekGrid.scrollHeight > weekGrid.clientHeight) {
+                    setTimeout(function() {
+                        if (weekGrid.scrollHeight > weekGrid.clientHeight) {
+                            weekGrid.scrollTop = Math.max(0, topPx);
+                        }
+                    }, 100);
+                }
             }
         } catch (_) { }
     },

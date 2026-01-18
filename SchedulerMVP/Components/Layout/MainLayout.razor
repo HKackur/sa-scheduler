@@ -38,7 +38,21 @@ else
             </div>
         </Authorized>
         <NotAuthorized>
-            <RedirectToLogin />
+            @* Check if this is a shared schedule page (public, no auth required) *@
+            @if (_isSharedSchedulePage)
+            {
+                @* Shared schedule page - public, no auth required, but show TopBar *@
+                <div class="app-root" style="display: flex; flex-direction: column; height: 100vh;">
+                    <TopBar />
+                    <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                        @Body
+                    </div>
+                </div>
+            }
+            else
+            {
+                <RedirectToLogin />
+            }
         </NotAuthorized>
     </AuthorizeView>
 }
@@ -48,6 +62,7 @@ else
     private bool _isWhatsNewPage = false;
     private bool _isGroupsManagePage = false;
     private bool _isHelpPage = false;
+    private bool _isSharedSchedulePage = false;
     private Modal? _currentModal = null;
     private List<Modal> _pendingModals = new();
     private bool _modalsLoaded = false;
@@ -77,6 +92,7 @@ else
             _isWhatsNewPage = path == "/vad-ar-nytt" || path.EndsWith("/vad-ar-nytt");
             _isGroupsManagePage = path == "/grupper" || path.EndsWith("/grupper");
             _isHelpPage = path == "/hjalp" || path.EndsWith("/hjalp");
+            _isSharedSchedulePage = path.StartsWith("/s/");
         }
         catch
         {
@@ -84,6 +100,7 @@ else
             _isWhatsNewPage = false;
             _isGroupsManagePage = false;
             _isHelpPage = false;
+            _isSharedSchedulePage = false;
         }
     }
 
@@ -95,7 +112,8 @@ else
 
     private async Task LoadModalsAsync()
     {
-        if (_isLoginPage || _modalsLoaded)
+        // Don't load modals for login page or shared schedule pages (public, no auth)
+        if (_isLoginPage || _isSharedSchedulePage || _modalsLoaded)
         {
             return;
         }

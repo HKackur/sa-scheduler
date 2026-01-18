@@ -192,46 +192,39 @@
             prefilledDay = data.dayOfWeek;
             prefilledStartTime = data.startTime;
             
-            // Open modal IMMEDIATELY - don't wait for database
-            UI.ShouldOpenBookingModal = true;
-            StateHasChanged();
-            
-            // Now load data asynchronously in background
+            // Load area and place data FIRST (synchronously) before opening modal
+            // This ensures correct values are shown immediately, not old cached values
             if (UI.SelectedAreaId.HasValue)
             {
-                _ = Task.Run(async () =>
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var area = await db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
+                
+                if (area?.Place != null)
                 {
-                    try
+                    selectedArea = area;
+                    selectedPlace = area.Place;
+                    
+                    // Calculate end time based on place's default duration
+                    if (selectedPlace.DefaultDurationMin > 0)
                     {
-                        await using var db = await DbFactory.CreateDbContextAsync();
-                        var area = await db.Areas.Include(a => a.Place).FirstOrDefaultAsync(a => a.Id == UI.SelectedAreaId.Value);
-                        
-                        if (area?.Place != null)
-                        {
-                            selectedArea = area;
-                            selectedPlace = area.Place;
-                            
-                            // Calculate end time based on place's default duration
-                            if (selectedPlace.DefaultDurationMin > 0)
-                            {
-                                var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
-                                var endMinutes = startMinutes + selectedPlace.DefaultDurationMin;
-                                var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
-                                prefilledEndTime = endTime.ToString("HH:mm");
-                            }
-                            
-                            await InvokeAsync(StateHasChanged);
-                        }
+                        var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
+                        var endMinutes = startMinutes + selectedPlace.DefaultDurationMin;
+                        var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
+                        prefilledEndTime = endTime.ToString("HH:mm");
                     }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error loading area data: {ex.Message}");
-                    }
-                    finally
-                    {
-                        isOpeningBookingModal = false;
-                    }
-                });
+                }
+                else
+                {
+                    // Area or place not found - clear values
+                    selectedArea = null;
+                    selectedPlace = null;
+                    
+                    // Default duration 60 minutes when we don't have a place to derive from
+                    var startMinutes = TimeOnly.Parse(data.startTime).ToTimeSpan().TotalMinutes;
+                    var endMinutes = startMinutes + 60;
+                    var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
+                    prefilledEndTime = endTime.ToString("HH:mm");
+                }
             }
             else
             {
@@ -244,11 +237,22 @@
                 var endMinutes = startMinutes + 60;
                 var endTime = TimeOnly.FromTimeSpan(TimeSpan.FromMinutes(endMinutes));
                 prefilledEndTime = endTime.ToString("HH:mm");
-                
-                isOpeningBookingModal = false;
             }
+            
+            // Now open modal with all data ready - correct values will show immediately
+            UI.ShouldOpenBookingModal = true;
+            StateHasChanged();
         }
-        catch
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error opening booking modal: {ex.Message}");
+            // On error, still open modal but with null values
+            selectedArea = null;
+            selectedPlace = null;
+            UI.ShouldOpenBookingModal = true;
+            StateHasChanged();
+        }
+        finally
         {
             isOpeningBookingModal = false;
         }

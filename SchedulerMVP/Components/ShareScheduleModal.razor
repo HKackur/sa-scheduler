@@ -1,0 +1,394 @@
+@using SchedulerMVP.Data.Entities
+@using SchedulerMVP.Services
+@inject ISharedScheduleService SharedScheduleService
+@inject IScheduleTemplateService ScheduleTemplateService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject ToastService ToastService
+@inject ILogger<ShareScheduleModal> Logger
+
+@if (IsOpen)
+{
+    <div class="modal-backdrop" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 2000;" @onclick="CloseModal"></div>
+    
+    <div class="bm-modal">
+        <div class="bm-header">
+            <h2 class="bm-title">Dela veckoschemat: @(templateName ?? "[veckomallsnamn]")</h2>
+        </div>
+        <div class="bm-modal-content">
+            @if (isLoading)
+            {
+                <div style="padding: 20px; text-align: center; color: #6b7280;">
+                    <div style="display: inline-block; width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: booking-modal-spin 0.6s linear infinite;"></div>
+                    <div style="margin-top: 8px; font-size: 14px;">Laddar...</div>
+                </div>
+            }
+            else if (sharedLink != null)
+            {
+                @* Aktivera/Avaktivera Toggle *@
+                <div class="bm-field">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <label class="bm-label" style="margin-bottom: 0;">Delningslänk är aktiv</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" checked="@sharedLink.IsActive" @onchange="OnToggleActive" />
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                        @(sharedLink.IsActive ? "Länken är aktiv och kan nås av externa användare" : "Länken är inaktiv och leder till en tom sida")
+                    </div>
+                </div>
+
+                <div style="border-top: 1px solid #e6e7ea; margin: 16px 0;"></div>
+
+                @* Välj vyer att visa *@
+                <div class="bm-field">
+                    <label class="bm-label">Välj vyer att visa</label>
+                    <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" @bind="allowWeekView" style="width: 18px; height: 18px; cursor: pointer;" />
+                            <span style="font-size: 14px; color: #0f1720;">Veckovy</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" @bind="allowDayView" style="width: 18px; height: 18px; cursor: pointer;" />
+                            <span style="font-size: 14px; color: #0f1720;">Dagsvy</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" @bind="allowListView" style="width: 18px; height: 18px; cursor: pointer;" />
+                            <span style="font-size: 14px; color: #0f1720;">Listvy</span>
+                        </label>
+                    </div>
+                    @if (viewValidationError)
+                    {
+                        <div style="color: #dc2626; font-size: 12px; margin-top: 8px;">Minst en vy måste vara vald</div>
+                    }
+                </div>
+
+                <div style="border-top: 1px solid #e6e7ea; margin: 16px 0;"></div>
+
+                @* Delningslänk *@
+                <div class="bm-field">
+                    <label class="bm-label">Delningslänk</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" class="bm-input" value="@shareUrl" readonly style="flex: 1; background: #f9fafb; cursor: text;" />
+                        <button type="button" class="btn-primary" @onclick="CopyLink" style="white-space: nowrap;">
+                            <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;">content_copy</span>
+                            Kopiera
+                        </button>
+                    </div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+                        Dela denna länk med personer som ska kunna se veckoschemat
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div style="padding: 20px; text-align: center;">
+                    <div style="font-size: 14px; color: #dc2626; margin-bottom: 12px;">Kunde inte ladda delningslänk</div>
+                    @if (!ScheduleTemplateId.HasValue)
+                    {
+                        <div style="font-size: 12px; color: #6b7280; line-height: 1.5;">
+                            <div style="margin-bottom: 4px;">Ingen veckomall är vald.</div>
+                            <div>Välj en veckomall i dropdown-menyn ovanför kalendern först.</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="font-size: 12px; color: #6b7280; line-height: 1.5;">
+                            <div style="margin-bottom: 4px;">Det kan bero på att databasen ännu inte är uppdaterad.</div>
+                            <div>Vänta några sekunder och försök igen, eller starta om servern.</div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        <div class="bm-actions">
+            <button type="button" @onclick="CloseModal" class="btn-outline">Stäng</button>
+            @if (sharedLink != null)
+            {
+                <button type="button" @onclick="SaveViewSettings" class="btn-primary" disabled="@isSaving">
+                    @if (isSaving)
+                    {
+                        <span>Sparar...</span>
+                    }
+                    else
+                    {
+                        <span>Spara</span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+}
+
+<style>
+    @@keyframes booking-modal-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #cbd5e1;
+        transition: .3s;
+        border-radius: 24px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: .3s;
+        border-radius: 50%;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+        background-color: #3b82f6;
+    }
+
+    .toggle-switch input:checked + .toggle-slider:before {
+        transform: translateX(20px);
+    }
+</style>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public Guid? ScheduleTemplateId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private SharedScheduleLink? sharedLink;
+    private bool isLoading = false;
+    private bool isSaving = false;
+    private bool allowWeekView = true;
+    private bool allowDayView = false;
+    private bool allowListView = true;
+    private bool viewValidationError = false;
+    private string shareUrl = string.Empty;
+    private string? templateName = null;
+    private bool _wasOpen = false;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && !_wasOpen)
+        {
+            _wasOpen = true;
+            await LoadSharedLinkAsync();
+        }
+        else if (!IsOpen && _wasOpen)
+        {
+            _wasOpen = false;
+            sharedLink = null;
+            templateName = null; // Reset template name when modal closes
+        }
+    }
+
+    private async Task LoadSharedLinkAsync()
+    {
+        if (!ScheduleTemplateId.HasValue)
+        {
+            Logger.LogWarning("[ShareScheduleModal] ScheduleTemplateId is null - cannot load shared link");
+            isLoading = false;
+            StateHasChanged();
+            return;
+        }
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            Logger.LogInformation($"[ShareScheduleModal] Loading shared link for template {ScheduleTemplateId.Value}");
+            sharedLink = await SharedScheduleService.GetByTemplateIdAsync(ScheduleTemplateId.Value);
+            
+            if (sharedLink == null)
+            {
+                // Create new link if it doesn't exist
+                Logger.LogInformation($"[ShareScheduleModal] No existing link found, creating new one for template {ScheduleTemplateId.Value}");
+                try
+                {
+                    sharedLink = await SharedScheduleService.CreateOrUpdateAsync(ScheduleTemplateId.Value);
+                    Logger.LogInformation($"[ShareScheduleModal] Successfully created shared link");
+                }
+                catch (Exception createEx)
+                {
+                    Logger.LogError(createEx, $"[ShareScheduleModal] Failed to create shared link: {createEx.Message}");
+                    // Check if it's a database table missing error
+                    if (createEx.Message.Contains("SharedScheduleLinks") || createEx.Message.Contains("does not exist") || createEx.Message.Contains("no such table"))
+                    {
+                        Logger.LogError("[ShareScheduleModal] Database table 'SharedScheduleLinks' does not exist. Migration may not have run yet.");
+                    }
+                    sharedLink = null;
+                }
+            }
+            else
+            {
+                Logger.LogInformation($"[ShareScheduleModal] Found existing shared link");
+            }
+
+            if (sharedLink != null)
+            {
+                // Update local state
+                allowWeekView = sharedLink.AllowWeekView;
+                allowDayView = sharedLink.AllowDayView;
+                allowListView = sharedLink.AllowListView;
+
+                // Load template name for display in title
+                try
+                {
+                    var template = await ScheduleTemplateService.GetByIdAsync(ScheduleTemplateId.Value);
+                    templateName = template?.Name;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, $"[ShareScheduleModal] Could not load template name: {ex.Message}");
+                    templateName = null; // Fallback to "veckoschema"
+                }
+
+                // Generate share URL
+                UpdateShareUrl();
+                Logger.LogInformation($"[ShareScheduleModal] Successfully loaded shared link with token: {sharedLink.ShareToken.Substring(0, Math.Min(10, sharedLink.ShareToken.Length))}...");
+            }
+            else
+            {
+                Logger.LogError($"[ShareScheduleModal] Failed to load or create shared link for template {ScheduleTemplateId.Value}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"[ShareScheduleModal] Error loading shared link: {ex.Message}");
+            // Check if it's a database table missing error
+            if (ex.Message.Contains("SharedScheduleLinks") || ex.Message.Contains("does not exist") || ex.Message.Contains("no such table"))
+            {
+                Logger.LogError("[ShareScheduleModal] Database table 'SharedScheduleLinks' does not exist. Please run migrations or wait for auto-migration to complete.");
+            }
+            sharedLink = null; // Ensure it's null on error
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void UpdateShareUrl()
+    {
+        if (sharedLink != null)
+        {
+            var baseUrl = Navigation.BaseUri.TrimEnd('/');
+            shareUrl = $"{baseUrl}/s/{sharedLink.ShareToken}";
+        }
+    }
+
+    private async Task OnToggleActive(ChangeEventArgs e)
+    {
+        if (!ScheduleTemplateId.HasValue || sharedLink == null)
+        {
+            return;
+        }
+
+        // Update local state first
+        var newValue = e.Value?.ToString() == "True" || (e.Value is bool b && b);
+        sharedLink.IsActive = newValue;
+
+        try
+        {
+            await SharedScheduleService.ToggleActiveAsync(ScheduleTemplateId.Value);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ShareScheduleModal] Error toggling active: {ex.Message}");
+            // Revert the change
+            sharedLink.IsActive = !newValue;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveViewSettings()
+    {
+        if (!ScheduleTemplateId.HasValue)
+        {
+            return;
+        }
+
+        // Validate: at least one view must be selected
+        if (!allowWeekView && !allowDayView && !allowListView)
+        {
+            viewValidationError = true;
+            StateHasChanged();
+            return;
+        }
+
+        viewValidationError = false;
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            await SharedScheduleService.UpdateViewSettingsAsync(
+                ScheduleTemplateId.Value,
+                allowWeekView,
+                allowDayView,
+                allowListView
+            );
+
+            // Show success toast
+            ToastService.ShowSuccess("Inställningar för delningslänken har sparats");
+            
+            // Close modal after a short delay to allow toast to be visible
+            await Task.Delay(300);
+            await CloseModal();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"[ShareScheduleModal] Error saving view settings: {ex.Message}");
+            ToastService.ShowError("Kunde inte spara inställningar");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CopyLink()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
+            ToastService.ShowSuccess("Länk kopierad till urklipp");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ShareScheduleModal] Error copying link: {ex.Message}");
+            ToastService.ShowError("Kunde inte kopiera länk");
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        IsOpen = false;
+        await OnClose.InvokeAsync();
+    }
+}
