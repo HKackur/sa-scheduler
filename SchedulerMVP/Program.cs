@@ -1188,6 +1188,41 @@ _ = Task.Run(async () =>
                         ");
                         Console.WriteLine("[MIGRATION] ✅ Checked/created Modals and ModalReadBy tables (PostgreSQL)");
                         logger.LogInformation("✅ Checked/created Modals and ModalReadBy tables (PostgreSQL)");
+                        
+                        // Create SharedScheduleLinks table if it doesn't exist (PostgreSQL)
+                        await context.Database.ExecuteSqlRawAsync(@"
+                            DO $$ 
+                            BEGIN 
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM information_schema.tables 
+                                    WHERE table_schema = 'public' AND table_name = 'SharedScheduleLinks'
+                                ) THEN
+                                    CREATE TABLE ""SharedScheduleLinks"" (
+                                        ""Id"" TEXT NOT NULL PRIMARY KEY,
+                                        ""ScheduleTemplateId"" TEXT NOT NULL,
+                                        ""ShareToken"" TEXT NOT NULL,
+                                        ""IsActive"" BOOLEAN NOT NULL DEFAULT true,
+                                        ""AllowWeekView"" BOOLEAN NOT NULL DEFAULT true,
+                                        ""AllowDayView"" BOOLEAN NOT NULL DEFAULT false,
+                                        ""AllowListView"" BOOLEAN NOT NULL DEFAULT true,
+                                        ""CreatedAt"" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                                        ""LastAccessedAt"" TIMESTAMP NULL,
+                                        ""AllowBookingRequests"" BOOLEAN NOT NULL DEFAULT false,
+                                        CONSTRAINT ""FK_SharedScheduleLinks_ScheduleTemplates_ScheduleTemplateId"" 
+                                            FOREIGN KEY (""ScheduleTemplateId"") 
+                                            REFERENCES ""ScheduleTemplates""(""Id"") 
+                                            ON DELETE CASCADE
+                                    );
+                                    CREATE UNIQUE INDEX ""IX_SharedScheduleLinks_ShareToken"" 
+                                        ON ""SharedScheduleLinks""(""ShareToken"");
+                                    CREATE INDEX ""IX_SharedScheduleLinks_ScheduleTemplateId"" 
+                                        ON ""SharedScheduleLinks""(""ScheduleTemplateId"");
+                                    RAISE NOTICE 'Created SharedScheduleLinks table';
+                                END IF;
+                            END $$;
+                        ");
+                        Console.WriteLine("[MIGRATION] ✅ Checked/created SharedScheduleLinks table (PostgreSQL)");
+                        logger.LogInformation("✅ Checked/created SharedScheduleLinks table (PostgreSQL)");
                     }
                     else
                     {
