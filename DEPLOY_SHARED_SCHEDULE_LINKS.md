@@ -3,7 +3,17 @@
 ## Problem
 Tabellen `SharedScheduleLinks` finns inte i Supabase-databasen i produktion, vilket gör att delningsfunktionen inte fungerar.
 
-## Lösning: Kör migrationen i produktion
+## Automatisk lösning (Rekommenderas)
+**Program.cs har nu automatisk skapelse av tabellen** - när appen startar kommer tabellen skapas automatiskt om den inte finns. Detta betyder att:
+
+- ✅ **Nya deploymenter**: Tabellen skapas automatiskt när appen startar
+- ✅ **Inga manuella SQL-steg krävs**: Appen hanterar allt automatiskt
+- ✅ **Säker**: Fungerar även om databasen saknar tabellen
+
+**För nya deploymenter**: Bara deploya koden - tabellen skapas automatiskt vid app-start!
+
+## Manuell lösning (Om du vill skapa tabellen NU)
+Om du vill skapa tabellen direkt utan att vänta på deployment:
 
 ### Alternativ 1: Kör SQL direkt i Supabase SQL Editor (SNABBAST)
 
