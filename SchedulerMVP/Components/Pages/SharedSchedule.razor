@@ -96,7 +96,7 @@ else
                 @* WeekGrid - exactly like in Index.razor (editor) but with read-only mode *@
                 <WeekGrid OnOpenModal="() => Task.CompletedTask" OnOpenCalendarBookingEdit="(_) => Task.CompletedTask" OnOpenTemplateEdit="(_) => Task.CompletedTask" IsSharedScheduleView="true" />
             </main>
-            @if (!isListView)
+            @if (!isListView && !isLoading && sharedLink != null)
             {
                 <aside class="sa-panel sa-right-new">
                     <CombinedSidebar IsReadOnly="true" />
